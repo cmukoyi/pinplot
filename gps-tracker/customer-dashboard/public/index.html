@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLE Tracker - Customer Portal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: white;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 2.5em;
+        }
+        .content {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .tag-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .tag-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .tag-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+        .tag-name {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .tag-status {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+        .battery {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+        #map {
+            width: 100%;
+            height: 500px;
+            background: #e0e0e0;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-size: 1.2em;
+        }
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #666;
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-bottom: 20px;
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏷️ My BLE Tags</h1>
+        <div class="content">
+            <button class="btn" onclick="loadTags()">🔄 Refresh Tags</button>
+            <div class="tag-grid" id="tagGrid">
+                <div class="loading">Loading your tags...</div>
+            </div>
+            <h2 style="margin-bottom: 15px; color: #333;">📍 Map View</h2>
+            <div id="map">Map integration coming soon - External API will be connected</div>
+        </div>
+    </div>
+
+    <script>
+        async function loadTags() {
+            try {
+                const response = await fetch('/api/tags');
+                const tags = await response.json();
+                
+                const grid = document.getElementById('tagGrid');
+                grid.innerHTML = '';
+                
+                tags.forEach(tag => {
+                    const card = document.createElement('div');
+                    card.className = 'tag-card';
+                    card.onclick = () => showTagLocation(tag.id);
+                    
+                    card.innerHTML = `
+                        <div class="tag-name">${tag.name}</div>
+                        <div>ID: ${tag.id}</div>
+                        <div class="tag-status">
+                            <span class="battery">🔋 ${tag.battery}%</span>
+                            <span>${tag.status}</span>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 0.85em;">
+                            Last seen: ${new Date(tag.last_seen).toLocaleString()}
+                        </div>
+                    `;
+                    
+                    grid.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Failed to load tags:', error);
+                document.getElementById('tagGrid').innerHTML = 
+                    '<div class="loading">Failed to load tags. Please try again.</div>';
+            }
+        }
+        
+        async function showTagLocation(tagId) {
+            try {
+                const response = await fetch(`/api/tags/${tagId}/location`);
+                const location = await response.json();
+                
+                alert(`Tag Location:\n\nLatitude: ${location.latitude}\nLongitude: ${location.longitude}\nAddress: ${location.address}\nAccuracy: ${location.accuracy}m`);
+                
+                // In production, this would update the map with the tag's location
+            } catch (error) {
+                console.error('Failed to load location:', error);
+                alert('Failed to load tag location. Please try again.');
+            }
+        }
+        
+        // Load tags on page load
+        loadTags();
+    </script>
+</body>
+</html>

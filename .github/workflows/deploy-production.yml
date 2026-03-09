@@ -1,0 +1,152 @@
+name: Deploy Beacon Telematics to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for production deployment'
+        required: true
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.2'
+          channel: 'stable'
+      
+      - name: Build Flutter Web App
+        run: |
+          cd gps-tracker/mobile-app/ble_tracker_app
+          flutter pub get
+          flutter build web --release --no-tree-shake-icons
+          echo "✅ Flutter web build completed"
+          ls -lh build/web/main.dart.js
+      
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+      
+      - name: Add Digital Ocean to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.DO_SERVER_IP }} >> ~/.ssh/known_hosts
+      
+      - name: Upload Deployment Scripts
+        env:
+          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
+          DO_USER: ${{ secrets.DO_USER }}
+        run: |
+          echo "📦 Uploading BeaconTelematics deployment scripts..."
+          ssh $DO_USER@$DO_SERVER_IP "mkdir -p ~/beacon-telematics"
+          scp deploy/pre-deployment-backup-beacon.sh $DO_USER@$DO_SERVER_IP:~/beacon-telematics/
+          scp deploy/verify-secrets-beacon.sh $DO_USER@$DO_SERVER_IP:~/beacon-telematics/
+          scp deploy/rollback-deployment-beacon.sh $DO_USER@$DO_SERVER_IP:~/beacon-telematics/
+          ssh $DO_USER@$DO_SERVER_IP "chmod +x ~/beacon-telematics/*.sh"
+          echo "✅ Deployment scripts uploaded and made executable"
+      
+      - name: Pre-Deployment Backup
+        env:
+          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
+          DO_USER: ${{ secrets.DO_USER }}
+        run: |
+          echo "💾 Creating pre-deployment backup..."
+          ssh $DO_USER@$DO_SERVER_IP "~/beacon-telematics/pre-deployment-backup-beacon.sh" || {
+            echo "⚠️  Backup script failed but continuing deployment"
+          }
+          echo "✅ Pre-deployment backup complete"
+      
+      - name: Deploy to Production
+        env:
+          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
+          DO_USER: ${{ secrets.DO_USER }}
+        run: |
+          # Copy gps-tracker folder to production under beacon-telematics directory
+          echo "📂 Syncing BeaconTelematics code to production..."
+          ssh $DO_USER@$DO_SERVER_IP "mkdir -p ~/beacon-telematics/gps-tracker"
+          rsync -avz --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '__pycache__' \
+            --exclude '.env' \
+            --exclude 'backend/.env' \
+            --exclude '.dart_tool' \
+            --exclude 'beacon_telematics_postgres_data' \
+            ./gps-tracker/ $DO_USER@$DO_SERVER_IP:~/beacon-telematics/gps-tracker/
+          
+          echo "🚀 Deploying BeaconTelematics containers..."
+          # Deploy on production
+          ssh $DO_USER@$DO_SERVER_IP << 'SSHEOF'
+            cd ~/beacon-telematics/gps-tracker
+            docker-compose down --remove-orphans
+            docker-compose build
+            docker-compose up -d
+            sleep 20
+            docker-compose ps
+            echo "=== BeaconTelematics Flutter Web ==="
+            docker logs --tail 10 beacon_telematics_flutter_web
+          SSHEOF
+          echo "✅ BeaconTelematics containers deployed"
+      
+      - name: Post-Deployment Verification
+        env:
+          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
+          DO_USER: ${{ secrets.DO_USER }}
+        run: |
+          echo "🔍 Verifying secrets and configuration..."
+          ssh $DO_USER@$DO_SERVER_IP "~/beacon-telematics/verify-secrets-beacon.sh" || {
+            echo "❌ Secret verification failed!"
+            echo "🔄 Secrets have been auto-restored from backup"
+            echo "⚠️  Review logs above for details"
+            exit 1
+          }
+          echo "✅ Secrets verified successfully"
+      
+      - name: Health Check
+        run: |
+          echo "🏥 Checking BeaconTelematics production health..."
+          sleep 5
+          curl -f http://${{ secrets.DO_SERVER_IP }}:8001/api/health || exit 1
+          echo "✅ BeaconTelematics backend healthy!"
+      
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo "================================"
+          echo "🚀 BeaconTelematics Deployment Complete!"
+          echo "================================"
+          echo "Frontend: http://beacontelematics.co.uk/ (configure domain first)"
+          echo "Backend: http://${{ secrets.DO_SERVER_IP }}:8001/api/health"
+          echo "Admin: http://${{ secrets.DO_SERVER_IP }}:3010"
+          echo "Customer: http://${{ secrets.DO_SERVER_IP }}:3011"
+          echo "Flutter Web: http://${{ secrets.DO_SERVER_IP }}:3012"
+          echo ""
+          echo "📋 Rollback Instructions (if needed):"
+          echo "   ssh ${{ secrets.DO_USER }}@${{ secrets.DO_SERVER_IP }}"
+          echo "   ~/beacon-telematics/rollback-deployment-beacon.sh"
+          echo "================================"
+          curl -f -I http://${{ secrets.DO_SERVER_IP }}:3012/ || exit 1
+          echo "✅ BeaconTelematics web app responding!"
+          echo ""
+          echo "🎉 BEACON TELEMATICS DEPLOYED!"
+          echo "Next Steps:"
+          echo "1. Configure nginx for beacontelematics.co.uk domain"
+          echo "2. Run certbot for SSL certificate"
+          echo "3. Update DNS A records to point to server IP"
+      
+      - name: Tag Release
+        run: |
+          TAG="beacon-prod-$(date +%Y%m%d-%H%M%S)"
+          git tag "$TAG"
+          git push origin "$TAG" || echo "Could not push tag"
