@@ -296,6 +296,14 @@ def health_check():
         "timestamp": datetime.utcnow().isoformat()
     }
 
+@app.get("/api/health")
+def api_health_check():
+    """API health check endpoint"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
 # Authentication endpoints
 @app.post("/api/v1/auth/register", response_model=Token)
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
