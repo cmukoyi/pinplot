@@ -84,23 +84,22 @@ services:
     networks:
       - beacon_telematics_network
 
-  # Note: nginx will be handled by main server nginx with subdomain routing
-  # Uncomment below only if you need standalone nginx for this instance
-  # nginx:
-  #   image: nginx:alpine
-  #   container_name: beacon_telematics_nginx
-  #   ports:
-  #     - "8080:80"
-  #     - "8443:443"
-  #   volumes:
-  #     - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-  #     - /etc/letsencrypt:/etc/letsencrypt:ro
-  #   depends_on:
-  #     - backend
-  #     - admin
-  #     - flutter-web
-  #   networks:
-  #     - beacon_telematics_network
+  nginx:
+    image: nginx:alpine
+    container_name: beacon_telematics_nginx
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - backend
+      - admin
+      - customer
+      - flutter-web
+    networks:
+      - beacon_telematics_network
 
 volumes:
   beacon_telematics_postgres_data:
