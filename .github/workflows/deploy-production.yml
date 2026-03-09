@@ -90,7 +90,7 @@ jobs:
           ssh $DO_USER@$DO_SERVER_IP << 'SSHEOF'
             cd ~/beacon-telematics/gps-tracker
             docker-compose down --remove-orphans
-            docker-compose build
+            docker-compose build --no-cache --pull
             docker-compose up -d
             
             echo "⏳ Waiting for containers to start..."
