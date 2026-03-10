@@ -2098,7 +2098,7 @@ Best regards''',
                                 Icon(Icons.directions_car, size: 18, color: AppTheme.brandPrimary),
                                 SizedBox(width: 8),
                                 Text(
-                                  vehicle.displayName,
+                                  vehicle.description,
                                   style: GoogleFonts.inter(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w500,
@@ -3628,7 +3628,7 @@ View on $mapProvider to see the vehicle location.''';
                     Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
                     SizedBox(width: 6),
                     Text(
-                      '${trip.formattedStartTime} - ${trip.formattedEndTime}',
+                      '${trip.startTimeFormatted} - ${trip.endTimeFormatted}',
                       style: GoogleFonts.inter(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -3740,7 +3740,7 @@ View on $mapProvider to see the vehicle location.''';
                   ],
                 ),
                 // Driver info
-                if (trip.driverDescription != null) ..[
+                if (trip.driverDescription != null) ...[
                   SizedBox(height: 8),
                   Row(
                     children: [
