@@ -252,7 +252,7 @@ class _MapScreenState extends State<MapScreen> {
             }
             
             // Prepare info window snippet with location description or coordinates
-            final locationInfo = position.locationDescription ?? 
+            final locationInfo = vehicle.lastKnownPosition?.locationDescription ?? 
                 '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
             final visibleAttrs = vehicle.visibleAttributes ?? {};
             final visibleCount = visibleAttrs.length;
@@ -276,7 +276,7 @@ class _MapScreenState extends State<MapScreen> {
           
           // Create Apple Maps annotation (for iOS)
           if (_useAppleMaps) {
-            final locationInfo = position.locationDescription ?? 
+            final locationInfo = vehicle.lastKnownPosition?.locationDescription ?? 
                 '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
             final visibleAttrs = vehicle.visibleAttributes ?? {};
             final visibleCount = visibleAttrs.length;
