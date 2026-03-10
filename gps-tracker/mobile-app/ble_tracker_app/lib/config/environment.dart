@@ -3,8 +3,8 @@ import 'package:flutter/foundation.dart';
 /// Environment Configuration - Automatic Build Mode Detection
 /// 
 /// ✅ AUTOMATIC MODE SELECTION (No manual configuration needed!):
-/// - `flutter run` → Debug mode → localhost:8000
-/// - `flutter build web --release` → Release mode → https://pinplot.me
+/// - `flutter run` → Debug mode → localhost:8001
+/// - `flutter build web --release` → Release mode → https://beacontelematics.co.uk
 /// - No flags needed, no manual changes, no confusion!
 /// 
 /// 🔒 DEPLOYMENT SAFETY:
@@ -19,10 +19,10 @@ import 'package:flutter/foundation.dart';
 
 class Environment {
   // 🔒 PRODUCTION URL - Safe to commit, used for all release builds
-  static const String _productionUrl = 'https://pinplot.me';
+  static const String _productionUrl = 'https://beacontelematics.co.uk';
   
   // 🛠️ DEVELOPMENT URL - Safe to commit, only active in debug mode
-  static const String _developmentUrl = 'http://localhost:8000';
+  static const String _developmentUrl = 'http://localhost:8001';
   
   /// Get the API base URL based on Flutter's build mode
   /// 
