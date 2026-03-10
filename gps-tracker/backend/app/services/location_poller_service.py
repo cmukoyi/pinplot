@@ -61,17 +61,31 @@ class LocationPollerService:
             vehicles = self.mzone_service.get_vehicles_with_locations(imeis)
             
             # Create a map of IMEI -> vehicle data
-            vehicle_map = {v.get('registration'): v for v in vehicles}
+            # IMPORTANT: MZone stores IMEI in either 'registration' OR 'unit_Description'
+            # Build map checking both fields
+            vehicle_map = {}
+            for v in vehicles:
+                # Check which field contains the IMEI and use it as key
+                reg = v.get('registration', '')
+                unit_desc = v.get('unit_Description', '')
+                for imei in imeis:
+                    if reg == imei or unit_desc == imei:
+                        vehicle_map[imei] = v
+                        break
+            
+            logger.info(f"🗺️  Built vehicle map with {len(vehicle_map)} entries for {len(imeis)} trackers")
             
             # Update each tracker
             updated_count = 0
             for tracker in trackers:
                 vehicle = vehicle_map.get(tracker.imei)
                 if not vehicle:
+                    logger.warning(f"⚠️  No vehicle data found for tracker IMEI: {tracker.imei}")
                     continue
                 
                 position = vehicle.get('lastKnownPosition', {})
-                if not position.get('latitude') or not position.get('longitude'):
+                if not position or not position.get('latitude') or not position.get('longitude'):
+                    logger.warning(f"⚠️  No location data for tracker IMEI: {tracker.imei}, vehicle ID: {vehicle.get('id')}")
                     continue
                 
                 # Update tracker position in database
