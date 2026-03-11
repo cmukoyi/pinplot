@@ -2092,15 +2092,19 @@ def get_trips(
             logger.info(f"📍 Fetching trips for vehicle {vehicle_id}")
             logger.info(f"📅 Date range: {utc_start} to {utc_end}")
         
-        # Get OAuth token for MZone API
-        token_url = "https://id.mzoneweb.net/realms/main/protocol/openid-connect/token"
+        # Get OAuth token for MZone API using correct password grant flow
+        token_url = "https://login.mzoneweb.net/connect/token"
         token_response = requests.post(
             token_url,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
             data={
-                "grant_type": "client_credentials",
-                "client_id": os.getenv("MZONE_CLIENT_ID", "mz6 PKCE"),
-                "client_secret": os.getenv("MZONE_CLIENT_SECRET", ""),
-                "scope": "mz6-api.all di-api.all"
+                "client_id": os.getenv("MZONE_CLIENT_ID", "mz-scopeuk"),
+                "client_secret": os.getenv("MZONE_CLIENT_SECRET", "g_SkQ.B.z3TeBU$g#hVeP#c2"),
+                "username": os.getenv("MZONE_USERNAME", "ScopeUKAPI"),
+                "password": os.getenv("MZONE_PASSWORD", "ScopeUKAPI01!"),
+                "scope": "mz6-api.all mz_username",
+                "grant_type": "password",
+                "response_type": "code id_token"
             },
             timeout=10
         )
