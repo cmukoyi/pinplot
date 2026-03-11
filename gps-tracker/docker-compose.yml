@@ -38,23 +38,22 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     environment:
     - MZONE_CLIENT_SECRET=g_SkQ.B.z3TeBU$$g#hVeP#c2
-  admin:
+  admin-portal:
     build:
-      context: ./admin-dashboard
+      context: ./admin-portal
       dockerfile: Dockerfile
-    container_name: beacon_telematics_admin
+    container_name: beacon_telematics_admin_portal
     ports:
-    - 3010:3000
-    volumes:
-    - ./admin-dashboard:/app
-    - /app/node_modules
-    environment:
-    - BACKEND_URL=http://backend:8000/api/v1
+    - 3010:80
     depends_on:
     - backend
     networks:
     - beacon_telematics_network
-    command: npm start
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
   customer:
     build:
       context: ./customer-dashboard
@@ -94,7 +93,7 @@ services:
     - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
     - backend
-    - admin
+    - admin-portal
     - customer
     - flutter-web
     networks:
