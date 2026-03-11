@@ -188,6 +188,20 @@
             font-size: 0.875rem;
             color: #64748b;
             margin-top: 0.25rem;
+            background: #f0f9ff;
+            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            border-left: 3px solid #0ea5e9;
+            margin-top: 0.75rem;
+        }
+
+        .trip-date-time {
+            font-weight: 600;
+            color: #0369a1;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
         }
 
         .trip-stats {
@@ -332,20 +346,21 @@
         }
 
         .details-header {
-            background: white;
+            background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
             padding: 1.5rem;
             border-radius: 8px;
             margin-bottom: 2rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
             display: flex;
             align-items: center;
             gap: 1rem;
+            color: white;
         }
 
         .back-btn {
-            background: #64748b;
+            background: rgba(255, 255, 255, 0.2);
             color: white;
-            border: none;
+            border: 2px solid rgba(255, 255, 255, 0.5);
             padding: 0.5rem 1rem;
             border-radius: 6px;
             cursor: pointer;
@@ -354,10 +369,15 @@
             align-items: center;
             gap: 0.5rem;
             transition: all 0.2s;
+            backdrop-filter: blur(10px);
+            white-space: nowrap;
+            flex-shrink: 0;
         }
 
         .back-btn:hover {
-            background: #475569;
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.8);
+            transform: translateX(-2px);
         }
 
         .details-title {
@@ -366,11 +386,12 @@
 
         .details-title h1 {
             font-size: 1.5rem;
-            color: #1e293b;
+            color: white;
+            font-weight: 700;
         }
 
         .details-title p {
-            color: #64748b;
+            color: rgba(255, 255, 255, 0.9);
             font-size: 0.95rem;
             margin-top: 0.25rem;
         }
@@ -385,8 +406,18 @@
 
         #map {
             width: 100%;
-            height: 500px;
+            height: 600px;
             background: #e5e7eb;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .map-wrapper {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
         }
 
         .map-loading {
@@ -402,9 +433,11 @@
         /* Trip Info Box */
         .info-box {
             background: white;
-            border-radius: 8px;
+            border-radius: 12px;
             padding: 2rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+            margin-top: 1rem;
         }
 
         .info-section {
@@ -566,7 +599,7 @@
 
                     <div class="control-item">
                         <label for="minDistance">📏 Min Distance (km)</label>
-                        <input type="search" id="minDistance" placeholder="0" value="0">
+                        <input type="search" id="minDistance" placeholder="0.1" value="0.1">
                     </div>
                 </div>
 
@@ -599,11 +632,13 @@
                 </div>
             </div>
 
-            <div class="map-container">
-                <div id="mapLoading" class="map-loading">
-                    📍 Loading map and route data...
+            <div class="map-wrapper">
+                <div class="map-container">
+                    <div id="mapLoading" class="map-loading">
+                        📍 Loading map and route data...
+                    </div>
+                    <div id="map" style="display: none;"></div>
                 </div>
-                <div id="map" style="display: none;"></div>
             </div>
 
             <div class="info-box">
@@ -814,6 +849,9 @@
                 const duration = formatDuration(trip.duration || 0);
                 const startTime = new Date(trip.startUtcTimestamp);
                 const endTime = new Date(trip.endUtcTimestamp);
+                const dateStr = startTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+                const startTimeStr = startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second: '2-digit'});
+                const endTimeStr = endTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second: '2-digit'});
 
                 return `
                     <div class="trip-card" onclick="viewTripRoute('${trip.id}')">
@@ -821,9 +859,8 @@
                             <div>
                                 <div class="trip-title">🚗 ${trip.vehicle_Description || 'Unknown Vehicle'}</div>
                                 <div class="trip-date">
-                                    📅 ${startTime.toLocaleDateString()} 
-                                    <span style="color: #94a3b8;">•</span> 
-                                    ⏱️ ${startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${endTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                    <div class="trip-date-time">📅 ${dateStr}</div>
+                                    <div style="font-size: 0.8rem; color: #475569;">⏱️ ${startTimeStr} → ${endTimeStr}</div>
                                 </div>
                             </div>
                         </div>
@@ -995,6 +1032,24 @@
             const duration = currentTrip.duration || 0;
             const startTime = new Date(currentTrip.startUtcTimestamp);
             const endTime = new Date(currentTrip.endUtcTimestamp);
+            const startTimeFormatted = startTime.toLocaleString('en-US', { 
+                weekday: 'short', 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            });
+            const endTimeFormatted = endTime.toLocaleString('en-US', { 
+                weekday: 'short', 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            });
 
             document.getElementById('tripId').textContent = currentTrip.id;
             document.getElementById('tripDuration').textContent = formatDuration(duration);
@@ -1004,8 +1059,8 @@
             document.getElementById('keyCode').textContent = currentTrip.driverKeyCode || 'N/A';
             document.getElementById('startLocation').textContent = currentTrip.startLocationDescription || 'N/A';
             document.getElementById('endLocation').textContent = currentTrip.endLocationDescription || 'N/A';
-            document.getElementById('startTime').textContent = startTime.toLocaleString();
-            document.getElementById('endTime').textContent = endTime.toLocaleString();
+            document.getElementById('startTime').textContent = startTimeFormatted;
+            document.getElementById('endTime').textContent = endTimeFormatted;
 
             // Calculate stats from events
             if (currentTripEvents && currentTripEvents.length > 0) {
@@ -1022,18 +1077,23 @@
         }
 
         function backToList() {
+            // Smooth transition
             document.getElementById('tripDetails').classList.remove('active');
             document.getElementById('tripsView').classList.remove('hidden');
             
+            // Clean up map
             if (map) {
                 map.remove();
                 map = null;
             }
+            
+            // Reset scroll position
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function resetFilters() {
             document.getElementById('vehicleSelect').value = '';
-            document.getElementById('minDistance').value = '0';
+            document.getElementById('minDistance').value = '0.1';
             document.getElementById('tripsList').innerHTML = '';
             document.getElementById('filterStats').style.display = 'none';
             currentTrips = [];
