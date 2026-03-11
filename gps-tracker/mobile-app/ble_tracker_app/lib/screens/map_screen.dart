@@ -3849,7 +3849,7 @@ View on $mapProvider to see the vehicle location.''';
   /// Filter out trips with distance 0km or no distance data
   List<Trip> _getFilteredTrips() {
     return _trips.where((trip) {
-      return trip.distance != null && trip.distance! > 0;
+      return trip.distance != null && trip.distance! >= 0.1;
     }).toList();
   }
   
@@ -3904,9 +3904,9 @@ View on $mapProvider to see the vehicle location.''';
         endDate: dateRange.endDate,
       );
       
-      // Filter out trips with 0km distance
+      // Filter out trips with 0km distance (including very short trips < 0.1km)
       final filteredTrips = allTrips.where((trip) {
-        return trip.distance != null && trip.distance! > 0;
+        return trip.distance != null && trip.distance! >= 0.1;
       }).toList();
       
       if (mounted) {
