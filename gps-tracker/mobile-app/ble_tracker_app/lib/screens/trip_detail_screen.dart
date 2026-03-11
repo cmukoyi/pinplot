@@ -23,7 +23,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   List<fmap.Polyline> _tripPolylines = [];
   List<fmap.Marker> _tripMarkers = [];
   bool _isLoading = true;
-  latlong.LatLngBounds? _routeBounds;
+  fmap.LatLngBounds? _routeBounds;
 
   @override
   void initState() {
@@ -525,7 +525,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
   @override
   void dispose() {
-    _mapController.dispose();
     super.dispose();
   }
 }
