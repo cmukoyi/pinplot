@@ -282,12 +282,18 @@ class MZoneService:
                 'Accept': 'application/json'
             }
             
-            # Build OData filter and parameters
-            # Match the pattern used by LastKnownPositions (no guid wrapper needed)
+            # Build OData parameters - utcStartDate, utcEndDate, vehicle_Id must be top-level query params, NOT in filter!
+            # This matches the working API format discovered during testing
             params = {
-                '$filter': f"vehicle_Id eq {vehicle_id} and startUtcTimestamp ge datetime'{start_date}' and endUtcTimestamp le datetime'{end_date}'",
+                'utcStartDate': start_date,
+                'utcEndDate': end_date,
+                'vehicle_Id': vehicle_id,
+                '$format': 'json',
+                '$count': 'true',
+                '$select': 'id,vehicle_Id,vehicle_Description,duration,distance,startLocationDescription,startUtcTimestamp,endLocationDescription,endUtcTimestamp,driver_Description,driverKeyCode',
                 '$orderby': 'startUtcTimestamp desc',
-                '$select': 'id,vehicle_Id,vehicleDescription,duration,distance,startLocationDescription,startUtcTimestamp,endLocationDescription,endUtcTimestamp,driverDescription,driverKeyCode'
+                '$skip': '0',
+                '$top': '100'
             }
             
             if self.debug:
