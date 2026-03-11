@@ -283,9 +283,9 @@ class MZoneService:
             }
             
             # Build OData filter and parameters
-            # NOTE: vehicle_Id must be wrapped as guid'...' and dates must be wrapped in quotes for proper OData comparison
+            # Match the pattern used by LastKnownPositions (no guid wrapper needed)
             params = {
-                '$filter': f"vehicle_Id eq guid'{vehicle_id}' and startUtcTimestamp ge '{start_date}' and endUtcTimestamp le '{end_date}'",
+                '$filter': f"vehicle_Id eq {vehicle_id} and startUtcTimestamp ge datetime'{start_date}' and endUtcTimestamp le datetime'{end_date}'",
                 '$orderby': 'startUtcTimestamp desc',
                 '$select': 'id,vehicle_Id,vehicleDescription,duration,distance,startLocationDescription,startUtcTimestamp,endLocationDescription,endUtcTimestamp,driverDescription,driverKeyCode'
             }
