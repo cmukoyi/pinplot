@@ -1322,12 +1322,12 @@ def get_trips(
                 "trips": []
             }
         
-        if debug:
-            print(f"\n{'='*60}")
-            print(f"📱 User {current_user.email} requesting trips")
-            print(f"   Vehicle ID: {vehicle_id}")
-            print(f"   Date range: {start_date} to {end_date}")
-            print(f"{'='*60}\n")
+        # ALWAYS log trips requests for debugging
+        print(f"\n{'='*60}")
+        print(f"📱 TRIPS REQUEST from {current_user.email}")
+        print(f"   Vehicle ID: {vehicle_id}")
+        print(f"   Date range: {start_date} to {end_date}")
+        print(f"{'='*60}\n")
         
         # Verify user has access to this vehicle
         tag = db.query(BLETag).filter(
@@ -1337,26 +1337,36 @@ def get_trips(
         ).first()
         
         if not tag:
-            if debug:
-                print(f"❌ User does not have access to vehicle {vehicle_id}")
+            print(f"❌ TRIPS ERROR: User does not have access to vehicle {vehicle_id}")
+            print(f"   User ID: {current_user.id}")
+            print(f"   Checked BLETag table for matching vehicle_id")
             return {
                 "success": False,
                 "error": "Vehicle not found or access denied",
                 "trips": []
             }
         
+        print(f"✅ Found BLETag for vehicle")
+        print(f"   Tag ID: {tag.id}")
+        print(f"   Tag IMEI: {tag.imei}")
+        print(f"   Tag description: {tag.description}")
+        
         # Get vehicle's MZone ID from tag's custom attributes or IMEI mapping
         # For now, we'll use the tag's IMEI to look up the vehicle
         from app.services.mzone_service import mzone_service
         
         # First get all vehicles to find the MZone vehicle ID
+        print(f"🔍 Looking up MZone vehicle ID for IMEI {tag.imei}")
         vehicles_data = mzone_service.get_all_vehicles()
         if not vehicles_data:
+            print(f"❌ TRIPS ERROR: Failed to fetch vehicles from MZone")
             return {
                 "success": False,
                 "error": "Failed to fetch vehicles from MZone",
                 "trips": []
             }
+        
+        print(f"📋 Checking {len(vehicles_data.get('value', []))} MZone vehicles for IMEI match")
         
         # Find vehicle matching this tag's IMEI
         mzone_vehicle_id = None
@@ -1364,11 +1374,16 @@ def get_trips(
             if (vehicle.get('registration') == tag.imei or 
                 vehicle.get('unit_Description') == tag.imei):
                 mzone_vehicle_id = vehicle.get('id')
+                print(f"✅ Found MZone vehicle match!")
+                print(f"   MZone Vehicle ID: {mzone_vehicle_id}")
+                print(f"   MZone Vehicle Description: {vehicle.get('description')}")
+                print(f"   Registration: {vehicle.get('registration')}")
+                print(f"   Unit Description: {vehicle.get('unit_Description')}")
                 break
         
         if not mzone_vehicle_id:
-            if debug:
-                print(f"❌ Could not find MZone vehicle ID for IMEI {tag.imei}")
+            print(f"❌ TRIPS ERROR: Could not find MZone vehicle ID for IMEI {tag.imei}")
+            print(f"   Searched registration and unit_Description fields")
             return {
                 "success": False,
                 "error": "Vehicle not found in MZone system",
@@ -1376,6 +1391,7 @@ def get_trips(
             }
         
         # Fetch trips from MZone
+        print(f"🚗 Fetching trips from MZone API...")
         trips_data = mzone_service.get_trips(
             vehicle_id=mzone_vehicle_id,
             start_date=start_date,
@@ -1383,6 +1399,7 @@ def get_trips(
         )
         
         if not trips_data:
+            print(f"❌ TRIPS ERROR: MZone API returned None")
             return {
                 "success": False,
                 "error": "Failed to fetch trips from MZone",
@@ -1391,8 +1408,17 @@ def get_trips(
         
         trips = trips_data.get('value', [])
         
-        if debug:
-            print(f"✅ Returning {len(trips)} trips")
+        print(f"✅ SUCCESS: Returning {len(trips)} trips to frontend")
+        if len(trips) == 0:
+            print(f"⚠️  NO TRIPS FOUND in this date range")
+            print(f"   Vehicle: {mzone_vehicle_id}")
+            print(f"   Range: {start_date} to {end_date}")
+        else:
+            print(f"📊 Sample trip data:")
+            for i, trip in enumerate(trips[:2]):  # First 2 trips
+                print(f"   Trip {i+1}: {trip.get('startLocationDescription')} → {trip.get('endLocationDescription')}")
+                print(f"           Start: {trip.get('startUtcTimestamp')}, Distance: {trip.get('distance')}m")
+        print(f"{'='*60}\n")
         
         return {
             "success": True,
