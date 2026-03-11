@@ -86,6 +86,7 @@ class BLETag(Base):
     device_name = Column(String(100))
     device_model = Column(String(100))
     description = Column(String(255))  # Vehicle description from MZone API
+    mzone_vehicle_id = Column(String(100), index=True)  # Cached MZone vehicle_Id for faster trips API
     mac_address = Column(String(17))  # Format: XX:XX:XX:XX:XX:XX
     is_active = Column(Boolean, default=True)
     last_seen = Column(DateTime(timezone=True))

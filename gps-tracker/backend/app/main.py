@@ -1350,47 +1350,56 @@ def get_trips(
         print(f"   Tag ID: {tag.id}")
         print(f"   Tag IMEI: {tag.imei}")
         print(f"   Tag description: {tag.description}")
+        print(f"   Cached MZone vehicle_Id: {tag.mzone_vehicle_id}")
         
-        # Get vehicle's MZone ID from tag's custom attributes or IMEI mapping
-        # For now, we'll use the tag's IMEI to look up the vehicle
-        from app.services.mzone_service import mzone_service
+        # Use cached MZone vehicle ID if available (much faster!)
+        mzone_vehicle_id = tag.mzone_vehicle_id
         
-        # First get all vehicles to find the MZone vehicle ID
-        print(f"🔍 Looking up MZone vehicle ID for IMEI {tag.imei}")
-        vehicles_data = mzone_service.get_all_vehicles()
-        if not vehicles_data:
-            print(f"❌ TRIPS ERROR: Failed to fetch vehicles from MZone")
-            return {
-                "success": False,
-                "error": "Failed to fetch vehicles from MZone",
-                "trips": []
-            }
-        
-        print(f"📋 Checking {len(vehicles_data.get('value', []))} MZone vehicles for IMEI match")
-        
-        # Find vehicle matching this tag's IMEI
-        mzone_vehicle_id = None
-        for vehicle in vehicles_data.get('value', []):
-            if (vehicle.get('registration') == tag.imei or 
-                vehicle.get('unit_Description') == tag.imei):
-                mzone_vehicle_id = vehicle.get('id')
-                print(f"✅ Found MZone vehicle match!")
-                print(f"   MZone Vehicle ID: {mzone_vehicle_id}")
-                print(f"   MZone Vehicle Description: {vehicle.get('description')}")
-                print(f"   Registration: {vehicle.get('registration')}")
-                print(f"   Unit Description: {vehicle.get('unit_Description')}")
-                break
-        
+        # If not cached yet, fall back to IMEI lookup (will be cached on next location poll)
         if not mzone_vehicle_id:
-            print(f"❌ TRIPS ERROR: Could not find MZone vehicle ID for IMEI {tag.imei}")
-            print(f"   Searched registration and unit_Description fields")
-            return {
-                "success": False,
-                "error": "Vehicle not found in MZone system",
-                "trips": []
-            }
+            print(f"⚠️  No cached MZone vehicle_Id, performing IMEI lookup...")
+            from app.services.mzone_service import mzone_service
+            
+            # Get all vehicles to find the MZone vehicle ID
+            vehicles_data = mzone_service.get_all_vehicles()
+            if not vehicles_data:
+                print(f"❌ TRIPS ERROR: Failed to fetch vehicles from MZone")
+                return {
+                    "success": False,
+                    "error": "Failed to fetch vehicles from MZone",
+                    "trips": []
+                }
+            
+            print(f"📋 Checking {len(vehicles_data.get('value', []))} MZone vehicles for IMEI match")
+            
+            # Find vehicle matching this tag's IMEI
+            for vehicle in vehicles_data.get('value', []):
+                if (vehicle.get('registration') == tag.imei or 
+                    vehicle.get('unit_Description') == tag.imei):
+                    mzone_vehicle_id = vehicle.get('id')
+                    # Cache it for future requests
+                    tag.mzone_vehicle_id = mzone_vehicle_id
+                    db.commit()
+                    print(f"✅ Found MZone vehicle match and cached it!")
+                    print(f"   MZone Vehicle ID: {mzone_vehicle_id}")
+                    print(f"   MZone Vehicle Description: {vehicle.get('description')}")
+                    print(f"   Registration: {vehicle.get('registration')}")
+                    print(f"   Unit Description: {vehicle.get('unit_Description')}")
+                    break
+            
+            if not mzone_vehicle_id:
+                print(f"❌ TRIPS ERROR: Could not find MZone vehicle ID for IMEI {tag.imei}")
+                print(f"   Searched registration and unit_Description fields")
+                return {
+                    "success": False,
+                    "error": "Vehicle not found in MZone system",
+                    "trips": []
+                }
+        else:
+            print(f"✅ Using cached MZone vehicle_Id (fast path)")
         
         # Fetch trips from MZone
+        from app.services.mzone_service import mzone_service
         print(f"🚗 Fetching trips from MZone API...")
         trips_data = mzone_service.get_trips(
             vehicle_id=mzone_vehicle_id,

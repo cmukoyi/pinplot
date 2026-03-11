@@ -94,6 +94,12 @@ class LocationPollerService:
                 tracker.location_description = position.get('locationDescription')  # Save address from MZone
                 tracker.last_seen = datetime.utcnow()
                 
+                # Cache MZone vehicle_Id for faster trips API lookups
+                mzone_vehicle_id = vehicle.get('id')
+                if mzone_vehicle_id and tracker.mzone_vehicle_id != mzone_vehicle_id:
+                    tracker.mzone_vehicle_id = mzone_vehicle_id
+                    logger.debug(f"💾 Cached MZone vehicle_Id {mzone_vehicle_id} for IMEI {tracker.imei}")
+                
                 # Update description if available
                 description = vehicle.get('description')
                 if description and tracker.description != description:
