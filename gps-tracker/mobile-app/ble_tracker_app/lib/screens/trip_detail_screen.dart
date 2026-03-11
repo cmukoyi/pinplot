@@ -203,39 +203,56 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 ],
               ),
             ),
-            // Map view
+            // Map view with boundary
             Expanded(
               flex: 1,
-              child: _isLoading
-                  ? Center(
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(AppTheme.brandPrimary),
-                      ),
-                    )
-                  : Container(
-                      color: Colors.white,
-                      child: fmap.FlutterMap(
-                        options: fmap.MapOptions(
-                          initialCenter: _routeBounds != null
-                              ? latlong.LatLng(
-                                  (_routeBounds!.south + _routeBounds!.north) / 2,
-                                  (_routeBounds!.west + _routeBounds!.east) / 2,
-                                )
-                              : (_tripEvents.isNotEmpty
-                                  ? latlong.LatLng(_tripEvents.first.latitude, _tripEvents.first.longitude)
-                                  : latlong.LatLng(0, 0)),
-                          initialZoom: _routeBounds != null ? 12.0 : 13.0,
-                        ),
-                        children: [
-                          fmap.TileLayer(
-                            urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            subdomains: ['a', 'b', 'c'],
-                          ),
-                          fmap.PolylineLayer(polylines: _tripPolylines),
-                          fmap.MarkerLayer(markers: _tripMarkers),
-                        ],
-                      ),
+              child: Container(
+                margin: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: AppTheme.brandPrimary.withOpacity(0.3),
+                    width: 2,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 12,
+                      offset: Offset(0, 4),
                     ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: _isLoading
+                      ? Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.brandPrimary),
+                          ),
+                        )
+                      : fmap.FlutterMap(
+                          options: fmap.MapOptions(
+                            initialCenter: _routeBounds != null
+                                ? latlong.LatLng(
+                                    (_routeBounds!.south + _routeBounds!.north) / 2,
+                                    (_routeBounds!.west + _routeBounds!.east) / 2,
+                                  )
+                                : (_tripEvents.isNotEmpty
+                                    ? latlong.LatLng(_tripEvents.first.latitude, _tripEvents.first.longitude)
+                                    : latlong.LatLng(0, 0)),
+                            initialZoom: _routeBounds != null ? 12.0 : 13.0,
+                          ),
+                          children: [
+                            fmap.TileLayer(
+                              urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                              subdomains: ['a', 'b', 'c'],
+                            ),
+                            fmap.PolylineLayer(polylines: _tripPolylines),
+                            fmap.MarkerLayer(markers: _tripMarkers),
+                          ],
+                        ),
+                ),
+              ),
             ),
             // Trip info box
             Container(

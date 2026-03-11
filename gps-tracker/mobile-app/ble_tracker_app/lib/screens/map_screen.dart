@@ -12,6 +12,7 @@ import 'package:ble_tracker_app/services/auth_service.dart';
 import 'package:ble_tracker_app/services/location_service.dart';
 import 'package:ble_tracker_app/services/logger_service.dart';
 import 'package:ble_tracker_app/services/poi_service.dart';
+import 'package:ble_tracker_app/services/deployment_monitor_service.dart';
 import 'package:ble_tracker_app/models/vehicle_model.dart';
 import 'package:ble_tracker_app/models/poi_model.dart';
 import 'package:ble_tracker_app/models/trip_model.dart';
@@ -34,6 +35,7 @@ class _MapScreenState extends State<MapScreen> {
   final _locationService = LocationService();
   final _logger = LoggerService();
   final _poiService = POIService();
+  final _deploymentMonitor = DeploymentMonitorService();
   int _selectedIndex = 0;
   int _unreadAlertCount = 0;
   Timer? _locationRefreshTimer; // Auto-refresh timer
@@ -474,6 +476,25 @@ class _MapScreenState extends State<MapScreen> {
       _logger.debug('Stack trace: $stackTrace');
       print('❌ MapScreen: Error loading vehicles: $e');
       print('❌ Stack trace: $stackTrace');
+      
+      // Check if this is a deployment error (HTML response, syntax error, etc.)
+      if (DeploymentMonitorService.isDeploymentError(e)) {
+        print('🔄 Detected deployment in progress...');
+        _deploymentMonitor.detectDeploymentInProgress();
+        
+        // Listen for deployment completion and retry
+        _deploymentMonitor.deploymentStateChanged.where((isDeploying) => !isDeploying).listen((_) {
+          if (mounted) {
+            print('✅ Deployment complete, reloading vehicles...');
+            _loadTags();
+          }
+        });
+        
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+        return;
+      }
       
       // Check if it's a session expiration error
       final errorMessage = e.toString();
@@ -3923,6 +3944,29 @@ View on $mapProvider to see the vehicle location.''';
       }
     } catch (e) {
       _logger.error('Failed to load trips: $e');
+      
+      // Check if this is a deployment error (HTML response, syntax error, etc.)
+      if (DeploymentMonitorService.isDeploymentError(e)) {
+        print('🔄 Detected deployment in progress...');
+        _deploymentMonitor.detectDeploymentInProgress();
+        
+        // Listen for deployment completion and retry
+        _deploymentMonitor.deploymentStateChanged.where((isDeploying) => !isDeploying).listen((_) {
+          if (mounted) {
+            print('✅ Deployment complete, reloading trips...');
+            _loadTrips();
+          }
+        });
+        
+        if (mounted) {
+          setState(() {
+            _isLoadingTrips = false;
+            _trips = [];
+          });
+        }
+        return;
+      }
+      
       if (mounted) {
         setState(() {
           _isLoadingTrips = false;
