@@ -207,56 +207,17 @@ email_service = EmailService()
 async def startup_event():
     init_db()
     
-    # Create admin models tables
-    from app.models_admin import Base as AdminBase
-    from app.database import engine
-    AdminBase.metadata.create_all(bind=engine)
-    
-    # Initialize default admin user if not exists
-    try:
-        db = get_db().__next__()
-        admin = db.query(AdminUser).filter(AdminUser.username == "Admin").first()
-        if not admin:
-            from datetime import datetime
-            default_admin = AdminUser(
-                username="Admin",
-                email="admin@beacontelematics.co.uk",
-                hashed_password=admin_hash_password("123456789_Plus"),
-                full_name="System Administrator",
-                role="admin",
-                is_active=True,
-                created_at=datetime.utcnow()
-            )
-            db.add(default_admin)
-            db.commit()
-            print("✓ Default admin user created: Admin / 123456789_Plus")
-        
-        # Create system user for app logs
-        system_user = db.query(AdminUser).filter(AdminUser.username == "system").first()
-        if not system_user:
-            from datetime import datetime
-            import secrets
-            system_user = AdminUser(
-                username="system",
-                email="system@beacontelematics.co.uk",
-                hashed_password=admin_hash_password(secrets.token_hex(32)),
-                full_name="System Logger",
-                role="admin",
-                is_active=True,
-                created_at=datetime.utcnow()
-            )
-            db.add(system_user)
-            db.commit()
-            print("✓ System user created for app logs")
-        
-        db.close()
-    except Exception as e:
-        print(f"⚠️  Note: Admin initialization error (may be normal on first migration): {e}")
+    # Note: Admin tables are created and populated via Alembic migrations and init_admin.py script
+    # Admin user initialization happens via:
+    #   1. Database migrations (alembic upgrade head)
+    #   2. Init script (python init_admin.py)
+    # Running table creation here would conflict with Alembic
     
     print("Database initialized!")
     print(f"SMTP configured: {email_service.smtp_host}:{email_service.smtp_port}")
     print("MailHog Web UI available at: http://localhost:8025")
     print("Admin Portal available at: /admin/index.html")
+    print("Admin API available at: /api/admin/")
     
     # Start background location poller
     asyncio.create_task(location_poller.start())
