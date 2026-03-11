@@ -18,26 +18,29 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ActivityMonitor(
-      child: Stack(
-        children: [
-          MaterialApp(
-            title: 'Asset Tracker',
-            theme: AppTheme.lightTheme,
-            debugShowCheckedModeBanner: false,
-            home: const SplashScreen(),
-            routes: {
-              '/welcome': (context) => const WelcomeScreen(),
-              '/map': (context) => const MapScreen(),
-              '/poi-management': (context) => const POIManagementScreen(),
-            },
-          ),
-          const Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: DeploymentBanner(),
-          ),
-        ],
+      child: MaterialApp(
+        title: 'Asset Tracker',
+        theme: AppTheme.lightTheme,
+        debugShowCheckedModeBanner: false,
+        home: const SplashScreen(),
+        routes: {
+          '/welcome': (context) => const WelcomeScreen(),
+          '/map': (context) => const MapScreen(),
+          '/poi-management': (context) => const POIManagementScreen(),
+        },
+        builder: (context, child) {
+          return Stack(
+            children: [
+              child!,
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: DeploymentBanner(),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
