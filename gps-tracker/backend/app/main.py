@@ -2041,6 +2041,158 @@ async def mock_location_test(
         raise HTTPException(status_code=500, detail=f"Error running mock test: {str(e)}")
 
 
+@app.post("/api/v1/trips")
+def get_trips(
+    request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch trips (journeys) from MZone API for a specific BLE tag and date range
+    Request body:
+    {
+        'vehicle_id': '88c45ad7-4054-40d8-b530-ed844e1c261a',  # GUID from DB
+        'start_date': '2026-01-31T00:00:00',  # ISO format
+        'end_date': '2026-03-11T23:59:59'     # ISO format
+    }
+    """
+    import requests
+    from datetime import datetime
+    
+    debug = os.getenv('DEBUG', 'False').lower() == 'true'
+    
+    try:
+        # Extract request data
+        vehicle_id = request.get('vehicle_id', '').strip() if isinstance(request, dict) else ''
+        start_date_str = request.get('start_date', '').strip() if isinstance(request, dict) else ''
+        end_date_str = request.get('end_date', '').strip() if isinstance(request, dict) else ''
+        
+        # Validate inputs
+        if not vehicle_id or not start_date_str or not end_date_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="vehicle_id, start_date, and end_date are required"
+            )
+        
+        # Parse dates
+        try:
+            start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+            end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)"
+            )
+        
+        # Format dates for MZone API (UTC with Z suffix)
+        utc_start = start_date.isoformat().replace('+00:00', 'Z').split('.')[0] + 'Z'
+        utc_end = end_date.isoformat().replace('+00:00', 'Z').split('.')[0] + 'Z'
+        
+        if debug:
+            logger.info(f"📍 Fetching trips for vehicle {vehicle_id}")
+            logger.info(f"📅 Date range: {utc_start} to {utc_end}")
+        
+        # Get OAuth token for MZone API
+        token_url = "https://id.mzoneweb.net/realms/main/protocol/openid-connect/token"
+        token_response = requests.post(
+            token_url,
+            data={
+                "grant_type": "client_credentials",
+                "client_id": os.getenv("MZONE_CLIENT_ID", "mz6 PKCE"),
+                "client_secret": os.getenv("MZONE_CLIENT_SECRET", ""),
+                "scope": "mz6-api.all di-api.all"
+            },
+            timeout=10
+        )
+        
+        if token_response.status_code != 200:
+            if debug:
+                logger.error(f"❌ Failed to get OAuth token: {token_response.status_code}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Failed to obtain access token from MZone"
+            )
+        
+        access_token = token_response.json().get('access_token')
+        if not access_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token response from MZone"
+            )
+        
+        # Build Trips API URL with filters
+        from urllib.parse import urlencode
+        
+        # Get vehicle group ID from environment or database
+        vehicle_group_id = os.getenv("MZONE_VEHICLE_GROUP_ID", "8e4fe3a7-4d46-474d-bf57-993828f70968")
+        
+        params = {
+            '$format': 'json',
+            '$count': 'true',
+            '$select': 'vehicle_Description,duration,distance,startLocationDescription,startUtcTimestamp,endLocationDescription,endUtcTimestamp,driver_Description,id,vehicle_Id,driverKeyCode',
+            '$orderby': 'startUtcTimestamp desc',
+            '$skip': '0',
+            '$top': '100',
+            'utcStartDate': utc_start,
+            'utcEndDate': utc_end,
+            'vehicleGroup_Id': vehicle_group_id,
+            '$filter': f'(vehicle_Id eq {vehicle_id})'
+        }
+        
+        api_url = f'https://live.mzoneweb.net/mzone62.api/Trips?{urlencode(params)}'
+        
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Accept': 'application/json'
+        }
+        
+        if debug:
+            logger.info(f"🌐 Calling Trips API...")
+            logger.info(f"🔗 URL (truncated): {api_url[:100]}...")
+        
+        response = requests.get(api_url, headers=headers, timeout=30)
+        
+        if response.status_code == 200:
+            trips_data = response.json()
+            trips = trips_data.get('value', [])
+            count = trips_data.get('@odata.count', 0)
+            
+            if debug:
+                logger.info(f"✅ Fetched {len(trips)} trips (total available: {count})")
+            
+            return {
+                'success': True,
+                'trips': trips,
+                'total_count': count,
+                'returned_count': len(trips),
+                'vehicle_id': vehicle_id,
+                'date_range': {
+                    'start': utc_start,
+                    'end': utc_end
+                }
+            }
+        else:
+            if debug:
+                logger.error(f"❌ Failed to fetch trips: {response.status_code}")
+                logger.error(f"📄 Response: {response.text[:500]}")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Trips API request failed: {response.status_code}"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        if debug:
+            logger.error(f"❌ Exception fetching trips: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching trips: {str(e)}"
+        )
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
