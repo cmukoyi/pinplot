@@ -1,7 +1,7 @@
 """add attributes column to ble_tags for custom field storage
 
 Revision ID: 010
-Revises: 009
+Revises: add_admin_models
 Create Date: 2026-03-12
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '010'
-down_revision = '009'
+down_revision = 'add_admin_models'
 branch_labels = None
 depends_on = None
 
