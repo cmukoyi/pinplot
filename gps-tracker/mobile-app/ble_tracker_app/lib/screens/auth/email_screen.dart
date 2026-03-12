@@ -295,7 +295,6 @@ class _EmailScreenState extends State<EmailScreen> {
                               fontWeight: FontWeight.w500,
                             ),
                             maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                             decoration: InputDecoration(
                               hintText: 'you@example.com',
                               hintMaxLines: 1,

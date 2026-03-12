@@ -239,7 +239,9 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
                               },
                             ),
                           );
-                    }),
+                        }),
+                      );
+                    },
                   ),
                   SizedBox(height: 32),
                   
