@@ -112,6 +112,7 @@ class _MapScreenState extends State<MapScreen> {
     }
     
     // User is authenticated - proceed with loading
+    _loadCustomVehicleNames(); // Load saved custom names first
     _loadTags();
     _loadUnreadAlertCount();
     _loadPOIs();
@@ -121,6 +122,22 @@ class _MapScreenState extends State<MapScreen> {
       _logger.info('Auto-refreshing vehicle locations (60 sec interval)');
       _loadTags();
     });
+  }
+  
+  /// Load all custom vehicle names from persistent storage
+  Future<void> _loadCustomVehicleNames() async {
+    try {
+      final customNames = await _authService.getAllCustomVehicleNames();
+      if (mounted) {
+        setState(() {
+          _vehicleCustomNames = customNames;
+          print('✅ Loaded ${customNames.length} custom vehicle names');
+        });
+      }
+    } catch (e) {
+      _logger.error('Failed to load custom vehicle names: $e');
+    }
+  }
   }
   
   @override
@@ -4728,4 +4745,191 @@ class _CustomDateRangeDialogState extends State<_CustomDateRangeDialog> {
   int _getDayCount() {
     return _endDate.difference(_startDate).inDays + 1;
   }
+
+  /// Dialog to rename a vehicle/tag with persistent storage
+  void _showEditNameDialog(Vehicle vehicle) {
+    final nameController = TextEditingController(
+      text: _vehicleCustomNames[vehicle.id] ?? vehicle.id, // Show current custom name or IMEI
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Rename Tag',
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: TextField(
+          controller: nameController,
+          decoration: InputDecoration(
+            hintText: 'Enter tag name (or leave empty for IMEI)',
+            hintStyle: GoogleFonts.inter(color: Colors.grey.shade400),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          ),
+          maxLength: 50,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(color: Colors.grey.shade600),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newName = nameController.text.trim();
+              
+              if (newName.isEmpty) {
+                // Remove custom name - revert to showing IMEI
+                await _authService.deleteCustomVehicleName(vehicle.id);
+                setState(() {
+                  _vehicleCustomNames.remove(vehicle.id);
+                });
+                print('✅ Removed custom name for ${vehicle.id}, will show IMEI');
+              } else {
+                // Save custom name
+                await _authService.saveCustomVehicleName(vehicle.id, newName);
+                setState(() {
+                  _vehicleCustomNames[vehicle.id] = newName;
+                });
+                print('✅ Saved custom name: $newName');
+              }
+              
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.brandPrimary,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(
+              'Save',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Bottom sheet to view vehicle attributes
+  void _showAttributesBottomSheet(Vehicle vehicle) {
+    final visibleAttrs = vehicle.visibleAttributes ?? {};
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        builder: (context, scrollController) => ListView(
+          controller: scrollController,
+          padding: EdgeInsets.all(16),
+          children: [
+            // Header
+            Container(
+              padding: EdgeInsets.only(bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Attributes - ${_vehicleCustomNames[vehicle.id] ?? vehicle.id}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    'Visible on map',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(color: Colors.grey.shade300),
+            SizedBox(height: 8),
+            // Attributes list
+            if (visibleAttrs.isEmpty)
+              Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Text(
+                    'No attributes set',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ),
+              )
+            else
+              ...visibleAttrs.entries.map((entry) {
+                final key = entry.key;
+                final value = entry.value;
+                final displayKey = key.replaceAll('_', ' ').toUpperCase();
+                
+                return Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.green.shade300,
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, size: 20, color: Colors.green.shade700),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                displayKey,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: Colors.green.shade700,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                value.toString(),
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  color: Colors.green.shade900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+          ],
+        ),
+      ),
+    );
+  }
 }
+
