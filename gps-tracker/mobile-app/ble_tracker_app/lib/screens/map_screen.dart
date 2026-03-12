@@ -1268,8 +1268,8 @@ Best regards''',
   Widget _buildVehiclePopup(Vehicle vehicle) {
     final location = vehicle.lastKnownPosition;
     return Container(
-      margin: EdgeInsets.all(20),
-      constraints: BoxConstraints(maxWidth: 320, maxHeight: 500),
+      margin: EdgeInsets.all(12),
+      constraints: BoxConstraints(maxWidth: 280, maxHeight: 320),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -1286,42 +1286,41 @@ Best regards''',
         children: [
           // Header with close button
           Container(
-            padding: EdgeInsets.all(12),
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: AppTheme.brandPrimary.withOpacity(0.1),
+              color: AppTheme.brandPrimary.withOpacity(0.08),
               borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 36,
-                  height: 36,
+                  width: 28,
+                  height: 28,
                   decoration: BoxDecoration(
                     color: AppTheme.brandPrimary,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Icon(
                     Icons.location_on,
                     color: Colors.white,
-                    size: 20,
+                    size: 16,
                   ),
                 ),
-                SizedBox(width: 12),
+                SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _vehicleCustomNames[vehicle.id] ?? vehicle.description,
                     style: GoogleFonts.poppins(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                IconButton(
-                  icon: Icon(Icons.close, size: 20),
-                  onPressed: _hideVehicleDetails,
-                  padding: EdgeInsets.all(4),
-                  constraints: BoxConstraints(minWidth: 32, minHeight: 32),
+                SizedBox(width: 2),
+                GestureDetector(
+                  onTap: _hideVehicleDetails,
+                  child: Icon(Icons.close, size: 18, color: Colors.grey.shade600),
                 ),
               ],
             ),
@@ -1330,36 +1329,32 @@ Best regards''',
           Expanded(
             child: SingleChildScrollView(
               child: Container(
-                padding: EdgeInsets.all(12),
+                padding: EdgeInsets.all(10),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (location != null) ...[
                       if (location.locationDescription != null && location.locationDescription!.isNotEmpty)
-                        _buildInfoRow(
+                        _buildCompactInfoRow(
                           icon: Icons.place,
-                          label: 'Location',
                           value: location.locationDescription!,
                         )
                       else
-                        _buildInfoRow(
+                        _buildCompactInfoRow(
                           icon: Icons.gps_fixed,
-                          label: 'Coordinates',
-                          value: '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}',
+                          value: '${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}',
                         ),
-                      SizedBox(height: 12),
-                      _buildInfoRow(
+                      SizedBox(height: 6),
+                      _buildCompactInfoRow(
                         icon: Icons.access_time,
-                        label: 'Updated',
                         value: location.timestampFormatted,
                       ),
                       if (location.speed != null)
                         Padding(
-                          padding: EdgeInsets.only(top: 12),
-                          child: _buildInfoRow(
+                          padding: EdgeInsets.only(top: 6),
+                          child: _buildCompactInfoRow(
                             icon: Icons.speed,
-                            label: 'Speed',
                             value: '${location.speed!.toStringAsFixed(1)} km/h',
                           ),
                         ),
@@ -1371,54 +1366,44 @@ Best regards''',
           ),
           // Action buttons - Fixed at bottom
           Container(
-            padding: EdgeInsets.all(12),
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             decoration: BoxDecoration(
               border: Border(top: BorderSide(color: Colors.grey.shade200)),
             ),
             child: Row(
               children: [
-                // View Attributes button (if attributes exist)
+                // View Attributes button (eye icon - if attributes exist)
                 if ((vehicle.visibleAttributes ?? {}).isNotEmpty)
                   Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        _hideVehicleDetails();
-                        _showAttributesBottomSheet(vehicle);
-                      },
-                      icon: Icon(Icons.remove_red_eye, size: 14),
-                      label: Text('Details', style: GoogleFonts.inter(fontSize: 11)),
-                      style: OutlinedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    child: Container(
+                      height: 32,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          _hideVehicleDetails();
+                          _showAttributesBottomSheet(vehicle);
+                        },
+                        icon: Icon(Icons.remove_red_eye, size: 13),
+                        label: Text('View', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w500)),
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.symmetric(horizontal: 6),
+                        ),
                       ),
                     ),
                   ),
-                if ((vehicle.visibleAttributes ?? {}).isNotEmpty) SizedBox(width: 6),
+                if ((vehicle.visibleAttributes ?? {}).isNotEmpty) SizedBox(width: 4),
                 Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      _hideVehicleDetails();
-                      _showEditNameDialog(vehicle);
-                    },
-                    icon: Icon(Icons.edit, size: 14),
-                    label: Text('Rename', style: GoogleFonts.inter(fontSize: 11)),
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 6),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      _hideVehicleDetails();
-                      _showShareLocationOptions(vehicle);
-                    },
-                    icon: Icon(Icons.share, size: 14),
-                    label: Text('Share', style: GoogleFonts.inter(fontSize: 11)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                  child: Container(
+                    height: 32,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        _hideVehicleDetails();
+                        _showEditNameDialog(vehicle);
+                      },
+                      icon: Icon(Icons.edit, size: 13),
+                      label: Text('Edit', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w500)),
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(horizontal: 6),
+                      ),
                     ),
                   ),
                 ),
@@ -1427,6 +1412,69 @@ Best regards''',
           ),
         ],
       ),
+    );
+  }
+
+  /// Compact info row for vehicle popup - shows icon and value only
+  Widget _buildCompactInfoRow({
+    required IconData icon,
+    required String value,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: Colors.grey.shade600),
+        SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade800,
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Standard info row for different contexts - shows icon, label, and value
+  Widget _buildInfoRow({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: Colors.grey[600]),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+              Text(
+                value,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1945,35 +1993,27 @@ Best regards''',
               tooltip: 'Add New Tracker',
             ),
           ),
-        // Map controls (zoom and pan) - Web only - Modern compact design
+        // Map zoom controls only - Web only - Minimal compact design
         if (!_isLoading && _useFlutterMap && kIsWeb)
           Positioned(
             right: 16,
             top: 80,
             child: Material(
               elevation: 4,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               shadowColor: Colors.black.withOpacity(0.15),
               child: Container(
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white,
-                      Colors.grey.shade50,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: Colors.grey.shade200,
-                    width: 1,
+                    width: 0.5,
                   ),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(height: 2),
                     // Zoom In
                     _buildMapControlButton(
                       icon: Icons.add_rounded,
@@ -1982,7 +2022,7 @@ Best regards''',
                     ),
                     Container(
                       height: 1,
-                      width: 32,
+                      width: 36,
                       color: Colors.grey.shade200,
                     ),
                     // Zoom Out
@@ -1991,48 +2031,6 @@ Best regards''',
                       onPressed: _zoomOut,
                       tooltip: 'Zoom Out',
                     ),
-                    Container(
-                      height: 1,
-                      width: 32,
-                      color: Colors.grey.shade200,
-                    ),
-                    // Pan Up
-                    _buildMapControlButton(
-                      icon: Icons.keyboard_arrow_up_rounded,
-                      onPressed: () => _panMap(0.1, 0),
-                      tooltip: 'Pan Up',
-                    ),
-                    // Pan controls row
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildMapControlButton(
-                          icon: Icons.keyboard_arrow_left_rounded,
-                          onPressed: () => _panMap(0, -0.1),
-                          tooltip: 'Pan Left',
-                        ),
-                        Container(width: 1, height: 36, color: Colors.grey.shade200),
-                        _buildMapControlButton(
-                          icon: Icons.my_location_rounded,
-                          onPressed: _resetMapView,
-                          tooltip: 'Reset View',
-                          isPrimary: true,
-                        ),
-                        Container(width: 1, height: 36, color: Colors.grey.shade200),
-                        _buildMapControlButton(
-                          icon: Icons.keyboard_arrow_right_rounded,
-                          onPressed: () => _panMap(0, 0.1),
-                          tooltip: 'Pan Right',
-                        ),
-                      ],
-                    ),
-                    // Pan Down
-                    _buildMapControlButton(
-                      icon: Icons.keyboard_arrow_down_rounded,
-                      onPressed: () => _panMap(-0.1, 0),
-                      tooltip: 'Pan Down',
-                    ),
-                    SizedBox(height: 2),
                   ],
                 ),
               ),
