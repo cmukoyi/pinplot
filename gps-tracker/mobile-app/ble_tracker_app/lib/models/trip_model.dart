@@ -5,7 +5,7 @@ class Trip {
   final String vehicleDescription;
   final String? driverDescription;
   final String? driverKeyCode;
-  final double? distance; // in miles
+  final double? distance; // in miles (received from API)
   final int duration; // in seconds
   final DateTime startUtcTimestamp;
   final DateTime endUtcTimestamp;
