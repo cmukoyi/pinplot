@@ -1363,23 +1363,6 @@ Best regards''',
                             value: '${location.speed!.toStringAsFixed(1)} km/h',
                           ),
                         ),
-                      // Display visible attributes on map
-                      if ((vehicle.visibleAttributes ?? {}).isNotEmpty) ...[
-                        SizedBox(height: 12),
-                        Divider(height: 1),
-                        SizedBox(height: 12),
-                        ...(vehicle.visibleAttributes ?? {}).entries.map((entry) {
-                          final displayKey = entry.key.replaceAll('_', ' ').toUpperCase();
-                          return Padding(
-                            padding: EdgeInsets.only(top: 12),
-                            child: _buildInfoRow(
-                              icon: Icons.label,
-                              label: displayKey,
-                              value: entry.value,
-                            ),
-                          );
-                        }).toList(),
-                      ],
                     ],
                   ],
                 ),
@@ -1394,6 +1377,22 @@ Best regards''',
             ),
             child: Row(
               children: [
+                // View Attributes button (if attributes exist)
+                if ((vehicle.visibleAttributes ?? {}).isNotEmpty)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        _hideVehicleDetails();
+                        _showAttributesBottomSheet(vehicle);
+                      },
+                      icon: Icon(Icons.remove_red_eye, size: 14),
+                      label: Text('Details', style: GoogleFonts.inter(fontSize: 11)),
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                      ),
+                    ),
+                  ),
+                if ((vehicle.visibleAttributes ?? {}).isNotEmpty) SizedBox(width: 6),
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () {
@@ -2636,6 +2635,226 @@ Best regards''',
     }
     
     return chips;
+  }
+
+  
+  void _showAttributesBottomSheet(Vehicle vehicle) {
+    final visibleAttrs = vehicle.visibleAttributes ?? {};
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            // Header
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.description, color: AppTheme.brandPrimary, size: 24),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Attributes',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          _vehicleCustomNames[vehicle.id] ?? vehicle.description,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, size: 20),
+                    onPressed: () => Navigator.pop(context),
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints(minWidth: 32, minHeight: 32),
+                  ),
+                ],
+              ),
+            ),
+            // Content - Scrollable attributes list
+            Expanded(
+              child: SingleChildScrollView(
+                child: Container(
+                  padding: EdgeInsets.all(16),
+                  child: visibleAttrs.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 32),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.label_off,
+                                  size: 48,
+                                  color: Colors.grey.shade400,
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  'No attributes to display',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : Column(
+                          children: visibleAttrs.entries.map((entry) {
+                            final displayKey = entry.key.replaceAll('_', ' ');
+                            return Padding(
+                              padding: EdgeInsets.only(bottom: 16),
+                              child: Container(
+                                padding: EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade50,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.grey.shade200),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          displayKey.toUpperCase(),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.grey.shade700,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green.shade100,
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.visibility,
+                                                size: 12,
+                                                color: Colors.green.shade700,
+                                              ),
+                                              SizedBox(width: 4),
+                                              Text(
+                                                'Visible',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 10,
+                                                  color: Colors.green.shade700,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: 12),
+                                    Text(
+                                      entry.value.toString(),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.grey.shade800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                ),
+              ),
+            ),
+            // Footer
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: Colors.grey.shade200)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _showEditNameDialog(vehicle);
+                      },
+                      icon: Icon(Icons.edit, size: 16),
+                      label: Text('Edit Attributes'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.brandPrimary,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: Icon(Icons.close, size: 16),
+                      label: Text('Close'),
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showEditNameDialog(Vehicle vehicle) {
