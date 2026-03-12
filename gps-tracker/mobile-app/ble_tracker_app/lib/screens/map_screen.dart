@@ -1782,11 +1782,11 @@ Best regards''',
               fmap.TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.beacontelematics.tracker',
-                maxZoom: 19,
-                keepBuffer: 8, // Keep 8 extra zoom levels in memory for smoother zooming
-                panBuffer: 4, // Load 4 extra tiles around viewport edges
-                maxNativeZoom: 19,
-                retinaMode: true, // Better quality on high-DPI screens
+                maxZoom: 18,
+                keepBuffer: 2,   // Only keep 2 extra tiles in memory (was 8)
+                panBuffer: 2,    // Only 2 tile padding around viewport (was 4)
+                maxNativeZoom: 18, // Don't request higher than server has
+                retinaMode: false, // Disable retina to save memory
                 tileDisplay: fmap.TileDisplay.fadeIn(
                   duration: Duration(milliseconds: 100),
                 ),
