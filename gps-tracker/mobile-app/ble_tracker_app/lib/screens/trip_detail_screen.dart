@@ -27,6 +27,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   bool _isLoading = true;
   fmap.LatLngBounds? _routeBounds;
   
+  // Map controller for zoom controls
+  late fmap.MapController _mapController;
+  
   // For showing location bubbles on marker tap
   String? _selectedMarkerType; // 'start' or 'end'
   Offset? _selectedMarkerPosition;
@@ -34,7 +37,14 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _mapController = fmap.MapController();
     _loadTripRoute();
+  }
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadTripRoute() async {
@@ -227,7 +237,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             ),
             // Map view with boundary
             Expanded(
-              flex: 1,
+              flex: 4,
               child: Container(
                 margin: EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -255,6 +265,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                       : Stack(
                           children: [
                             fmap.FlutterMap(
+                              mapController: _mapController,
                               options: fmap.MapOptions(
                                 initialCenter: _routeBounds != null
                                     ? latlong.LatLng(
@@ -278,6 +289,42 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                             // Location bubble overlay
                             if (_selectedMarkerType != null && _selectedMarkerPosition != null)
                               _buildLocationBubble(),
+                            // Zoom controls
+                            Positioned(
+                              right: 12,
+                              bottom: 12,
+                              child: Column(
+                                children: [
+                                  FloatingActionButton(
+                                    mini: true,
+                                    heroTag: 'zoom_in',
+                                    backgroundColor: Colors.white,
+                                    elevation: 2,
+                                    onPressed: () {
+                                      _mapController.move(
+                                        _mapController.camera.center,
+                                        _mapController.camera.zoom + 1,
+                                      );
+                                    },
+                                    child: Icon(Icons.add, color: AppTheme.brandPrimary),
+                                  ),
+                                  SizedBox(height: 8),
+                                  FloatingActionButton(
+                                    mini: true,
+                                    heroTag: 'zoom_out',
+                                    backgroundColor: Colors.white,
+                                    elevation: 2,
+                                    onPressed: () {
+                                      _mapController.move(
+                                        _mapController.camera.center,
+                                        _mapController.camera.zoom - 1,
+                                      );
+                                    },
+                                    child: Icon(Icons.remove, color: AppTheme.brandPrimary),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                 ),
