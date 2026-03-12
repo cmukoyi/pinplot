@@ -2509,15 +2509,6 @@ Best regards''',
                             ),
                           ),
                         ),
-                      // Display all attributes (not just visible ones)
-                      if (vehicle.attributes != null && vehicle.attributes!.isNotEmpty)
-                        Padding(
-                          padding: EdgeInsets.only(top: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: _buildAttributeChips(vehicle),
-                          ),
-                        ),
                     ],
                   ),
                 ),
