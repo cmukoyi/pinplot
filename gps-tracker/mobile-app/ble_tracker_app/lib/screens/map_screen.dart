@@ -1269,7 +1269,7 @@ Best regards''',
     final location = vehicle.lastKnownPosition;
     return Container(
       margin: EdgeInsets.all(20),
-      constraints: BoxConstraints(maxWidth: 320, maxHeight: 280),
+      constraints: BoxConstraints(maxWidth: 320, maxHeight: 500),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -1326,89 +1326,103 @@ Best regards''',
               ],
             ),
           ),
-          // Content
+          // Content - Scrollable
+          Expanded(
+            child: SingleChildScrollView(
+              child: Container(
+                padding: EdgeInsets.all(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (location != null) ...[
+                      if (location.locationDescription != null && location.locationDescription!.isNotEmpty)
+                        _buildInfoRow(
+                          icon: Icons.place,
+                          label: 'Location',
+                          value: location.locationDescription!,
+                        )
+                      else
+                        _buildInfoRow(
+                          icon: Icons.gps_fixed,
+                          label: 'Coordinates',
+                          value: '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}',
+                        ),
+                      SizedBox(height: 12),
+                      _buildInfoRow(
+                        icon: Icons.access_time,
+                        label: 'Updated',
+                        value: location.timestampFormatted,
+                      ),
+                      if (location.speed != null)
+                        Padding(
+                          padding: EdgeInsets.only(top: 12),
+                          child: _buildInfoRow(
+                            icon: Icons.speed,
+                            label: 'Speed',
+                            value: '${location.speed!.toStringAsFixed(1)} km/h',
+                          ),
+                        ),
+                      // Display visible attributes on map
+                      if ((vehicle.visibleAttributes ?? {}).isNotEmpty) ...[
+                        SizedBox(height: 12),
+                        Divider(height: 1),
+                        SizedBox(height: 12),
+                        ...(vehicle.visibleAttributes ?? {}).entries.map((entry) {
+                          final displayKey = entry.key.replaceAll('_', ' ').toUpperCase();
+                          return Padding(
+                            padding: EdgeInsets.only(top: 12),
+                            child: _buildInfoRow(
+                              icon: Icons.label,
+                              label: displayKey,
+                              value: entry.value,
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Action buttons - Fixed at bottom
           Container(
             padding: EdgeInsets.all(12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: Row(
               children: [
-                if (location != null) ...[
-                  if (location.locationDescription != null && location.locationDescription!.isNotEmpty)
-                    _buildInfoRow(
-                      icon: Icons.place,
-                      label: 'Location',
-                      value: location.locationDescription!,
-                    )
-                  else
-                    _buildInfoRow(
-                      icon: Icons.gps_fixed,
-                      label: 'Coordinates',
-                      value: '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}',
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      _hideVehicleDetails();
+                      _showEditNameDialog(vehicle);
+                    },
+                    icon: Icon(Icons.edit, size: 14),
+                    label: Text('Rename', style: GoogleFonts.inter(fontSize: 11)),
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                     ),
-                  SizedBox(height: 12),
-                  _buildInfoRow(
-                    icon: Icons.access_time,
-                    label: 'Updated',
-                    value: location.timestampFormatted,
                   ),
-                  if (location.speed != null)
-                    Padding(
-                      padding: EdgeInsets.only(top: 12),
-                      child: _buildInfoRow(
-                        icon: Icons.speed,
-                        label: 'Speed',
-                        value: '${location.speed!.toStringAsFixed(1)} km/h',
-                      ),
+                ),
+                SizedBox(width: 6),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      _hideVehicleDetails();
+                      _showShareLocationOptions(vehicle);
+                    },
+                    icon: Icon(Icons.share, size: 14),
+                    label: Text('Share', style: GoogleFonts.inter(fontSize: 11)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                     ),
-                  // Display visible attributes on map
-                  ...(vehicle.visibleAttributes ?? {}).entries.map((entry) {
-                    final displayKey = entry.key.replaceAll('_', ' ').toUpperCase();
-                    return Padding(
-                      padding: EdgeInsets.only(top: 12),
-                      child: _buildInfoRow(
-                        icon: Icons.label,
-                        label: displayKey,
-                        value: entry.value,
-                      ),
-                    );
-                  }).toList(),
-                  // Action buttons
-                  SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            _hideVehicleDetails();
-                            _showEditNameDialog(vehicle);
-                          },
-                          icon: Icon(Icons.edit, size: 14),
-                          label: Text('Rename', style: GoogleFonts.inter(fontSize: 11)),
-                          style: OutlinedButton.styleFrom(
-                            padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 6),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            _hideVehicleDetails();
-                            _showShareLocationOptions(vehicle);
-                          },
-                          icon: Icon(Icons.share, size: 14),
-                          label: Text('Share', style: GoogleFonts.inter(fontSize: 11)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
-                ],
+                ),
               ],
             ),
           ),
