@@ -690,7 +690,7 @@ def add_ble_tag(
     if existing_tag:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This IMEI is already registered"
+            detail="IMEI already registered"
         )
     
     # Create new tag
@@ -1088,7 +1088,7 @@ def add_tag_compat(
                 print(f"❌ IMEI {tag_data.imei} already registered")
             return {
                 "success": False,
-                "error": "This IMEI is already registered"
+                "error": "IMEI already registered"
             }
         
         # Validate IMEI with MProfiler API before adding
