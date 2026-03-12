@@ -1022,4 +1022,63 @@ class AuthService {
       throw Exception(errorMsg);
     }
   }
+
+  // ============= CUSTOM VEHICLE NAME PERSISTENCE =============
+  /// Save a custom name for a vehicle/tag (persisted across sessions)
+  Future<void> saveCustomVehicleName(String vehicleId, String customName) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('custom_vehicle_name_$vehicleId', customName);
+      print('✅ Saved custom name for $vehicleId: $customName');
+    } catch (e) {
+      print('❌ Failed to save custom vehicle name: $e');
+      rethrow;
+    }
+  }
+
+  /// Retrieve custom name for a vehicle (returns null if no custom name set)
+  Future<String?> getCustomVehicleName(String vehicleId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('custom_vehicle_name_$vehicleId');
+    } catch (e) {
+      print('❌ Failed to get custom vehicle name: $e');
+      return null;
+    }
+  }
+
+  /// Delete custom name for a vehicle (revert to showing IMEI)
+  Future<void> deleteCustomVehicleName(String vehicleId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('custom_vehicle_name_$vehicleId');
+      print('✅ Deleted custom name for $vehicleId');
+    } catch (e) {
+      print('❌ Failed to delete custom vehicle name: $e');
+    }
+  }
+
+  /// Get all custom vehicle names as a map {vehicleId: customName}
+  Future<Map<String, String>> getAllCustomVehicleNames() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final customNames = <String, String>{};
+      
+      prefs.getKeys().forEach((key) {
+        if (key.startsWith('custom_vehicle_name_')) {
+          final vehicleId = key.replaceFirst('custom_vehicle_name_', '');
+          final customName = prefs.getString(key);
+          if (customName != null) {
+            customNames[vehicleId] = customName;
+          }
+        }
+      });
+      
+      return customNames;
+    } catch (e) {
+      print('❌ Failed to get all custom vehicle names: $e');
+      return {};
+    }
+  }
 }
+
