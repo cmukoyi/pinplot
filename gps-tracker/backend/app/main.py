@@ -1371,7 +1371,8 @@ def get_vehicles(
                 "description": tag.description,
                 "registration": tag.imei,
                 "ignitionOn": False,  # Not stored in database currently
-                "lastKnownPosition": last_known_position
+                "lastKnownPosition": last_known_position,
+                "attributes": tag.attributes or {}  # Include custom attributes (job_accessories, notes, etc.)
             })
         
         if debug:
