@@ -1233,7 +1233,7 @@ Best regards''',
     final location = vehicle.lastKnownPosition;
     return Container(
       margin: EdgeInsets.all(12),
-      constraints: BoxConstraints(maxWidth: 280, maxHeight: 320),
+      constraints: BoxConstraints(maxWidth: 280, maxHeight: 260),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -1964,12 +1964,12 @@ Best regards''',
             top: 80,
             child: Material(
               elevation: 4,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(8),
               shadowColor: Colors.black.withOpacity(0.15),
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: Colors.grey.shade200,
                     width: 0.5,
@@ -1978,22 +1978,32 @@ Best regards''',
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Zoom In
-                    _buildMapControlButton(
-                      icon: Icons.add_rounded,
-                      onPressed: _zoomIn,
-                      tooltip: 'Zoom In',
+                    // Zoom In button
+                    SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        icon: Icon(Icons.add_rounded, size: 16),
+                        onPressed: _zoomIn,
+                        tooltip: 'Zoom In',
+                      ),
                     ),
                     Container(
                       height: 1,
-                      width: 36,
+                      width: 28,
                       color: Colors.grey.shade200,
                     ),
-                    // Zoom Out
-                    _buildMapControlButton(
-                      icon: Icons.remove_rounded,
-                      onPressed: _zoomOut,
-                      tooltip: 'Zoom Out',
+                    // Zoom Out button
+                    SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        icon: Icon(Icons.remove_rounded, size: 16),
+                        onPressed: _zoomOut,
+                        tooltip: 'Zoom Out',
+                      ),
                     ),
                   ],
                 ),
