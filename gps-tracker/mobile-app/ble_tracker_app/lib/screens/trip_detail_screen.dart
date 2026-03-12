@@ -737,9 +737,4 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       ),
     );
   }
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
 }
