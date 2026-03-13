@@ -43,9 +43,15 @@ class _SignInScreenState extends State<SignInScreen> {
       }
     } catch (e) {
       if (mounted) {
+        // Extract the error message, removing 'Exception: ' wrapper
+        String errorMsg = e.toString();
+        if (errorMsg.startsWith('Exception: ')) {
+          errorMsg = errorMsg.substring('Exception: '.length);
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Sign in failed: ${e.toString()}'),
+            content: Text('Sign in failed: $errorMsg'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 3),
             action: SnackBarAction(

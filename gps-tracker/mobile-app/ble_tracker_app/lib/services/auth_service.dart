@@ -482,7 +482,7 @@ class AuthService {
       }
     } catch (e) {
       _logger.error('signIn: Failed', e);
-      throw Exception('Sign in failed: ${e.toString()}');
+      rethrow; // Re-throw without wrapping to avoid double-exception messages
     }
   }
   
