@@ -34,12 +34,20 @@ jobs:
           echo "✅ All required secrets are configured"
 
       # ============================================================================
-      # STEP 0b: SETUP SSH KEY
+      # STEP 0b: SETUP SSH KEY AND KNOWN HOSTS
       # ============================================================================
       - name: 🔐 Setup SSH Key
         uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+
+      - name: Add Server to Known Hosts
+        env:
+          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H $DO_SERVER_IP >> ~/.ssh/known_hosts 2>&1 || true
+          echo "✅ Server added to known hosts"
 
       # ============================================================================
       # STEP 1: BACKUP DATABASE BEFORE DEPLOYMENT
@@ -50,35 +58,16 @@ jobs:
           DO_USER: ${{ secrets.DO_USER }}
         run: |
           echo "Creating database backup..."
-          ssh $DO_USER@$DO_SERVER_IP << 'EOF'
-            cd /root/beacon-telematics/gps-tracker
-            
-            # Create timestamped backup directory
-            BACKUP_DIR="backups/$(date +%Y%m%d_%H%M%S)"
-            mkdir -p "$BACKUP_DIR"
-            
-            # Backup PostgreSQL database
-            docker compose exec -T db pg_dump -U beacon_user -d beacon_telematics > "$BACKUP_DIR/beacon_db.sql" 2>&1
-            
-            if [ $? -eq 0 ]; then
-              BACKUP_SIZE=$(du -h "$BACKUP_DIR/beacon_db.sql" | cut -f1)
-              echo "✅ Database backup created: $BACKUP_DIR/beacon_db.sql ($BACKUP_SIZE)"
-            else
-              echo "❌ Backup failed!"
-              exit 1
-            fi
-            
-            # Keep only last 10 backups to save space
-            echo "Cleaning old backups (keeping last 10)..."
-            BACKUP_COUNT=$(ls -d backups/*/ 2>/dev/null | wc -l)
-            if [ $BACKUP_COUNT -gt 10 ]; then
-              ls -t -d backups/*/ | tail -n +11 | xargs rm -rf
-              echo "✅ Removed old backups"
-            fi
-            
-            echo "Current backups:"
-            ls -lh backups/ | grep "^d"
-          EOF
+          ssh $DO_USER@$DO_SERVER_IP "cd /root/beacon-telematics/gps-tracker && \
+            BACKUP_DIR=backups/\$(date +%Y%m%d_%H%M%S) && \
+            mkdir -p \$BACKUP_DIR && \
+            docker compose exec -T db pg_dump -U beacon_user -d beacon_telematics > \$BACKUP_DIR/beacon_db.sql 2>&1 && \
+            BACKUP_SIZE=\$(du -h \$BACKUP_DIR/beacon_db.sql | cut -f1) && \
+            echo '✅ Database backup created: '\$BACKUP_DIR'/beacon_db.sql ('\$BACKUP_SIZE')' && \
+            BACKUP_COUNT=\$(ls -d backups/*/ 2>/dev/null | wc -l) && \
+            if [ \$BACKUP_COUNT -gt 10 ]; then ls -t -d backups/*/ | tail -n +11 | xargs rm -rf; echo '✅ Old backups removed'; fi && \
+            echo 'Current backups:' && \
+            ls -lh backups/ | grep '^d'"
 
       # ============================================================================
       # STEP 2: TAG CURRENT CODE VERSION IN GIT
@@ -103,18 +92,9 @@ jobs:
           DO_USER: ${{ secrets.DO_USER }}
         run: |
           echo "Applying Alembic migrations..."
-          ssh $DO_USER@$DO_SERVER_IP << 'EOF'
-            cd /root/beacon-telematics/gps-tracker
-            
-            docker compose exec -T backend alembic upgrade head 2>&1
-            
-            if [ $? -ne 0 ]; then
-              echo "❌ Migration failed! Rollback may be required."
-              exit 1
-            fi
-            
-            echo "✅ Migrations completed successfully"
-          EOF
+          ssh $DO_USER@$DO_SERVER_IP "cd /root/beacon-telematics/gps-tracker && \
+            docker compose exec -T backend alembic upgrade head 2>&1 && \
+            echo '✅ Migrations completed successfully'"
 
       # ============================================================================
       # STEP 4: DEPLOY NEW CODE
@@ -125,26 +105,16 @@ jobs:
           DO_USER: ${{ secrets.DO_USER }}
         run: |
           echo "Deploying new code..."
-          ssh $DO_USER@$DO_SERVER_IP << 'EOF'
-            cd /root/beacon-telematics/gps-tracker
-            
-            # Pull latest code
-            echo "Pulling latest code from main branch..."
-            git pull origin main 2>&1
-            
-            # Rebuild containers with new code
-            echo "Rebuilding containers..."
-            docker compose build --no-cache backend admin-portal customer flutter-web 2>&1
-            
-            # Restart all services
-            echo "Restarting services..."
-            docker compose down && docker compose up -d 2>&1
-            
-            # Wait for services to be ready
-            sleep 15
-            
-            echo "✅ Deployment completed"
-          EOF
+          ssh $DO_USER@$DO_SERVER_IP "cd /root/beacon-telematics/gps-tracker && \
+            echo 'Pulling latest code from main branch...' && \
+            git pull origin main 2>&1 && \
+            echo 'Rebuilding containers...' && \
+            docker compose build --no-cache backend admin-portal customer flutter-web 2>&1 && \
+            echo 'Restarting services...' && \
+            docker compose down && docker compose up -d 2>&1 && \
+            echo 'Waiting for services to stabilize...' && \
+            sleep 15 && \
+            echo '✅ Deployment completed'"
 
       # ============================================================================
       # STEP 5: RUN SMOKE TESTS (health checks)
