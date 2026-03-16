@@ -15,7 +15,7 @@ services:
     healthcheck:
       test:
       - CMD-SHELL
-      - pg_isready -U beacon_user
+      - pg_isready -U beacon_user -d beacon_telematics
       interval: 10s
       timeout: 5s
       retries: 5
