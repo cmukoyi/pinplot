@@ -86,8 +86,8 @@ services:
     image: nginx:alpine
     container_name: beacon_telematics_nginx
     ports:
-    - 8080:80
-    - 8443:443
+    - 80:80
+    - 443:443
     volumes:
     - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     - /etc/letsencrypt:/etc/letsencrypt:ro
