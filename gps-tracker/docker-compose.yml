@@ -36,8 +36,6 @@ services:
     networks:
     - beacon_telematics_network
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    environment:
-    - MZONE_CLIENT_SECRET=g_SkQ.B.z3TeBU$$g#hVeP#c2
   admin-portal:
     build:
       context: ./admin-portal
