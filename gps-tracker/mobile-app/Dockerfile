@@ -1,23 +1,11 @@
 # Flutter Web App Dockerfile
-# Builds and serves Flutter web app with nginx
+# Serves pre-built Flutter web app with nginx
+# NOTE: Flutter app is built by GitHub Actions CI/CD pipeline, not here
 
-# Stage 1: Build Flutter app
-FROM ghcr.io/cirruslabs/flutter:stable AS builder
-
-WORKDIR /app
-
-# Copy Flutter app source
-COPY ble_tracker_app /app
-
-# Build Flutter web app
-RUN flutter pub get && \
-    flutter build web --web-renderer html --release
-
-# Stage 2: Serve with nginx
 FROM nginx:alpine
 
-# Copy built Flutter web files from builder stage
-COPY --from=builder /app/build/web /usr/share/nginx/html
+# Copy pre-built Flutter web files (built by GitHub Actions)
+COPY ble_tracker_app/build/web /usr/share/nginx/html
 
 # Create nginx configuration for Flutter web app
 RUN echo 'server {' > /etc/nginx/conf.d/default.conf && \

@@ -89,6 +89,19 @@ jobs:
           echo "✅ Flutter web build completed"
           ls -lh build/web/main.dart.js
       
+      - name: Verify Flutter Build Artifacts
+        run: |
+          echo "🔍 Verifying Flutter build artifacts exist..."
+          if [ -d "gps-tracker/mobile-app/ble_tracker_app/build/web" ]; then
+            echo "✅ Flutter web build directory exists"
+            ls -lh gps-tracker/mobile-app/ble_tracker_app/build/web/ | head -10
+            FILE_COUNT=$(find gps-tracker/mobile-app/ble_tracker_app/build/web -type f | wc -l)
+            echo "✅ Found $FILE_COUNT files in build/web/"
+          else
+            echo "❌ ERROR: Flutter build directory not found!"
+            exit 1
+          fi
+      
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.8.0
         with:
@@ -129,10 +142,14 @@ jobs:
           DO_USER: ${{ secrets.DO_USER }}
         run: |
           # Copy gps-tracker folder to production under beacon-telematics directory
+          # CRITICAL: Pre-built Flutter artifacts are in mobile-app/ble_tracker_app/build/web/
           echo "📂 Syncing BeaconTelematics code to production..."
           ssh $DO_USER@$DO_SERVER_IP "mkdir -p ~/beacon-telematics/gps-tracker"
           rsync -avz --delete \
+            --include 'mobile-app/ble_tracker_app/build/web/***' \
+            --include 'mobile-app/ble_tracker_app/build/' \
             --exclude '.git' \
+            --exclude '.gitignore' \
             --exclude 'node_modules' \
             --exclude '__pycache__' \
             --exclude '.env' \
@@ -140,6 +157,10 @@ jobs:
             --exclude '.dart_tool' \
             --exclude 'beacon_telematics_postgres_data' \
             ./gps-tracker/ $DO_USER@$DO_SERVER_IP:~/beacon-telematics/gps-tracker/
+          
+          # Verify artifacts were synced
+          echo "🔍 Verifying pre-built Flutter artifacts on server..."
+          ssh $DO_USER@$DO_SERVER_IP "ls -lh ~/beacon-telematics/gps-tracker/mobile-app/ble_tracker_app/build/web/ | head -5 || echo '⚠️  Build artifacts not found on server!'"
           
           echo "🚀 Deploying BeaconTelematics containers..."
           # Deploy on production
