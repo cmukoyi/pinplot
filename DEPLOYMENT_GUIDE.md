@@ -174,6 +174,66 @@ rsync --dry-run -avz ... (add all flags from above)
 
 ---
 
+### Rule 7: Correct Nginx Caching Strategy (CRITICAL for UI updates to appear)
+**March 17 P.M. Issue:** "I made changes but can't see them even after deployment!" - Users reporting UI changes not appearing in browser.
+
+**Root Cause:** The nginx config in `mobile-app/Dockerfile` was caching `index.html` for 1 HOUR: `Cache-Control: public, max-age=3600`. Browser served old HTML referencing old JavaScript forever.
+
+**The Solution: Different cache strategies by file type:**
+
+| File Type | max-age | Reason | Header |
+|-----------|---------|--------|--------|
+| `index.html` | 0 (never) | HTML must always be fresh, it references JS bundles | `no-cache, no-store, must-revalidate` |
+| `main.dart.js`, `*.js`, `*.css` | 1 year | Safe because filenames include content hash | `public, immutable, max-age=31536000` |
+| `flutter_service_worker.js` | 0 (never) | Service worker must check for updates | `no-cache, no-store, must-revalidate` |
+| Fonts, images (`.woff2`, `.png`, etc) | 1 year | Safe - rarely change | `public, max-age=31536000, immutable` |
+
+**What You Must Do:**
+- ✅ HTML files: `Cache-Control: no-cache, no-store, must-revalidate`
+- ✅ Hashed bundles (`.js`, `.css`): `Cache-Control: public, immutable, max-age=31536000`
+- ✅ Service worker: `Cache-Control: no-cache, no-store, must-revalidate`
+- ✅ Always set `Pragma: no-cache` and `Expires: 0` for non-cached resources
+
+**What You Must NOT Do:**
+- ❌ Use `max-age=3600` on root location (catches HTML!)
+- ❌ Cache `index.html` for any duration
+- ❌ Use `public, max-age=*` on HTML
+- ❌ Skip the service worker no-cache directive
+
+**Correct Dockerfile Config:**
+```dockerfile
+# HTML: NO CACHE
+location ~ ^/.*\.html$ {
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+    add_header Pragma "no-cache";
+    add_header Expires "0";
+}
+
+# Hashed bundles: 1 YEAR CACHE (safe due to hash in filename)
+location ~ \.(js|css)$ {
+    add_header Cache-Control "public, immutable, max-age=31536000";
+}
+
+# Service worker: NO CACHE
+location /flutter_service_worker.js {
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+    add_header Pragma "no-cache";
+    add_header Expires "0";
+}
+
+# SPA fallback: NO CACHE (falls back to index.html)
+location / {
+    try_files $uri $uri/ /index.html;
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+}
+```
+
+**User Workaround (if they still see old version after deployment):**
+1. Hard refresh: `Ctrl + Shift + R` (Windows) or `Cmd + Shift + R` (Mac)
+2. Or DevTools → Network tab → right-click refresh → check "Disable cache" → reload
+
+---
+
 ## ✅ Pre-Deployment Checklist
 
 **Run these before pushing to main:**
