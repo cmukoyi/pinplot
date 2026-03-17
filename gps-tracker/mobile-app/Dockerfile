@@ -2,7 +2,7 @@
 # Builds and serves Flutter web app with nginx
 
 # Stage 1: Build Flutter app
-FROM cirrusci/flutter:latest as builder
+FROM ghcr.io/cirruslabs/flutter:stable AS builder
 
 WORKDIR /app
 
