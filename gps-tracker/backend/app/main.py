@@ -1384,21 +1384,6 @@ def get_vehicles(
             "error": str(e),
             "vehicles": []
         }
-        
-        return {
-            "success": True,
-            "count": len(formatted_vehicles),
-            "vehicles": formatted_vehicles
-        }
-    
-    except Exception as e:
-        if debug:
-            print(f"❌ Error in /api/vehicles: {str(e)}")
-        return {
-            "success": False,
-            "error": str(e),
-            "vehicles": []
-        }
 
 
 # ==================== Trips / Journeys Management ====================
@@ -2154,7 +2139,7 @@ async def mock_location_test(
 
 
 @app.post("/api/v1/trips")
-def get_trips(
+def get_trips_v1(
     request: dict,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)

@@ -9,7 +9,7 @@ import os
 # SendGrid support
 try:
     from sendgrid import SendGridAPIClient
-    from sendgrid.helpers.mail import Mail, Email, To, Content
+    from sendgrid.helpers.mail import Mail, Email, To, Content, TrackingSettings, ClickTracking
     SENDGRID_AVAILABLE = True
 except ImportError:
     SENDGRID_AVAILABLE = False
@@ -25,7 +25,7 @@ class EmailService:
         self.smtp_port = int(os.getenv("SMTP_PORT", "1025"))
         self.smtp_user = os.getenv("SMTP_USER", "")
         self.smtp_password = os.getenv("SMTP_PASSWORD", "")
-        self.from_email = os.getenv("FROM_EMAIL", "noreply@bletracker.com")
+        self.from_email = os.getenv("FROM_EMAIL", "noreply@beacontelematics.co.uk")
         self.debug = os.getenv("DEBUG", "False").lower() == "true"
         
         # Log email service configuration
@@ -411,9 +411,9 @@ class EmailService:
             )
             # Disable click tracking so map/Google Maps links are not rewritten
             # to SendGrid redirect URLs (url####.domain/ls/click?upn=...)
-            message.tracking_settings = {
-                'click_tracking': {'enable': False, 'enable_text': False}
-            }
+            tracking_settings = TrackingSettings()
+            tracking_settings.click_tracking = ClickTracking(enable=False, enable_text=False)
+            message.tracking_settings = tracking_settings
             
             sg = SendGridAPIClient(self.sendgrid_api_key)
             response = sg.send(message)
