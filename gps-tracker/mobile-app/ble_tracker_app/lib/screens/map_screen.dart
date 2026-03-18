@@ -539,19 +539,8 @@ class _MapScreenState extends State<MapScreen> {
             (route) => false,
           );
         } else {
-          // Other errors - show retry option
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to load vehicles: ${e.toString()}'),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 5),
-              action: SnackBarAction(
-                label: 'Retry',
-                textColor: Colors.white,
-                onPressed: _loadTags,
-              ),
-            ),
-          );
+          // Other errors (e.g. network, no vehicles yet) — log only, no UI error shown
+          print('⚠️ Failed to load vehicles (silent): ${e.toString()}');
         }
       }
     }

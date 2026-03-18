@@ -48,10 +48,20 @@ class _SignInScreenState extends State<SignInScreen> {
         if (errorMsg.startsWith('Exception: ')) {
           errorMsg = errorMsg.substring('Exception: '.length);
         }
-        
+
+        // Detect network/fetch errors (e.g. during deployments) and show a friendly message
+        final bool isNetworkError = errorMsg.toLowerCase().contains('failed to fetch') ||
+            errorMsg.toLowerCase().contains('clientexception') ||
+            errorMsg.toLowerCase().contains('socketexception') ||
+            errorMsg.toLowerCase().contains('connection refused');
+
+        final String displayMsg = isNetworkError
+            ? 'Unable to login, please retry after 5 minutes — deployment in progress'
+            : 'Sign in failed: $errorMsg';
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Sign in failed: $errorMsg'),
+            content: Text(displayMsg),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 3),
             action: SnackBarAction(
