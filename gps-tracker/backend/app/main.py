@@ -347,45 +347,55 @@ def manifest():
 # Authentication endpoints
 @app.post("/api/v1/auth/register", response_model=Token)
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user"""
-    # Check if user exists
+    """Register a new user — only called after email/PIN verification and details entry"""
+    # Require that a verified PIN exists for this email (proves email ownership)
+    verified_pin = db.query(VerificationPIN).filter(
+        VerificationPIN.email == user_data.email,
+        VerificationPIN.is_used == True
+    ).order_by(VerificationPIN.created_at.desc()).first()
+
+    if not verified_pin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email not verified. Please complete PIN verification first."
+        )
+
+    # Reject if already fully registered
     existing_user = db.query(User).filter(User.email == user_data.email).first()
+    if existing_user and existing_user.hashed_password is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+
     if existing_user:
-        # If user exists but has no password (from email verification), update it
-        if existing_user.hashed_password is None:
-            existing_user.hashed_password = get_password_hash(user_data.password)
-            existing_user.first_name = user_data.first_name
-            existing_user.last_name = user_data.last_name
-            existing_user.is_admin = user_data.is_admin
-            existing_user.email_verified = True
-            db.commit()
-            db.refresh(existing_user)
-            
-            # Generate token
-            access_token = create_access_token(data={"sub": str(existing_user.id)})
-            return {"access_token": access_token, "token_type": "bearer"}
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
-            )
-    
-    # Create new user
+        # Partial record exists (edge case) — complete it
+        existing_user.hashed_password = get_password_hash(user_data.password)
+        existing_user.first_name = user_data.first_name
+        existing_user.last_name = user_data.last_name
+        existing_user.is_admin = user_data.is_admin
+        existing_user.email_verified = True
+        existing_user.is_active = True
+        db.commit()
+        db.refresh(existing_user)
+        access_token = create_access_token(data={"sub": str(existing_user.id)})
+        return {"access_token": access_token, "token_type": "bearer"}
+
+    # Create user for the first time — all details collected, email verified
     db_user = User(
         email=user_data.email,
         hashed_password=get_password_hash(user_data.password),
         first_name=user_data.first_name,
         last_name=user_data.last_name,
         is_admin=user_data.is_admin,
-        email_verified=True
+        email_verified=True,
+        is_active=True
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    
-    # Generate token
+
     access_token = create_access_token(data={"sub": str(db_user.id)})
-    
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.post("/api/v1/auth/login", response_model=Token)
@@ -437,27 +447,16 @@ def send_verification_code(request: SendVerificationCodeRequest, db: Session = D
     # Generate 6-digit PIN
     pin = email_service.generate_pin()
     expires_at = datetime.utcnow() + timedelta(minutes=10)
-    
-    # If user doesn't exist, create a temporary record
-    if not user:
-        user = User(
-            email=request.email,
-            hashed_password=None,  # Will be set after verification
-            email_verified=False
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    
-    # Invalidate old PINs
+
+    # Invalidate old PINs for this email (regardless of whether user exists)
     db.query(VerificationPIN).filter(
         VerificationPIN.email == request.email,
         VerificationPIN.is_used == False
     ).update({"is_used": True})
-    
-    # Create new PIN
+
+    # Create PIN record without a user_id — user is created only after PIN is verified
     verification = VerificationPIN(
-        user_id=user.id,
+        user_id=user.id if user else None,
         email=request.email,
         pin=pin,
         expires_at=expires_at
@@ -480,10 +479,10 @@ def send_verification_code(request: SendVerificationCodeRequest, db: Session = D
         "expires_in_minutes": 10
     }
 
-@app.post("/api/v1/auth/verify-pin", response_model=Token)
+@app.post("/api/v1/auth/verify-pin")
 def verify_pin(request: VerifyPINRequest, db: Session = Depends(get_db)):
-    """Verify PIN and create/login user"""
-    # Find valid PIN
+    """Verify PIN — confirms email ownership. User is NOT created here."""
+    # Find valid, unused, non-expired PIN
     verification = db.query(VerificationPIN).filter(
         VerificationPIN.email == request.email,
         VerificationPIN.pin == request.pin,
@@ -497,27 +496,19 @@ def verify_pin(request: VerifyPINRequest, db: Session = Depends(get_db)):
             detail="Invalid or expired verification code"
         )
     
-    # Mark PIN as used
+    # Mark PIN as used — email ownership confirmed.
+    # User record is created only when /register is called with name + password.
     verification.is_used = True
-    
-    # Get or update user
-    user = db.query(User).filter(User.id == verification.user_id).first()
-    user.email_verified = True
-    user.is_active = True
+
+    # If a pre-existing user exists (e.g. re-registration), mark email verified.
+    existing_user = db.query(User).filter(User.email == request.email).first()
+    if existing_user:
+        existing_user.email_verified = True
+        existing_user.is_active = True
     
     db.commit()
-    db.refresh(user)
     
-    # Send welcome email if it's a new user (only if email is configured)
-    import os
-    debug = os.getenv('DEBUG', 'False').lower() == 'true'
-    if not user.first_name and not debug:
-        email_service.send_welcome_email(user.email)
-    
-    # Generate access token
-    access_token = create_access_token(data={"sub": str(user.id)})
-    
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"success": True, "message": "Email verified successfully"}
 
 @app.post("/api/v1/auth/forgot-password")
 def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
@@ -1044,14 +1035,8 @@ def send_pin_compat(request: SendVerificationCodeRequest, db: Session = Depends(
 @app.post("/api/auth/verify-pin")
 def verify_pin_compat(request: VerifyPINRequest, db: Session = Depends(get_db)):
     """Mobile app compatibility endpoint for verify-pin"""
-    result = verify_pin(request, db)
-    # Return with 'token' field instead of 'access_token' for mobile app compatibility
-    return {
-        "token": result["access_token"],
-        "access_token": result["access_token"],
-        "token_type": "bearer",
-        "success": True
-    }
+    verify_pin(request, db)
+    return {"success": True, "message": "Email verified successfully"}
 
 
 @app.get("/api/auth/me", response_model=UserResponse)
@@ -1272,6 +1257,13 @@ def update_tag_attributes(
         
         # Extract attributes from request (has "attributes" key)
         attrs = attributes_data.get('attributes', {})
+        
+        # Persist device_name if provided alongside attributes
+        new_device_name = attributes_data.get('device_name')
+        if new_device_name is not None:
+            tag.device_name = new_device_name.strip() or None
+            if debug:
+                print(f"✏️  Updating device_name to: {tag.device_name}")
         
         # Validate structure - each attribute should have value and show_on_map
         for attr_name, attr_value in attrs.items():

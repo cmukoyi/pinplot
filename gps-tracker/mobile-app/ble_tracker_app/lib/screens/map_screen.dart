@@ -3038,12 +3038,17 @@ Best regards''',
                   };
                   
                   try {
-                    // Call API to save attributes
+                    // Call API to save attributes and device name
                     final imei = vehicle.registration ?? '';
                     print('💾 Saving attributes for IMEI: $imei');
                     print('   Attributes to save: $attributes');
+                    print('   Device name: ${nameController.text.trim()}');
                     if (imei.isNotEmpty) {
-                      await _locationService.updateAssetAttributes(imei, attributes);
+                      await _locationService.updateAssetAttributes(
+                        imei,
+                        attributes,
+                        deviceName: nameController.text.trim().isEmpty ? null : nameController.text.trim(),
+                      );
                       print('✅ Attributes saved successfully');
                       
                       // Reload vehicles to reflect changes

@@ -16,6 +16,8 @@ if use_sqlite:
         return Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     def get_uuid_fk(table_col):
         return Column(String(36), ForeignKey(table_col), nullable=False)
+    def get_uuid_fk_nullable(table_col):
+        return Column(String(36), ForeignKey(table_col), nullable=True)
 else:
     # For PostgreSQL, use native UUID type
     from sqlalchemy.dialects.postgresql import UUID
@@ -23,6 +25,8 @@ else:
         return Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     def get_uuid_fk(table_col):
         return Column(UUID(as_uuid=True), ForeignKey(table_col), nullable=False)
+    def get_uuid_fk_nullable(table_col):
+        return Column(UUID(as_uuid=True), ForeignKey(table_col), nullable=True)
 
 class User(Base):
     __tablename__ = "users"
@@ -51,15 +55,15 @@ class VerificationPIN(Base):
     __tablename__ = "verification_pins"
     
     id = get_uuid_column()
-    user_id = get_uuid_fk("users.id")
+    user_id = get_uuid_fk_nullable("users.id")  # nullable — user is created only at /register
     email = Column(String(255), nullable=False, index=True)
     pin = Column(String(6), nullable=False)
     is_used = Column(Boolean, default=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
-    # Relationship
-    user = relationship("User", back_populates="verification_pins")
+    # Relationship (user_id may be NULL before registration completes)
+    user = relationship("User", back_populates="verification_pins", foreign_keys="[VerificationPIN.user_id]")
 
 
 class PasswordResetToken(Base):

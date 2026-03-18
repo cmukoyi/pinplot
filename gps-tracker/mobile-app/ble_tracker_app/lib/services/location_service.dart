@@ -243,7 +243,10 @@ class LocationService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $authToken',
         },
-        body: json.encode({'imei': imei}),
+        body: json.encode({
+          'imei': imei,
+          if (description != null && description.isNotEmpty) 'device_name': description,
+        }),
       ).timeout(const Duration(seconds: 10));
       
       if (response.statusCode == 200) {
@@ -385,11 +388,12 @@ class LocationService {
   }
   
   /// Update asset attributes
-  Future<void> updateAssetAttributes(String imei, Map<String, dynamic> attributes) async {
+  Future<void> updateAssetAttributes(String imei, Map<String, dynamic> attributes, {String? deviceName}) async {
     try {
       _logger.info('updateAssetAttributes: Updating attributes for IMEI $imei');
       print('\n========== UPDATE ATTRIBUTES ==========');
       print('📝 Updating attributes for IMEI: $imei');
+      if (deviceName != null) print('🏷️  Updating device name to: $deviceName');
       
       // Get auth token
       final authToken = await _getAuthToken();
@@ -404,13 +408,16 @@ class LocationService {
       print('📡 Calling: PUT $url');
       print('📦 Attributes: $attributes');
       
+      final body = <String, dynamic>{'attributes': attributes};
+      if (deviceName != null) body['device_name'] = deviceName;
+      
       final response = await http.put(
         url,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $authToken',
         },
-        body: json.encode({'attributes': attributes}),
+        body: json.encode(body),
       ).timeout(const Duration(seconds: 30));
       
       print('📊 Response status: ${response.statusCode}');

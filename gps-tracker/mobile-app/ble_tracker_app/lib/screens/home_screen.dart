@@ -151,7 +151,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       // Save IMEI to local storage using LocationService
-      await _locationService.saveIMEI(imei);
+      final tagName = _tagNameController.text.trim();
+      await _locationService.saveIMEI(imei, description: tagName.isEmpty ? null : tagName);
       print('✅ HomeScreen: IMEI saved to local storage: $imei');
       
       // Optional: Also try to save to backend for user's account (legacy API)
@@ -678,19 +679,19 @@ class _HomeScreenState extends State<HomeScreen> {
                             // Save Button
                             SizedBox(
                               width: double.infinity,
-                              height: 50,
                               child: ElevatedButton(
                                 onPressed: _isLoading ? null : _addTag,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppTheme.brandPrimary,
                                   foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   disabledBackgroundColor: Colors.grey.shade300,
                                 ),
                                 child: _isLoading
-                                    ? SizedBox(
+                                    ? const SizedBox(
                                         height: 20,
                                         width: 20,
                                         child: CircularProgressIndicator(
@@ -699,15 +700,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                       )
                                     : Row(
+                                        mainAxisSize: MainAxisSize.min,
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
-                                          Icon(Icons.save, size: 20),
-                                          SizedBox(width: 8),
-                                          Text(
-                                            'Save Tag',
-                                            style: GoogleFonts.inter(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
+                                          const Icon(Icons.save, size: 20),
+                                          const SizedBox(width: 8),
+                                          Flexible(
+                                            child: Text(
+                                              'Save Tag',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
                                         ],

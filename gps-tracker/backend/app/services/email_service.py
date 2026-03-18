@@ -409,6 +409,11 @@ class EmailService:
                 plain_text_content=text_content,
                 html_content=html_content
             )
+            # Disable click tracking so map/Google Maps links are not rewritten
+            # to SendGrid redirect URLs (url####.domain/ls/click?upn=...)
+            message.tracking_settings = {
+                'click_tracking': {'enable': False, 'enable_text': False}
+            }
             
             sg = SendGridAPIClient(self.sendgrid_api_key)
             response = sg.send(message)

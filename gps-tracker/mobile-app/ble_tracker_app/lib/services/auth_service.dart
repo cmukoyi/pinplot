@@ -335,25 +335,9 @@ class AuthService {
       print('📄 Response body: ${response.body}');
       
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        print('📋 Response data keys: ${data.keys.toList()}');
-        
-        // Backend returns 'token' not 'access_token'
-        final token = data['token'];
-        print('🔑 Token received: ${token?.substring(0, 20) ?? 'NULL'}...');
-        
-        await _saveToken(token);
-        _token = token;
-        
-        // Verify it was saved
-        final prefs = await SharedPreferences.getInstance();
-        final savedToken = prefs.getString('auth_token');
-        print('✅ Token saved to storage: ${savedToken != null}');
-        if (savedToken != null) {
-          print('   Saved token: ${savedToken.substring(0, 20)}...');
-        }
-        
-        print('✅ PIN verified, token saved successfully');
+        // Email ownership confirmed. No token at this stage —
+        // the account is not created until /register (final step).
+        print('✅ PIN verified. Email confirmed, proceeding to registration.');
         print('========== VERIFY PIN END ==========\n');
       } else {
         try {

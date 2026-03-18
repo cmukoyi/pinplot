@@ -22,7 +22,6 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
   @override
   void initState() {
     super.initState();
-    // Auto-focus first input
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNodes[0].requestFocus();
     });
@@ -44,11 +43,9 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
 
     try {
       await _authService.verifyPin(widget.email, pin);
-      
+
       if (mounted) {
-        // Clear any SnackBars before navigation
         ScaffoldMessenger.of(context).clearSnackBars();
-        // PIN verified - navigate to user details screen
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -110,205 +107,204 @@ class _PinVerificationScreenState extends State<PinVerificationScreen> {
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
-            child: Container(
-              constraints: BoxConstraints(maxWidth: 400),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.98),
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 20,
-                    offset: Offset(0, 10),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.all(32.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Back Button
-                  Align(
-                    alignment: Alignment.topLeft,
-                    child: TextButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      icon: Icon(Icons.arrow_back),
-                      label: Text('Back'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.grey.shade600,
+            child: Center(                          // ← fixes left-align issue
+              child: Container(
+                constraints: BoxConstraints(maxWidth: 400),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.98),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 20,
+                      offset: Offset(0, 10),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Back Button
+                    Align(
+                      alignment: Alignment.topLeft,
+                      child: TextButton.icon(
+                        onPressed: () => Navigator.pop(context),
+                        icon: Icon(Icons.arrow_back),
+                        label: Text('Back'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.grey.shade600,
+                        ),
                       ),
                     ),
-                  ),
-                  SizedBox(height: 16),
-                  
-                  // Icon
-                  Center(
-                    child: Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: AppTheme.brandPrimary,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.brandPrimary.withValues(alpha: 0.3),
-                            blurRadius: 10,
-                            offset: Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.shield_outlined,
-                        size: 32,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 24),
-                  
-                  // Title
-                  Center(
-                    child: Column(
-                      children: [
-                        Text(
-                          'Verify Code',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey.shade800,
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Enter the 6-digit code sent to',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          widget.email,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.brandPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 40),
-                  
-                  // PIN Input
-                  // Responsive PIN input boxes
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      // Calculate box size based on available width
-                      final availableWidth = constraints.maxWidth - 20; // padding buffer
-                      final boxSize = (availableWidth / 6).clamp(40.0, 65.0); // Min 40, Max 65
-                      
-                      return Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: List.generate(6, (index) {
-                          return SizedBox(
-                            width: boxSize,
-                            height: boxSize,
-                            child: TextField(
-                              controller: _controllers[index],
-                              focusNode: _focusNodes[index],
-                              textAlign: TextAlign.center,
-                              keyboardType: TextInputType.number,
-                              maxLength: 1,
-                              style: TextStyle(
-                                fontSize: boxSize * 0.5,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              decoration: InputDecoration(
-                                counterText: '',
-                                contentPadding: EdgeInsets.zero,
-                              ),
-                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                              onChanged: (value) {
-                                if (value.isNotEmpty && index < 5) {
-                                  _focusNodes[index + 1].requestFocus();
-                                } else if (value.isEmpty && index > 0) {
-                                  _focusNodes[index - 1].requestFocus();
-                                } else if (value.isNotEmpty && index == 5) {
-                                  // Last digit entered
-                                  _focusNodes[index].unfocus();
-                                }
-                              },
+                    SizedBox(height: 16),
+
+                    // Icon
+                    Center(
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: AppTheme.brandPrimary,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.brandPrimary.withValues(alpha: 0.3),
+                              blurRadius: 10,
+                              offset: Offset(0, 5),
                             ),
-                          );
-                        }),
-                      );
-                    },
-                  ),
-                  SizedBox(height: 32),
-                  
-                  // Verify Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _verifyPin,
-                      child: _isLoading
-                          ? SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.check_circle, size: 20),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Verify & Continue',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
-                  SizedBox(height: 24),
-                  
-                  // Resend Code
-                  Center(
-                    child: Column(
-                      children: [
-                        Text(
-                          "Didn't receive the code?",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade500,
-                          ),
+                          ],
                         ),
-                        TextButton(
-                          onPressed: _resendCode,
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppTheme.brandPrimary,
+                        child: Icon(
+                          Icons.shield_outlined,
+                          size: 32,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 24),
+
+                    // Title
+                    Center(
+                      child: Column(
+                        children: [
+                          Text(
+                            'Verify Code',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey.shade800,
+                            ),
                           ),
-                          child: Text(
-                            'Resend Code',
+                          SizedBox(height: 8),
+                          Text(
+                            'Enter the 6-digit code sent to',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            widget.email,
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
+                              color: AppTheme.brandPrimary,
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    SizedBox(height: 40),
+
+                    // PIN Input
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final availableWidth = constraints.maxWidth - 20;
+                        final boxSize = (availableWidth / 6).clamp(40.0, 65.0);
+
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: List.generate(6, (index) {
+                            return SizedBox(
+                              width: boxSize,
+                              height: boxSize,
+                              child: TextField(
+                                controller: _controllers[index],
+                                focusNode: _focusNodes[index],
+                                textAlign: TextAlign.center,
+                                keyboardType: TextInputType.number,
+                                maxLength: 1,
+                                style: TextStyle(
+                                  fontSize: boxSize * 0.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                decoration: InputDecoration(
+                                  counterText: '',
+                                  contentPadding: EdgeInsets.zero,
+                                ),
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                onChanged: (value) {
+                                  if (value.isNotEmpty && index < 5) {
+                                    _focusNodes[index + 1].requestFocus();
+                                  } else if (value.isEmpty && index > 0) {
+                                    _focusNodes[index - 1].requestFocus();
+                                  } else if (value.isNotEmpty && index == 5) {
+                                    _focusNodes[index].unfocus();
+                                  }
+                                },
+                              ),
+                            );
+                          }),
+                        );
+                      },
+                    ),
+                    SizedBox(height: 32),
+
+                    // Verify Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _verifyPin,
+                        child: _isLoading
+                            ? SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.check_circle, size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Verify & Continue',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                    SizedBox(height: 24),
+
+                    // Resend Code
+                    Center(
+                      child: Column(
+                        children: [
+                          Text(
+                            "Didn't receive the code?",
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _resendCode,
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppTheme.brandPrimary,
+                            ),
+                            child: Text(
+                              'Resend Code',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
