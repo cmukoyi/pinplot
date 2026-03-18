@@ -135,10 +135,19 @@ class _POIManagementScreenState extends State<POIManagementScreen> {
                         'No locations created yet',
                         style: TextStyle(fontSize: 18, color: Colors.grey[600]),
                       ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Create a location from the map screen',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                      SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: () => Navigator.pop(context, 'create'),
+                        icon: Icon(Icons.add_location_alt),
+                        label: Text('Create Location'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.brandPrimary,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                       ),
                     ],
                   ),

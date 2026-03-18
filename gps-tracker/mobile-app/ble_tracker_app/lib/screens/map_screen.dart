@@ -3480,8 +3480,11 @@ View on $mapProvider to see the vehicle location.''';
                 title: 'Manage Locations',
                 subtitle: 'Create and manage location alerts',
                 onTap: () async {
-                  await Navigator.pushNamed(context, '/poi-management');
+                  final result = await Navigator.pushNamed(context, '/poi-management');
                   _loadPOIs();
+                  if (result == 'create') {
+                    _showCreatePOIDialog();
+                  }
                 },
               ),
               
