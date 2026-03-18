@@ -16,30 +16,71 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # needed to access tags and history
+          fetch-depth: 0
 
-      - uses: webfactory/ssh-agent@v0.8.0
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
 
-      - name: Rollback to ${{ inputs.version || 'previous tag' }}
-        env:
-          SSH_HOST: ${{ secrets.DO_SERVER_IP }}
-          SSH_USER: ${{ secrets.DO_USER }}
-          TARGET_VERSION: ${{ inputs.version }}
-          WRITE_SECRETS: "false"
-        run: |
-          chmod +x deploy/deploy.sh
+      - name: Add server to known hosts
+        run: ssh-keyscan -H ${{ secrets.DO_SERVER_IP }} >> ~/.ssh/known_hosts
 
-          # Checkout the target version's code locally so rsync sends the right files
+      - name: Checkout rollback target
+        env:
+          TARGET_VERSION: ${{ inputs.version }}
+        run: |
           if [ -n "$TARGET_VERSION" ]; then
             git checkout "$TARGET_VERSION"
             echo "Rolling back to: $TARGET_VERSION"
           else
             PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-parse --short HEAD~1)
             git checkout "$PREV"
-            echo "Rolling back to previous tag: $PREV"
+            echo "Rolling back to: $PREV"
           fi
 
-          # Run deploy without writing secrets (WRITE_SECRETS=false)
-          ./deploy/deploy.sh
+      - name: Sync code to server (no .env write — secrets preserved)
+        env:
+          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
+          DO_USER: ${{ secrets.DO_USER }}
+        run: |
+          rsync -avz --delete \
+            --exclude '.git' \
+            --exclude '.gitignore' \
+            --exclude 'node_modules' \
+            --exclude '__pycache__' \
+            --exclude '*.pyc' \
+            --exclude '.dart_tool' \
+            --exclude 'beacon_telematics_postgres_data' \
+            --exclude 'backend/.env' \
+            --exclude '.env' \
+            ./gps-tracker/ $DO_USER@$DO_SERVER_IP:~/beacon-telematics/gps-tracker/
+          echo "✅ Code synced (secrets on server untouched)"
+
+      - name: Rebuild and restart containers
+        env:
+          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
+          DO_USER: ${{ secrets.DO_USER }}
+        run: |
+          ssh $DO_USER@$DO_SERVER_IP 'bash -s' << 'SSHEOF'
+            set -e
+            cd ~/beacon-telematics/gps-tracker
+            docker compose down --remove-orphans || true
+            docker compose build --no-cache flutter-web admin-portal
+            docker compose build backend customer
+            docker compose up -d
+            sleep 20
+            docker compose ps
+            echo "✅ Rollback complete"
+          SSHEOF
+
+      - name: Rollback summary
+        if: always()
+        run: |
+          echo "========================================"
+          echo "⏪ Beacon Telematics — Rollback Complete"
+          echo "Target  : ${{ inputs.version || 'previous tag' }}"
+          echo "Commit  : $(git rev-parse --short HEAD)"
+          echo "========================================"
+          echo "Verify  : http://${{ secrets.DO_SERVER_IP }}:8001/api/health"
+          echo "========================================"
