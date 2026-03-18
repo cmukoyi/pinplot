@@ -270,63 +270,66 @@ class MZoneService:
         try:
             token = self.get_oauth_token()
             if not token:
-                if self.debug:
-                    print("❌ Failed to obtain OAuth token for trips")
+                print("❌ [get_trips] Failed to obtain OAuth token")
                 return None
-            
-            url = f"{self.api_base}/Trips"
-            headers = {
-                'Authorization': f'Bearer {token}',
-                'Accept': 'application/json'
-            }
-            
-            # vehicle_Id must be a top-level query param (NOT inside $filter)
-            # This matches the working MZone API format verified by test_trips_api_direct.py
-            params = {
-                'utcStartDate': start_date,
-                'utcEndDate': end_date,
-                'vehicle_Id': vehicle_id,
-                '$format': 'json',
-                '$count': 'true',
-                '$select': 'id,vehicle_Id,vehicle_Description,duration,distance,startLocationDescription,startUtcTimestamp,endLocationDescription,endUtcTimestamp,driver_Description,driverKeyCode',
-                '$orderby': 'startUtcTimestamp desc',
-                '$skip': '0',
-                '$top': '100'
-            }
-            # Add vehicleGroup_Id if configured
-            if self.trips_group_id:
-                params['vehicleGroup_Id'] = self.trips_group_id
-            
-            if self.debug:
-                print(f"\n{'='*70}")
-                print(f"🚗 Fetching trips from MZone API")
-                print(f"   Vehicle ID: {vehicle_id}")
-                print(f"   Date range: {start_date} to {end_date}")
-                print(f"   URL: {url}")
-                print(f"{'='*70}")
-            
-            response = requests.get(url, headers=headers, params=params, timeout=30)
-            
+
+            # Build URL exactly like the working test_trips_api_direct.py —
+            # as a manually constructed query string (avoids any encoding issues
+            # that requests params= dict might introduce with $ keys)
+            group_part = f"&vehicleGroup_Id={self.trips_group_id}" if self.trips_group_id else ""
+            full_url = (
+                f"{self.api_base}/Trips?"
+                f"utcStartDate={start_date}"
+                f"&utcEndDate={end_date}"
+                f"&vehicle_Id={vehicle_id}"
+                f"{group_part}"
+                f"&$format=json"
+                f"&$count=true"
+                f"&$select=id,vehicle_Id,vehicle_Description,duration,distance,"
+                f"startLocationDescription,startUtcTimestamp,endLocationDescription,"
+                f"endUtcTimestamp,driver_Description,driverKeyCode"
+                f"&$orderby=startUtcTimestamp%20desc"
+                f"&$skip=0"
+                f"&$top=100"
+            )
+
+            print(f"\n{'='*70}")
+            print(f"🚗 [get_trips] Calling MZone API")
+            print(f"   vehicle_id : {vehicle_id}")
+            print(f"   start_date : {start_date}")
+            print(f"   end_date   : {end_date}")
+            print(f"   group_id   : {self.trips_group_id}")
+            print(f"   full_url   : {full_url}")
+            print(f"{'='*70}")
+
+            response = requests.get(
+                full_url,
+                headers={'Authorization': f'Bearer {token}', 'Accept': 'application/json'},
+                timeout=30
+            )
+
+            print(f"   HTTP status: {response.status_code}")
+
             if response.status_code == 200:
                 data = response.json()
                 trip_count = len(data.get('value', []))
-                if self.debug:
-                    print(f"✅ Fetched {trip_count} trips from MZone")
-                    if trip_count > 0:
-                        for trip in data.get('value', [])[:3]:  # Show first 3 trips
-                            print(f"   📍 Trip {trip.get('id')}: {trip.get('startLocationDescription')} → {trip.get('endLocationDescription')}")
-                    print(f"{'='*70}\n")
+                odata_count = data.get('@odata.count', '?')
+                print(f"✅ [get_trips] {trip_count} trips returned (odata.count={odata_count})")
+                if trip_count > 0:
+                    for trip in data.get('value', [])[:2]:
+                        print(f"   📍 {trip.get('startLocationDescription')} → {trip.get('endLocationDescription')}")
+                print(f"{'='*70}\n")
                 return data
             else:
-                if self.debug:
-                    print(f"❌ Error fetching trips: {response.status_code}")
-                    print(f"   Response: {response.text}")
-                    print(f"{'='*70}\n")
+                print(f"❌ [get_trips] MZone error {response.status_code}")
+                print(f"   Response body: {response.text[:500]}")
+                print(f"{'='*70}\n")
                 return None
-        
+
         except Exception as e:
-            if self.debug:
-                print(f"❌ Error in get_trips: {str(e)}")
+            print(f"❌ [get_trips] Exception: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def get_trip_events(self, trip_id: str) -> Optional[Dict]:
