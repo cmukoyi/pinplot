@@ -2277,25 +2277,33 @@ Best regards''',
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.garage_outlined, size: 80, color: Colors.grey.shade400),
-                      SizedBox(height: 16),
-                      Text(
-                        'No Assets',
-                        style: GoogleFonts.poppins(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Add BLE tags to track your vehicles',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                        ),
+                      Icon(
+                        Icons.bluetooth_searching,
+                        size: 100,
+                        color: AppTheme.brandPrimary.withOpacity(0.5),
                       ),
                       SizedBox(height: 24),
+                      Text(
+                        'No Tags Yet',
+                        style: GoogleFonts.poppins(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.brandPrimary,
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 40),
+                        child: Text(
+                          'Add your first BLE tag to start tracking your assets',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 32),
                       ElevatedButton.icon(
                         onPressed: () async {
                           final result = await Navigator.push(
@@ -2306,15 +2314,22 @@ Best regards''',
                             _loadTags();
                           }
                         },
-                        icon: Icon(Icons.add),
-                        label: Text('Add Tag'),
+                        icon: Icon(Icons.add, size: 24),
+                        label: Text(
+                          'Add Your First Tag',
+                          style: GoogleFonts.inter(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.brandPrimary,
                           foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(16),
                           ),
+                          elevation: 4,
                         ),
                       ),
                     ],
