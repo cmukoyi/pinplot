@@ -38,9 +38,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _checkUserTags() async {
+    print('🏠 HomeScreen._checkUserTags: skipAutoNavigation=${widget.skipAutoNavigation}, isFirstTimeUser=${widget.isFirstTimeUser}');
     // Skip auto-navigation if explicitly told to, or for first-time users
     // (first-time users navigate to MapScreen only after adding their first tag)
     if (widget.skipAutoNavigation || widget.isFirstTimeUser) {
+      print('🏠 HomeScreen._checkUserTags: skipping auto-nav, showing add-tag screen');
       if (mounted) {
         setState(() => _checkingTags = false);
       }
@@ -49,20 +51,21 @@ class _HomeScreenState extends State<HomeScreen> {
     
     // Check if user already has tags
     try {
+      print('🏠 HomeScreen._checkUserTags: fetching tags from backend...');
       final tags = await _authService.getBLETags();
+      print('🏠 HomeScreen._checkUserTags: got ${tags?.length ?? 0} tags');
       if (tags != null && tags.isNotEmpty && mounted) {
         // User has tags - navigate to MapScreen
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MapScreen()),
-        );
+        print('🏠 HomeScreen._checkUserTags: has tags, pushing /map');
+        Navigator.pushNamedAndRemoveUntil(context, '/map', (route) => false);
         return;
       }
     } catch (e) {
-      print('Error checking tags: $e');
+      print('🏠 HomeScreen._checkUserTags: error fetching tags: $e');
     }
     
     // User has no tags - show add tag screen
+    print('🏠 HomeScreen._checkUserTags: no tags found, showing add-tag screen');
     if (mounted) {
       setState(() => _checkingTags = false);
     }
@@ -209,16 +212,11 @@ class _HomeScreenState extends State<HomeScreen> {
           _tagNameController.clear();
         });
         
-        // After successful add, navigate to MapScreen — clear the entire stack
-        // so there are no blank screens to pop back to.
+        // After successful add, navigate to MapScreen — use named route so URL updates correctly
         await Future.delayed(Duration(milliseconds: 500));
         if (mounted) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const MapScreen()),
-            (route) => false,
-          );
-          print('✅ HomeScreen: Navigated to MapScreen after adding first tag');
+          print('✅ HomeScreen: Navigating to /map after adding first tag');
+          Navigator.pushNamedAndRemoveUntil(context, '/map', (route) => false);
         }
       }
     } catch (e) {
@@ -474,11 +472,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     if (!widget.isFirstTimeUser)
                       TextButton(
                         onPressed: () {
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(builder: (context) => const MapScreen()),
-                            (route) => false,
-                          );
+                          print('🗺️ HomeScreen: Back to Map tapped, navigating to /map');
+                          // Use named route so Flutter Web updates URL to #/map correctly
+                          Navigator.pushNamedAndRemoveUntil(context, '/map', (route) => false);
                         },
                         style: TextButton.styleFrom(
                           backgroundColor: Colors.white.withOpacity(0.6),

@@ -33,13 +33,11 @@ class _SignInScreenState extends State<SignInScreen> {
       );
       
       if (mounted) {
+        print('✅ SignIn: Login successful, navigating to /map');
         // Clear any SnackBars before navigation
         ScaffoldMessenger.of(context).clearSnackBars();
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => HomeScreen()),
-          (route) => false,
-        );
+        // Use named route so Flutter Web updates URL to #/map correctly
+        Navigator.pushNamedAndRemoveUntil(context, '/map', (route) => false);
       }
     } catch (e) {
       if (mounted) {
