@@ -43,6 +43,23 @@ services:
     environment:
       - DEBUG=False
       - ENVIRONMENT=production
+      # Explicitly pass through variables loaded from env_file
+      # Docker Compose loads these variables BEFORE container starts
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - FROM_EMAIL=${FROM_EMAIL}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - MZONE_TOKEN_URL=${MZONE_TOKEN_URL}
+      - MZONE_API_BASE=${MZONE_API_BASE}
+      - MZONE_CLIENT_ID=${MZONE_CLIENT_ID}
+      - MZONE_CLIENT_SECRET=${MZONE_CLIENT_SECRET}
+      - MZONE_USERNAME=${MZONE_USERNAME}
+      - MZONE_PASSWORD=${MZONE_PASSWORD}
+      - MZONE_VEHICLE_GROUP_ID=${MZONE_VEHICLE_GROUP_ID}
     # No --reload in production
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
 
