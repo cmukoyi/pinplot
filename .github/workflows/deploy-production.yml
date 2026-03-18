@@ -198,6 +198,24 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.DO_SERVER_IP }} >> ~/.ssh/known_hosts
 
+      - name: Test SSH connection
+        env:
+          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
+          DO_USER: ${{ secrets.DO_USER }}
+        run: |
+          echo "🔍 Testing SSH connection..."
+          echo "User: $DO_USER"
+          echo "Server: $DO_SERVER_IP"
+          ssh -v $DO_USER@$DO_SERVER_IP "echo '✅ SSH connection successful'" || {
+            echo "❌ SSH connection failed!"
+            echo "Debugging info:"
+            echo "SSH agent info:"
+            ssh-add -l
+            echo "Known hosts:"
+            cat ~/.ssh/known_hosts
+            exit 1
+          }
+
       - name: Write backend .env on server
         env:
           DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
