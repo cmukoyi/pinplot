@@ -2237,7 +2237,7 @@ def get_trips_v1(
             'utcStartDate': utc_start,
             'utcEndDate': utc_end,
             'vehicleGroup_Id': vehicle_group_id,
-            '$filter': f'(vehicle_Id eq {vehicle_id})'
+            'vehicle_Id': vehicle_id  # top-level param, not $filter
         }
         
         api_url = f'https://live.mzoneweb.net/mzone62.api/Trips?{urlencode(params)}'

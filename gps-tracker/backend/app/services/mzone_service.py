@@ -6,7 +6,6 @@ import requests
 import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
-from urllib.parse import quote
 
 class MZoneService:
     def __init__(self):
@@ -53,9 +52,6 @@ class MZoneService:
                 'scope': self.scope
             }
             
-            # URL encode the payload
-            payload_str = '&'.join([f"{k}={quote(str(v))}" for k, v in payload.items()])
-            
             headers = {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'Accept': 'application/json'
@@ -63,7 +59,7 @@ class MZoneService:
             
             response = requests.post(
                 self.token_url,
-                data=payload_str,
+                data=payload,  # pass dict — requests handles encoding safely
                 headers=headers,
                 timeout=30
             )
@@ -284,13 +280,12 @@ class MZoneService:
                 'Accept': 'application/json'
             }
             
-            # Build OData parameters matching the working API format:
-            # vehicleGroup_Id + utcStartDate + utcEndDate as top-level params,
-            # vehicle filter in $filter=(vehicle_Id eq {id})
+            # vehicle_Id must be a top-level query param (NOT inside $filter)
+            # This matches the working MZone API format verified by test_trips_api_direct.py
             params = {
                 'utcStartDate': start_date,
                 'utcEndDate': end_date,
-                '$filter': f'(vehicle_Id eq {vehicle_id})',
+                'vehicle_Id': vehicle_id,
                 '$format': 'json',
                 '$count': 'true',
                 '$select': 'id,vehicle_Id,vehicle_Description,duration,distance,startLocationDescription,startUtcTimestamp,endLocationDescription,endUtcTimestamp,driver_Description,driverKeyCode',
