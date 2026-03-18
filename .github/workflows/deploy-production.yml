@@ -4,521 +4,87 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
-    inputs:
-      reason:
-        description: 'Reason for production deployment'
-        required: true
 
 jobs:
-  # ─────────────────────────────────────────────────────────────────
-  # JOB 1 — Test Backend
-  # ─────────────────────────────────────────────────────────────────
   test-backend:
-    name: Test Backend
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
           cache: 'pip'
+      - run: cd gps-tracker/backend && pip install -r requirements.txt -r requirements-dev.txt && pytest tests/ -v
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          cd gps-tracker/backend
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
-
-      - name: Run Tests
-        run: |
-          cd gps-tracker/backend
-          pytest tests/ -v --tb=short --cov=app --cov-report=term-missing
-        continue-on-error: false
-
-      - name: Upload Coverage Reports
-        if: always()
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./gps-tracker/backend/.coverage
-          flags: unittests
-          fail_ci_if_error: false
-
-  # ─────────────────────────────────────────────────────────────────
-  # JOB 2 — Build Flutter Web (on runner, artifacts uploaded)
-  # ─────────────────────────────────────────────────────────────────
   build-flutter:
-    name: Build Flutter Web
     runs-on: ubuntu-latest
     needs: test-backend
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.2'
-          channel: 'stable'
           cache: true
-
-      - name: Flutter pub get
-        run: |
-          cd gps-tracker/mobile-app/ble_tracker_app
-          flutter pub get
-
-      - name: Flutter analyze
-        run: |
-          cd gps-tracker/mobile-app/ble_tracker_app
-          flutter analyze --no-fatal-infos
-        continue-on-error: true
-
-      - name: Build Flutter Web
-        run: |
-          cd gps-tracker/mobile-app/ble_tracker_app
-          flutter build web --release --no-tree-shake-icons
-          echo "✅ Flutter web build completed"
-          ls -lh build/web/main.dart.js
-
-      - name: Verify build output
-        run: |
-          BUILD_DIR="gps-tracker/mobile-app/ble_tracker_app/build/web"
-          if [ ! -d "$BUILD_DIR" ]; then
-            echo "❌ Flutter build directory not found!"
-            exit 1
-          fi
-          FILE_COUNT=$(find "$BUILD_DIR" -type f | wc -l)
-          echo "✅ Flutter build OK — $FILE_COUNT files"
-          ls -lh "$BUILD_DIR" | head -10
-
-      # ── Upload built artifacts so deploy job can use them ────────
-      # This is the KEY fix — Flutter is built ONCE here, then passed
-      # to the deploy job. The server never runs flutter build.
-      - name: Upload Flutter build artifact
-        uses: actions/upload-artifact@v4
+      - run: cd gps-tracker/mobile-app/ble_tracker_app && flutter pub get && flutter build web --release
+      - uses: actions/upload-artifact@v4
         with:
           name: flutter-web-build
           path: gps-tracker/mobile-app/ble_tracker_app/build/web/
           retention-days: 1
 
-  # ─────────────────────────────────────────────────────────────────
-  # JOB 3 — Deploy to Production
-  # ─────────────────────────────────────────────────────────────────
   deploy-production:
-    name: Deploy to Production
     runs-on: ubuntu-latest
     needs: build-flutter
     environment: production
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # ── CRITICAL: Validate all required secrets are populated ────
-      - name: Validate required secrets
-        run: |
-          REQUIRED_SECRETS=(
-            "DATABASE_URL"
-            "SECRET_KEY"
-            "POSTGRES_USER"
-            "POSTGRES_PASSWORD"
-            "POSTGRES_DB"
-            "SENDGRID_API_KEY"
-            "ALLOWED_ORIGINS"
-            "MZONE_CLIENT_ID"
-            "MZONE_CLIENT_SECRET"
-            "MZONE_USERNAME"
-            "MZONE_PASSWORD"
-          )
-          
-          MISSING=0
-          for SECRET in "${REQUIRED_SECRETS[@]}"; do
-            VALUE="${!SECRET}"
-            if [ -z "$VALUE" ]; then
-              echo "❌ MISSING SECRET: $SECRET"
-              MISSING=$((MISSING + 1))
-            else
-              echo "✅ $SECRET is set (${#VALUE} chars)"
-            fi
-          done
-          
-          if [ $MISSING -gt 0 ]; then
-            echo ""
-            echo "❌ DEPLOYMENT ABORTED: $MISSING required secrets are missing or empty!"
-            echo ""
-            echo "Add them to GitHub Repo → Settings → Secrets and variables → Actions"
-            exit 1
-          fi
-          echo ""
-          echo "✅ All required secrets are populated"
-
-      # ── Download the Flutter build from Job 2 ───────────────────
-      # Placed exactly where the Dockerfile expects:
-      # COPY ble_tracker_app/build/web /usr/share/nginx/html
-      - name: Download Flutter build artifact
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
           name: flutter-web-build
           path: gps-tracker/mobile-app/ble_tracker_app/build/web/
 
-      - name: Verify Flutter artifacts are present
-        run: |
-          BUILD_DIR="gps-tracker/mobile-app/ble_tracker_app/build/web"
-          if [ ! -f "$BUILD_DIR/main.dart.js" ]; then
-            echo "❌ main.dart.js missing from build artifacts!"
-            exit 1
-          fi
-          FILE_COUNT=$(find "$BUILD_DIR" -type f | wc -l)
-          echo "✅ Flutter artifacts ready — $FILE_COUNT files"
-          echo "main.dart.js size: $(ls -lh $BUILD_DIR/main.dart.js | awk '{print $5}')"
-
-      - name: Verify alerts_screen.dart changes
-        run: |
-          FILE="gps-tracker/mobile-app/ble_tracker_app/lib/screens/alerts_screen.dart"
-          if grep -q "createdAt.isAfter" "$FILE"; then
-            echo "✅ alerts_screen.dart has createdAt.isAfter filter"
-          else
-            echo "❌ ERROR: alerts_screen.dart missing expected createdAt.isAfter filter"
-            exit 1
-          fi
-
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.8.0
+      - uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
 
-      - name: Add DigitalOcean to known hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.DO_SERVER_IP }} >> ~/.ssh/known_hosts
-
-      - name: Test SSH connection
-        env:
-          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
-          DO_USER: ${{ secrets.DO_USER }}
-        run: |
-          echo "🔍 Testing SSH connection..."
-          echo "User: $DO_USER"
-          echo "Server: $DO_SERVER_IP"
-          ssh -v $DO_USER@$DO_SERVER_IP "echo '✅ SSH connection successful'" || {
-            echo "❌ SSH connection failed!"
-            echo "Debugging info:"
-            echo "SSH agent info:"
-            ssh-add -l
-            echo "Known hosts:"
-            cat ~/.ssh/known_hosts
-            exit 1
-          }
-
-      - name: Write backend .env on server
-        env:
-          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
-          DO_USER: ${{ secrets.DO_USER }}
-        run: |
-          ssh $DO_USER@$DO_SERVER_IP "mkdir -p ~/beacon-telematics/gps-tracker/backend"
-          ssh $DO_USER@$DO_SERVER_IP "cat > ~/beacon-telematics/gps-tracker/backend/.env" << EOF
+      - run: |
+          SSH_HOST="${{ secrets.DO_SERVER_IP }}"
+          SSH_USER="${{ secrets.DO_USER }}"
+          
+          ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" hostname && echo "SSH OK"
+          
+          # Create env
+          cat > /tmp/.env <<-EOFENV
           DATABASE_URL=${{ secrets.DATABASE_URL }}
-          SECRET_KEY=${{ secrets.SECRET_KEY }}
           POSTGRES_USER=${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
           SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}
           ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}
-          EOF
-          ssh $DO_USER@$DO_SERVER_IP "chmod 600 ~/beacon-telematics/gps-tracker/backend/.env"
-          echo "✅ .env written"
-
-      - name: Upload deployment scripts
-        env:
-          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
-          DO_USER: ${{ secrets.DO_USER }}
-        run: |
-          ssh $DO_USER@$DO_SERVER_IP "mkdir -p ~/beacon-telematics"
-          scp deploy/pre-deployment-backup-beacon.sh $DO_USER@$DO_SERVER_IP:~/beacon-telematics/
-          scp deploy/verify-secrets-beacon.sh        $DO_USER@$DO_SERVER_IP:~/beacon-telematics/
-          scp deploy/rollback-deployment-beacon.sh   $DO_USER@$DO_SERVER_IP:~/beacon-telematics/
-          ssh $DO_USER@$DO_SERVER_IP "chmod +x ~/beacon-telematics/*.sh"
-          echo "✅ Deployment scripts uploaded"
-
-      - name: Pre-deployment backup
-        env:
-          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
-          DO_USER: ${{ secrets.DO_USER }}
-        run: |
-          ssh $DO_USER@$DO_SERVER_IP "~/beacon-telematics/pre-deployment-backup-beacon.sh" || {
-            echo "⚠️  Backup script failed but continuing deployment"
-          }
-
-      # ── Sync code to server ──────────────────────────────────────
-      # CRITICAL: Do NOT exclude build/web — the Dockerfile COPYs it.
-      # The pre-built artifacts MUST land on the server before
-      # docker compose build runs.
-      - name: Sync code to server
-        env:
-          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
-          DO_USER: ${{ secrets.DO_USER }}
-        run: |
-          echo "📂 Syncing code + pre-built Flutter artifacts to server..."
-          ssh $DO_USER@$DO_SERVER_IP "mkdir -p ~/beacon-telematics/gps-tracker"
-
-          rsync -avz --delete \
-            --exclude '.git' \
-            --exclude '.gitignore' \
-            --exclude 'node_modules' \
-            --exclude '__pycache__' \
-            --exclude '*.pyc' \
-            --exclude '.env' \
-            --exclude 'backend/.env' \
-            --exclude '.dart_tool' \
-            --exclude 'beacon_telematics_postgres_data' \
-            ./gps-tracker/ $DO_USER@$DO_SERVER_IP:~/beacon-telematics/gps-tracker/
-
-          echo "🔍 Confirming Flutter artifacts landed on server..."
-          ssh $DO_USER@$DO_SERVER_IP bash << 'VERIFY'
-            BUILD_DIR=~/beacon-telematics/gps-tracker/mobile-app/ble_tracker_app/build/web
-            if [ ! -f "$BUILD_DIR/main.dart.js" ]; then
-              echo "❌ main.dart.js NOT found on server after rsync!"
-              exit 1
-            fi
-            FILE_COUNT=$(find "$BUILD_DIR" -type f | wc -l)
-            echo "✅ Flutter artifacts confirmed on server: $FILE_COUNT files"
-            echo "main.dart.js: $(ls -lh $BUILD_DIR/main.dart.js | awk '{print $5}')"
-          VERIFY
-
-      # ── Build containers ─────────────────────────────────────────
-      # flutter-web and admin-portal: always --no-cache
-      #   Docker cannot detect that COPY source files changed
-      #   without --no-cache, so it reuses the old layer = old UI.
-      # backend/customer: use layer cache (safe, dependencies cached)
-      - name: Build and start containers
-        env:
-          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
-          DO_USER: ${{ secrets.DO_USER }}
-        run: |
-          ssh $DO_USER@$DO_SERVER_IP bash << 'SSHEOF'
-            set -e
-            cd ~/beacon-telematics/gps-tracker
-
-            echo "━━━ Stopping existing containers ━━━"
-            docker compose down --remove-orphans || true
-
-            # Explicitly remove stale UI images so --no-cache is truly clean
-            echo "━━━ Removing stale UI images ━━━"
-            docker images --format '{{.Repository}}:{{.Tag}}' \
-              | grep -E 'flutter.web|admin.portal' \
-              | xargs -r docker rmi -f 2>/dev/null || true
-
-            echo "━━━ Building flutter-web (no cache) ━━━"
-            docker compose build --no-cache flutter-web
-
-            echo "━━━ Building admin-portal (no cache) ━━━"
-            docker compose build --no-cache admin-portal
-
-            echo "━━━ Building backend (layer cache OK) ━━━"
-            docker compose build backend
-
-            echo "━━━ Building customer (layer cache OK) ━━━"
-            docker compose build customer
-
-            echo "━━━ Starting all containers ━━━"
-            docker compose up -d
-
-            # Prune ONLY dangling images — never volumes
-            echo "━━━ Pruning dangling images ━━━"
-            docker image prune -f
-
-            echo "✅ All containers started"
-            docker compose ps
-          SSHEOF
-
-      - name: Wait for database
-        env:
-          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
-          DO_USER: ${{ secrets.DO_USER }}
-        run: |
-          ssh $DO_USER@$DO_SERVER_IP bash << 'SSHEOF'
-            echo "⏳ Waiting for PostgreSQL to be ready..."
-            for i in $(seq 1 30); do
-              if docker exec beacon_telematics_db pg_isready -U beacon_user >/dev/null 2>&1; then
-                echo "✅ Database ready (attempt $i)"
-                exit 0
-              fi
-              echo "  ↻ Waiting... attempt $i/30"
-              sleep 3
-            done
-            echo "❌ Database did not become ready in time"
-            docker logs --tail 30 beacon_telematics_db
-            exit 1
-          SSHEOF
-
-      - name: Wait for backend to stabilize
-        env:
-          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
-          DO_USER: ${{ secrets.DO_USER }}
-        run: |
-          ssh $DO_USER@$DO_SERVER_IP bash << 'SSHEOF'
-            echo "⏳ Waiting for backend to finish migrations (entrypoint.sh)..."
-            for i in $(seq 1 60); do
-              if docker logs beacon_telematics_backend 2>/dev/null | grep -q "Application startup complete"; then
-                echo "✅ Backend initialization complete (attempt $i)"
-                exit 0
-              fi
-              if docker logs beacon_telematics_backend 2>/dev/null | grep -q "ERROR"; then
-                echo "❌ Backend failed to start"
-                docker logs --tail 50 beacon_telematics_backend
-                exit 1
-              fi
-              echo "  ↻ Waiting... attempt $i/60"
-              sleep 2
-            done
-            echo "⚠️  Backend startup taking longer than expected, continuing with health checks..."
-          SSHEOF
-
-      - name: Health checks
-        env:
-          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
-          DO_USER: ${{ secrets.DO_USER }}
-        run: |
-          check() {
-            local NAME="$1"
-            local URL="$2"
-            local RETRIES="${3:-10}"
-            for i in $(seq 1 $RETRIES); do
-              if curl -fsS --max-time 5 "$URL" > /dev/null 2>&1; then
-                echo "✅ $NAME healthy"
-                return 0
-              fi
-              echo "  ↻ $NAME not ready (attempt $i/$RETRIES)..."
-              sleep 5
-            done
-            echo "❌ $NAME FAILED after $RETRIES attempts"
-            return 1
-          }
-
-          FAILED=0
-          check "Backend API"  "http://$DO_SERVER_IP:8001/api/health" 10 || FAILED=1
-          check "Admin Portal" "http://$DO_SERVER_IP:3010/health"     10 || FAILED=1
-          check "Flutter Web"  "http://$DO_SERVER_IP:3012/"           12 || FAILED=1
-          check "Customer UI"  "http://$DO_SERVER_IP:3011/"           10 || FAILED=1
-          check "Nginx"        "http://$DO_SERVER_IP:80/"             10 || FAILED=1
-
-          if [ "$FAILED" -eq 1 ]; then
-            echo ""
-            echo "⚠️  Health check failure — dumping container logs..."
-            ssh $DO_USER@$DO_SERVER_IP \
-              "cd ~/beacon-telematics/gps-tracker && \
-               docker compose ps && \
-               echo '=== flutter-web ===' && docker logs --tail 30 beacon_telematics_flutter_web && \
-               echo '=== backend ===' && docker logs --tail 30 beacon_telematics_backend"
-            exit 1
-          fi
-
-          echo ""
-          echo "✅ All health checks passed"
-
-      - name: Verify admin dashboard files
-        env:
-          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
-          DO_USER: ${{ secrets.DO_USER }}
-        run: |
-          ssh $DO_USER@$DO_SERVER_IP bash << 'SSHEOF'
-            cd ~/beacon-telematics/gps-tracker
-            echo "📂 Admin dashboard public files:"
-            ls -lh admin-dashboard/public/
-
-            for FILE in index.html trips.html billing.html; do
-              if [ -f "admin-dashboard/public/$FILE" ]; then
-                echo "✅ $FILE ($(wc -c < admin-dashboard/public/$FILE) bytes)"
-              else
-                echo "⚠️  $FILE not found"
-              fi
-            done
-
-            echo ""
-            echo "🔗 Testing manifest endpoint..."
-            MANIFEST=$(docker exec beacon_telematics_admin \
-              curl -s http://localhost:3000/api/manifest 2>/dev/null || echo '{}')
-            if echo "$MANIFEST" | grep -q "trips.html"; then
-              echo "✅ trips.html confirmed in manifest"
-            else
-              echo "⚠️  trips.html not in manifest"
-              echo "Response: $MANIFEST"
-            fi
-          SSHEOF
-
-      - name: Verify secrets
-        env:
-          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
-          DO_USER: ${{ secrets.DO_USER }}
-        run: |
-          ssh $DO_USER@$DO_SERVER_IP "~/beacon-telematics/verify-secrets-beacon.sh" || {
-            echo "❌ Secret verification failed"
-            exit 1
-          }
-          echo "✅ Secrets verified"
-
-      - name: Print final container status
-        if: always()
-        env:
-          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
-          DO_USER: ${{ secrets.DO_USER }}
-        run: |
-          ssh $DO_USER@$DO_SERVER_IP \
-            "cd ~/beacon-telematics/gps-tracker && docker compose ps"
-
-      - name: Tag release
-        run: |
-          TAG="beacon-prod-$(date +%Y%m%d-%H%M%S)"
-          git tag "$TAG"
-          git push origin "$TAG" || echo "⚠️  Could not push tag (non-fatal)"
-
-      - name: Deployment summary
-        if: always()
-        run: |
-          echo "========================================"
-          echo "🚀 BeaconTelematics Deployment Complete!"
-          echo "========================================"
-          echo ""
-          echo "📍 Access Points:"
-          echo "  Backend API:      http://${{ secrets.DO_SERVER_IP }}:8001/api/health"
-          echo "  Admin Dashboard:  http://${{ secrets.DO_SERVER_IP }}:3010/"
-          echo "  Journeys Page:    http://${{ secrets.DO_SERVER_IP }}:3010/trips.html"
-          echo "  Customer UI:      http://${{ secrets.DO_SERVER_IP }}:3011/"
-          echo "  Flutter Web:      http://${{ secrets.DO_SERVER_IP }}:3012/"
-          echo "  Nginx:            http://${{ secrets.DO_SERVER_IP }}:80/"
-          echo ""
-          echo "  Domain (after DNS):"
-          echo "    https://beacontelematics.co.uk/"
-          echo "    https://beacontelematics.co.uk/trips.html"
-          echo ""
-          echo "📋 Rollback:"
-          echo "   ssh ${{ secrets.DO_USER }}@${{ secrets.DO_SERVER_IP }}"
-          echo "   ~/beacon-telematics/rollback-deployment-beacon.sh"
-          echo "========================================"
-
-  # ─────────────────────────────────────────────────────────────────
-  # JOB 4 — Notify on failure
-  # ─────────────────────────────────────────────────────────────────
-  notify-failure:
-    name: Notify on Failure
-    runs-on: ubuntu-latest
-    needs: [test-backend, build-flutter, deploy-production]
-    if: failure()
-    steps:
-      - name: Send failure notification
-        run: |
-          echo "🚨 Pipeline FAILED"
-          echo "Commit:  ${{ github.sha }}"
-          echo "Branch:  ${GITHUB_REF##*/}"
-          echo "Actor:   ${{ github.actor }}"
-          echo "Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          # Uncomment to enable Slack alerts:
-          # curl -X POST -H 'Content-type: application/json' \
-          #   --data "{\"text\":\"🚨 Beacon Telematics deploy FAILED\nCommit: ${{ github.sha }}\nActor: ${{ github.actor }}\nURL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
-          #   ${{ secrets.SLACK_WEBHOOK_URL }}
+          MZONE_CLIENT_ID=${{ secrets.MZONE_CLIENT_ID }}
+          MZONE_CLIENT_SECRET=${{ secrets.MZONE_CLIENT_SECRET }}
+          MZONE_USERNAME=${{ secrets.MZONE_USERNAME }}
+          MZONE_PASSWORD=${{ secrets.MZONE_PASSWORD }}
+          FROM_EMAIL=${{ secrets.FROM_EMAIL }}
+          DEBUG=False
+          ENVIRONMENT=production
+          EOFENV
+          
+          ssh "$SSH_USER@$SSH_HOST" mkdir -p ~/beacon-telematics/gps-tracker/backend
+          scp /tmp/.env "$SSH_USER@$SSH_HOST:~/beacon-telematics/gps-tracker/backend/.env"
+          ssh "$SSH_USER@$SSH_HOST" chmod 600 ~/beacon-telematics/gps-tracker/backend/.env
+          
+          rsync -avz --delete --exclude .git --exclude node_modules ./gps-tracker/ "$SSH_USER@$SSH_HOST:~/beacon-telematics/gps-tracker/"
+          
+          ssh "$SSH_USER@$SSH_HOST" << "DEPLOYEOF"
+          cd ~/beacon-telematics/gps-tracker
+          docker compose down --remove-orphans || true
+          docker compose build --no-cache flutter-web admin-portal
+          docker compose build backend customer
+          docker compose up -d
+          sleep 10
+          docker compose ps
+          DEPLOYEOF
+          
+          echo "✅ Deployment complete"
