@@ -27,19 +27,23 @@ ssh -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" << 'BACKUPEOF'
 BACKUP_DIR=~/beacon-telematics/backups/$(date +%Y%m%d_%H%M%S)
 mkdir -p "$BACKUP_DIR"
 
-# Backup .env (secrets)
+# Backup .env files (secrets)
 if [ -f ~/beacon-telematics/gps-tracker/backend/.env ]; then
     cp ~/beacon-telematics/gps-tracker/backend/.env "$BACKUP_DIR/backend.env"
-    echo "  ✅ .env backed up"
+    echo "  ✅ backend.env backed up"
+fi
+if [ -f ~/beacon-telematics/gps-tracker/.env ]; then
+    cp ~/beacon-telematics/gps-tracker/.env "$BACKUP_DIR/root.env"
+    echo "  ✅ root.env backed up"
 fi
 
-# Backup database
+# Backup database (compressed)
 if docker ps --format '{{.Names}}' | grep -q beacon_telematics_db; then
-    docker exec beacon_telematics_db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > "$BACKUP_DIR/db.sql" 2>/dev/null && echo "  ✅ Database backed up" || echo "  ⚠️  DB backup skipped (container not ready)"
+    docker exec beacon_telematics_db pg_dump -U beacon_user beacon_telematics | gzip > "$BACKUP_DIR/db.sql.gz" && echo "  ✅ Database backed up (compressed)" || echo "  ⚠️  DB backup skipped (container not ready)"
 fi
 
-# Keep only last 5 backups
-ls -dt ~/beacon-telematics/backups/*/ 2>/dev/null | tail -n +6 | xargs -r rm -rf
+# Keep only last 10 backups
+ls -dt ~/beacon-telematics/backups/*/ 2>/dev/null | tail -n +11 | xargs -r rm -rf
 
 echo "✅ Backup saved to $BACKUP_DIR"
 BACKUPEOF
