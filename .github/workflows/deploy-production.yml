@@ -301,33 +301,27 @@ jobs:
             exit 1
           SSHEOF
 
-      - name: Run database migrations
+      - name: Wait for backend to stabilize
         env:
           DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
           DO_USER: ${{ secrets.DO_USER }}
         run: |
           ssh $DO_USER@$DO_SERVER_IP bash << 'SSHEOF'
-            set -e
-            cd ~/beacon-telematics/gps-tracker
-
-            if ! docker ps --filter name=beacon_telematics_backend \
-                --format '{{.Status}}' | grep -q 'Up'; then
-              echo "❌ Backend not running — cannot run migrations"
-              docker logs --tail 30 beacon_telematics_backend
-              exit 1
-            fi
-
-            echo "🔄 Running Alembic migrations..."
-            docker compose exec -T backend alembic upgrade head || {
-              echo "⚠️  First attempt failed, retrying in 15s..."
-              sleep 15
-              docker compose exec -T backend alembic upgrade head || {
-                echo "❌ Migration failed on second attempt"
+            echo "⏳ Waiting for backend to finish migrations (entrypoint.sh)..."
+            for i in $(seq 1 60); do
+              if docker logs beacon_telematics_backend 2>/dev/null | grep -q "Application startup complete"; then
+                echo "✅ Backend initialization complete (attempt $i)"
+                exit 0
+              fi
+              if docker logs beacon_telematics_backend 2>/dev/null | grep -q "ERROR"; then
+                echo "❌ Backend failed to start"
                 docker logs --tail 50 beacon_telematics_backend
                 exit 1
-              }
-            }
-            echo "✅ Migrations complete"
+              fi
+              echo "  ↻ Waiting... attempt $i/60"
+              sleep 2
+            done
+            echo "⚠️  Backend startup taking longer than expected, continuing with health checks..."
           SSHEOF
 
       - name: Health checks
