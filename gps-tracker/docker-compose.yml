@@ -10,10 +10,6 @@ services:
     container_name: beacon_telematics_db
     env_file:
       - ./backend/.env
-    environment:
-      POSTGRES_USER: beacon_user
-      POSTGRES_PASSWORD: beacon_default_password
-      POSTGRES_DB: beacon_telematics
     volumes:
       - beacon_telematics_postgres_data:/var/lib/postgresql/data
     ports:
