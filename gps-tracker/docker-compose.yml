@@ -1,0 +1,120 @@
+version: '3.8'
+
+# Production Docker Compose — Beacon Telematics
+# Deployed via GitHub Actions CI/CD
+# Secrets injected from backend/.env (written by pipeline from GitHub Secrets)
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: beacon_telematics_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-beacon_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-beacon_telematics}
+    volumes:
+      - beacon_telematics_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - beacon_telematics_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-beacon_user} -d ${POSTGRES_DB:-beacon_telematics}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: beacon_telematics_backend
+    env_file:
+      - ./backend/.env
+    ports:
+      - "0.0.0.0:8001:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - beacon_telematics_network
+    restart: unless-stopped
+    environment:
+      - DEBUG=False
+      - ENVIRONMENT=production
+    # No --reload in production
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+
+  admin-portal:
+    build:
+      context: ./admin-portal
+      dockerfile: Dockerfile
+    container_name: beacon_telematics_admin
+    ports:
+      - "3010:80"
+    depends_on:
+      - backend
+    networks:
+      - beacon_telematics_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  customer:
+    build:
+      context: ./customer-dashboard
+      dockerfile: Dockerfile
+    container_name: beacon_telematics_customer
+    ports:
+      - "3011:3001"
+    environment:
+      - BACKEND_URL=http://backend:8000/api/v1
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    networks:
+      - beacon_telematics_network
+    restart: unless-stopped
+
+  flutter-web:
+    build:
+      context: ./mobile-app
+      dockerfile: Dockerfile
+    container_name: beacon_telematics_flutter_web
+    ports:
+      - "3012:80"
+    depends_on:
+      - backend
+    networks:
+      - beacon_telematics_network
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: beacon_telematics_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - backend
+      - admin-portal
+      - customer
+      - flutter-web
+    networks:
+      - beacon_telematics_network
+    restart: unless-stopped
+
+volumes:
+  beacon_telematics_postgres_data:
+    driver: local
+
+networks:
+  beacon_telematics_network:
+    driver: bridge
