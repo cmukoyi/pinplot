@@ -1089,14 +1089,32 @@ Best regards''',
       );
       return;
     }
-    
-    final vehicleName = _vehicleCustomNames[vehicle.id] ?? vehicle.description;
-    final shareText = 'Location: $vehicleName\n' +
-      'Latitude: ${location.latitude.toStringAsFixed(6)}\n' +
-      'Longitude: ${location.longitude.toStringAsFixed(6)}\n' +
-      'Time: ${location.timestampFormatted}';
-    
-    await Share.share(shareText);
+
+    final vehicleName = _vehicleCustomNames[vehicle.id] ??
+        vehicle.description ??
+        vehicle.registration ??
+        'Unknown Asset';
+
+    final lat = location.latitude;
+    final lng = location.longitude;
+
+    String mapsUrl;
+    String mapProvider;
+
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      mapsUrl = 'https://maps.apple.com/?q=$lat,$lng';
+      mapProvider = 'Apple Maps';
+    } else {
+      mapsUrl = 'https://www.google.com/maps?q=$lat,$lng';
+      mapProvider = 'Google Maps';
+    }
+
+    final shareText = '''$vehicleName
+Location: $mapsUrl
+
+View on $mapProvider to see the vehicle location.''';
+
+    await Share.share(shareText, subject: 'Location of $vehicleName');
   }
 
   void _hideVehicleDetails() {
