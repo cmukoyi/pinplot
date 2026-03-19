@@ -55,3 +55,6 @@ logs/
 .pub-cache/
 .pub/
 build/
+
+# Local test scripts (contain secrets — never push)
+testScripts/
