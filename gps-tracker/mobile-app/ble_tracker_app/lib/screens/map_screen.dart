@@ -2120,7 +2120,7 @@ Best regards''',
                 // Vehicle selector
                 if (_vehicles.isEmpty)
                   Text(
-                    'No vehicles available',
+                    'No assets being tracked',
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       color: Colors.grey.shade600,
@@ -2192,10 +2192,10 @@ Best regards''',
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.directions_car_outlined, size: 64, color: Colors.grey.shade400),
+                        Icon(Icons.location_on_outlined, size: 64, color: Colors.grey.shade400),
                         SizedBox(height: 16),
                         Text(
-                          'No vehicles available',
+                          'No assets being tracked',
                           style: GoogleFonts.inter(
                             fontSize: 16,
                             color: Colors.grey.shade600,
