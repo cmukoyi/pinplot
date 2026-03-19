@@ -106,39 +106,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       }
-    } else if (status.isDenied) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Camera permission is required to scan QR codes'),
-            backgroundColor: Colors.orange,
-            action: SnackBarAction(
-              label: 'Settings',
-              textColor: Colors.white,
-              onPressed: () {
-                openAppSettings();
-              },
-            ),
-          ),
-        );
-      }
-    } else if (status.isPermanentlyDenied) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Please enable camera permission in Settings'),
-            backgroundColor: Colors.red,
-            action: SnackBarAction(
-              label: 'Open Settings',
-              textColor: Colors.white,
-              onPressed: () {
-                openAppSettings();
-              },
-            ),
-          ),
-        );
-      }
     }
+    // If permission is denied or permanently denied, do nothing —
+    // the user stays on the screen and can type the IMEI manually
+    // or tap the QR button again.
   }
 
   Future<void> _addTag() async {
