@@ -2103,7 +2103,7 @@ Best regards''',
         children: [
           // Header with vehicle selector and date filter
           Container(
-            padding: EdgeInsets.only(top: 60, left: 16, right: 16, bottom: 12),
+            padding: EdgeInsets.only(top: 96, left: 16, right: 16, bottom: 12),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
@@ -2467,8 +2467,10 @@ Best regards''',
                           Expanded(
                             child: Text(
                               displayName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.poppins(
-                                fontSize: 18,
+                                fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.grey.shade800,
                               ),
@@ -2527,21 +2529,27 @@ Best regards''',
                     color: _isTrackerArmedToAnyPOI(vehicle.id) 
                       ? Colors.green.shade700 
                       : Colors.red.shade700,
-                    size: 20,
+                    size: 18,
                   ),
+                  padding: EdgeInsets.all(4),
+                  constraints: BoxConstraints(minWidth: 32, minHeight: 32),
                   onPressed: () => _showArmDisarmDialog(vehicle),
                   tooltip: _isTrackerArmedToAnyPOI(vehicle.id) ? 'Armed' : 'Disarmed',
                 ),
                 // Share Location Button (disabled for NEW assets)
                 if (hasLocation)
                   IconButton(
-                    icon: Icon(Icons.share, color: Colors.green.shade700, size: 20),
+                    icon: Icon(Icons.share, color: Colors.green.shade700, size: 18),
+                    padding: EdgeInsets.all(4),
+                    constraints: BoxConstraints(minWidth: 32, minHeight: 32),
                     onPressed: () => _showShareLocationOptions(vehicle),
                     tooltip: 'Share location',
                   ),
                 // Edit Button
                 IconButton(
-                  icon: Icon(Icons.edit, color: AppTheme.brandPrimary, size: 20),
+                  icon: Icon(Icons.edit, color: AppTheme.brandPrimary, size: 18),
+                  padding: EdgeInsets.all(4),
+                  constraints: BoxConstraints(minWidth: 32, minHeight: 32),
                   onPressed: () => _showEditNameDialog(vehicle),
                   tooltip: 'Edit name',
                 ),
@@ -2550,7 +2558,7 @@ Best regards''',
                   Icon(
                     Icons.chevron_right,
                     color: Colors.grey.shade400,
-                    size: 28,
+                    size: 24,
                   ),
               ],
             ),

@@ -58,7 +58,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
               child: Container(
-                constraints: BoxConstraints(maxWidth: 400),
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width > 600 ? 400 : MediaQuery.of(context).size.width * 0.95,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.95),
                   borderRadius: BorderRadius.circular(32),
@@ -74,7 +76,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     width: 1.5,
                   ),
                 ),
-                padding: const EdgeInsets.all(40.0),
+                padding: EdgeInsets.symmetric(
+                  horizontal: MediaQuery.of(context).size.width < 420 ? 20.0 : 40.0,
+                  vertical: 40.0,
+                ),
                 child: _emailSent ? _buildSuccessView() : _buildFormView(),
               ),
             ),

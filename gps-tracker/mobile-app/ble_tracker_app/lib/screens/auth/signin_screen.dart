@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ble_tracker_app/theme/app_theme.dart';
 import 'package:ble_tracker_app/services/auth_service.dart';
 import 'package:ble_tracker_app/screens/home_screen.dart';
@@ -19,7 +20,26 @@ class _SignInScreenState extends State<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _rememberPassword = false;
   final _authService = AuthService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    final remember = prefs.getBool('remember_password') ?? false;
+    if (remember) {
+      setState(() {
+        _rememberPassword = true;
+        _emailController.text = prefs.getString('saved_email') ?? '';
+        _passwordController.text = prefs.getString('saved_password') ?? '';
+      });
+    }
+  }
 
   Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
@@ -32,6 +52,18 @@ class _SignInScreenState extends State<SignInScreen> {
         _passwordController.text,
       );
       
+      // Save or clear credentials based on remember me checkbox
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberPassword) {
+        await prefs.setBool('remember_password', true);
+        await prefs.setString('saved_email', _emailController.text.trim());
+        await prefs.setString('saved_password', _passwordController.text);
+      } else {
+        await prefs.remove('remember_password');
+        await prefs.remove('saved_email');
+        await prefs.remove('saved_password');
+      }
+
       if (mounted) {
         print('✅ SignIn: Login successful, navigating to /map');
         // Clear any SnackBars before navigation
@@ -91,7 +123,9 @@ class _SignInScreenState extends State<SignInScreen> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
               child: Container(
-                constraints: BoxConstraints(maxWidth: 400),
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width > 600 ? 400 : MediaQuery.of(context).size.width * 0.95,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.95),
                   borderRadius: BorderRadius.circular(32),
@@ -107,7 +141,10 @@ class _SignInScreenState extends State<SignInScreen> {
                     width: 1.5,
                   ),
                 ),
-                padding: const EdgeInsets.all(40.0),
+                padding: EdgeInsets.symmetric(
+                  horizontal: MediaQuery.of(context).size.width < 420 ? 20.0 : 40.0,
+                  vertical: 40.0,
+                ),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -330,7 +367,30 @@ class _SignInScreenState extends State<SignInScreen> {
                       ).animate()
                         .fadeIn(delay: 500.ms, duration: 600.ms)
                         .slideY(begin: 0.2, end: 0, delay: 500.ms, duration: 600.ms),
-                      SizedBox(height: 32),
+                      SizedBox(height: 12),
+
+                      // Remember Password checkbox
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: _rememberPassword,
+                            activeColor: AppTheme.brandPrimary,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                            onChanged: (value) {
+                              setState(() => _rememberPassword = value ?? false);
+                            },
+                          ),
+                          Text(
+                            'Remember me',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ).animate().fadeIn(delay: 550.ms, duration: 600.ms),
+                      SizedBox(height: 20),
                       
                       // Sign In Button with animation
                       SizedBox(

@@ -674,7 +674,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                             // Tag Name Input
                             Text(
-                              'Tag Name (Optional)',
+                              'Asset Description (Optional)',
                               style: GoogleFonts.inter(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
