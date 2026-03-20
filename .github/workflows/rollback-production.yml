@@ -28,7 +28,8 @@ jobs:
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           ssh-keyscan -t rsa,ecdsa,ed25519 -H ${{ secrets.DO_SERVER_IP }} >> ~/.ssh/known_hosts 2>/dev/null
-          chmod 600 ~/.ssh/known_hosts
+          printf 'Host %s\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n' "${{ secrets.DO_SERVER_IP }}" >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
 
       - name: Checkout rollback target
         env:
