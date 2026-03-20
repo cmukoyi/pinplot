@@ -24,5 +24,5 @@ def init_db():
     existing_tables = inspector.get_table_names()
     if existing_tables:
         print(f"Database has {len(existing_tables)} existing tables. Running create_all to add any missing tables.")
-    # create_all is safe to call even when tables exist — it only creates missing ones
-    Base.metadata.create_all(bind=engine)
+    # checkfirst=True prevents crash on duplicate indexes/tables that already exist
+    Base.metadata.create_all(bind=engine, checkfirst=True)
