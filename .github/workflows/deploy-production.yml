@@ -200,6 +200,10 @@ jobs:
           DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
           DO_USER: ${{ secrets.DO_USER }}
         run: |
+          # Strip any accidental whitespace/CR from secret values
+          SERVER=$(echo "$DO_SERVER_IP" | tr -d '[:space:]')
+          USER=$(echo "$DO_USER" | tr -d '[:space:]')
+
           rsync -avz --delete \
             -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
             --exclude '.git' \
@@ -211,9 +215,10 @@ jobs:
             --exclude 'pinplot_postgres_data' \
             --exclude 'backend/.env' \
             --exclude '.env' \
-            ./gps-tracker/ "$DO_USER@$DO_SERVER_IP:/root/pinplot/gps-tracker/"
+            ./gps-tracker/ "${USER}@${SERVER}:/root/pinplot/gps-tracker/"
 
-          ssh "$DO_USER@$DO_SERVER_IP" \
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            "${USER}@${SERVER}" \
             'test -f /root/pinplot/gps-tracker/mobile-app/ble_tracker_app/build/web/main.dart.js \
              && echo "✅ Flutter artifacts on server" \
              || (echo "❌ Flutter artifacts missing on server" && exit 1)'
