@@ -1,8 +1,9 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
+import 'package:ble_tracker_app/config/environment.dart';
 
-/// Enhanced logger for BeaconTelematics mobile app
+/// Enhanced logger for Pinplot mobile app
 /// Sends logs to backend admin portal with proper sanitization
 class AdminPortalLogger {
   static const String _logEndpoint = '/api/admin/logs';
@@ -12,10 +13,10 @@ class AdminPortalLogger {
   late String _baseUrl;
   
   AdminPortalLogger({
-    this.backendUrl = 'https://beacontelematics.co.uk',
+    String? backendUrl,
     this.adminKey,
-  }) {
-    _baseUrl = backendUrl.replaceAll(RegExp(r'/$'), '');
+  }) : backendUrl = backendUrl ?? Environment.apiBaseUrl {
+    _baseUrl = this.backendUrl.replaceAll(RegExp(r'/$'), '');
   }
 
   /// Sanitize sensitive data from logs
@@ -297,7 +298,7 @@ AdminPortalLogger? _loggerInstance;
 
 /// Initialize global logger instance
 AdminPortalLogger initializeLogger({
-  String backendUrl = 'https://beacontelematics.co.uk',
+  String? backendUrl,
   String? adminKey,
 }) {
   _loggerInstance = AdminPortalLogger(
@@ -309,16 +310,14 @@ AdminPortalLogger initializeLogger({
 
 /// Get global logger instance
 AdminPortalLogger getLogger() {
-  return _loggerInstance ??= AdminPortalLogger(
-    backendUrl: 'https://beacontelematics.co.uk',
-  );
+  return _loggerInstance ??= AdminPortalLogger();
 }
 
 // Usage examples in Flutter app:
 // 
 // // In main.dart - initialize logger
 // void main() {
-//   initializeLogger(backendUrl: 'https://beacontelematics.co.uk');
+//   initializeLogger();
 //   runApp(const MyApp());
 // }
 //
