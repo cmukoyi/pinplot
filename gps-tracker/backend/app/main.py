@@ -484,6 +484,31 @@ def send_verification_code(request: SendVerificationCodeRequest, db: Session = D
 @app.post("/api/v1/auth/verify-pin")
 def verify_pin(request: VerifyPINRequest, db: Session = Depends(get_db)):
     """Verify PIN — confirms email ownership. User is NOT created here."""
+    _debug_mode = os.getenv('DEBUG', 'False').lower() == 'true'
+
+    # DEV BYPASS: In debug mode, PIN "123456" always succeeds without checking the DB.
+    if _debug_mode and request.pin == "123456":
+        print(f"[DEV] Bypassing PIN verification for {request.email} (DEBUG=True, pin=123456)")
+        # Invalidate any old PINs, then insert a pre-used record so /register can proceed.
+        db.query(VerificationPIN).filter(
+            VerificationPIN.email == request.email,
+            VerificationPIN.is_used == False
+        ).update({"is_used": True})
+        bypass_pin = VerificationPIN(
+            user_id=None,
+            email=request.email,
+            pin="123456",
+            is_used=True,
+            expires_at=datetime.utcnow() + timedelta(minutes=10),
+        )
+        db.add(bypass_pin)
+        existing_user = db.query(User).filter(User.email == request.email).first()
+        if existing_user:
+            existing_user.email_verified = True
+            existing_user.is_active = True
+        db.commit()
+        return {"success": True, "message": "Email verified successfully"}
+
     # Find valid, unused, non-expired PIN
     verification = db.query(VerificationPIN).filter(
         VerificationPIN.email == request.email,
