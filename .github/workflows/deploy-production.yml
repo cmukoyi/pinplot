@@ -208,9 +208,6 @@ jobs:
             echo "━━━ Building UI services (no cache) ━━━"
             docker compose build --no-cache flutter-web admin-portal
 
-            echo "━━━ Pruning build cache (prevents stale snapshot errors) ━━━"
-            docker builder prune -f
-
             echo "━━━ Building backend services ━━━"
             docker compose build --no-cache backend customer
 

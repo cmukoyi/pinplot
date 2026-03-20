@@ -19,10 +19,13 @@ def get_db():
         db.close()
 
 def init_db():
-    """Initialize database tables - always runs create_all (idempotent, only creates missing tables)"""
+    """Initialize database tables - only creates tables that don't already exist."""
     inspector = inspect(engine)
-    existing_tables = inspector.get_table_names()
+    existing_tables = set(inspector.get_table_names())
     if existing_tables:
-        print(f"Database has {len(existing_tables)} existing tables. Running create_all to add any missing tables.")
-    # checkfirst=True prevents crash on duplicate indexes/tables that already exist
-    Base.metadata.create_all(bind=engine, checkfirst=True)
+        print(f"Database has {len(existing_tables)} existing tables. Checking for new tables...")
+    for table in Base.metadata.sorted_tables:
+        if table.name not in existing_tables:
+            print(f"Creating table: {table.name}")
+            table.create(bind=engine)
+    print("Database initialization complete.")
