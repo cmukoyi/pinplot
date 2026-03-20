@@ -187,10 +187,12 @@ app.include_router(admin_router)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# CORS middleware - allow all origins for development
+# CORS middleware - restrict to known origins only
+_cors_origins_env = os.getenv("CORS_ORIGINS", "https://pinplot.me,https://www.pinplot.me")
+_allowed_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
