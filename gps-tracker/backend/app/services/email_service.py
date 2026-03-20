@@ -25,7 +25,7 @@ class EmailService:
         self.smtp_port = int(os.getenv("SMTP_PORT", "1025"))
         self.smtp_user = os.getenv("SMTP_USER", "")
         self.smtp_password = os.getenv("SMTP_PASSWORD", "")
-        self.from_email = os.getenv("FROM_EMAIL", "noreply@beacontelematics.co.uk")
+        self.from_email = os.getenv("FROM_EMAIL", "noreply@pinplot.me")
         self.debug = os.getenv("DEBUG", "False").lower() == "true"
         
         # Log email service configuration
@@ -427,5 +427,10 @@ class EmailService:
                 
         except Exception as e:
             print(f"❌ Error sending email via SendGrid: {e}")
+            # Print SendGrid response body for diagnosis
+            if hasattr(e, 'body'):
+                print(f"❌ SendGrid error body: {e.body}")
+            if hasattr(e, 'status_code'):
+                print(f"❌ SendGrid status code: {e.status_code}")
             return False
 

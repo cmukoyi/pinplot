@@ -43,6 +43,7 @@ services:
     environment:
       - DEBUG=False
       - ENVIRONMENT=production
+      - FROM_EMAIL=noreply@pinplot.me
     # No --reload in production
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
 
