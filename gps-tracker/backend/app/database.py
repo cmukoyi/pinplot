@@ -19,14 +19,10 @@ def get_db():
         db.close()
 
 def init_db():
-    """Initialize database tables - skip if tables already exist (e.g., from backup restore)"""
+    """Initialize database tables - always runs create_all (idempotent, only creates missing tables)"""
     inspector = inspect(engine)
     existing_tables = inspector.get_table_names()
-    
-    # If tables already exist, database is already initialized
     if existing_tables:
-        print(f"Database already initialized with {len(existing_tables)} tables. Skipping init_db().")
-        return
-    
-    # Create tables only if database is empty
+        print(f"Database has {len(existing_tables)} existing tables. Running create_all to add any missing tables.")
+    # create_all is safe to call even when tables exist — it only creates missing ones
     Base.metadata.create_all(bind=engine)
