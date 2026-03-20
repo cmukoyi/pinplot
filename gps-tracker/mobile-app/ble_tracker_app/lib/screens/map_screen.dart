@@ -1581,11 +1581,14 @@ View on $mapProvider to see the vehicle location.''';
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
                     children: [
-                      Image.asset(
-                        'assets/logo.png',
-                        height: 48,
-                        fit: BoxFit.contain,
-                        filterQuality: FilterQuality.high,
+                      Text(
+                        'Pinplot',
+                        style: GoogleFonts.poppins(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 1.2,
+                        ),
                       ),
                       Spacer(),
                       // Alerts button with badge
