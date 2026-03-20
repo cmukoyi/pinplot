@@ -1,26 +1,26 @@
 
 
-# Production Docker Compose — Beacon Telematics
+# Production Docker Compose — Pinplot
 # Deployed via GitHub Actions CI/CD
 # Secrets injected from backend/.env (written by pipeline from GitHub Secrets)
 
 services:
   db:
     image: postgres:15-alpine
-    container_name: beacon_telematics_db
+    container_name: pinplot_db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-beacon_user}
+      POSTGRES_USER: ${POSTGRES_USER:-pinplot_db_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-beacon_telematics}
+      POSTGRES_DB: ${POSTGRES_DB:-pinplot_db}
     volumes:
-      - beacon_telematics_postgres_data:/var/lib/postgresql/data
+      - pinplot_postgres_data:/var/lib/postgresql/data
     ports:
       - "5433:5432"
     networks:
-      - beacon_telematics_network
+      - pinplot_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-beacon_user} -d ${POSTGRES_DB:-beacon_telematics}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pinplot_db_user} -d ${POSTGRES_DB:-pinplot_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -29,7 +29,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: beacon_telematics_backend
+    container_name: pinplot_backend
     env_file:
       - ./backend/.env
     ports:
@@ -38,7 +38,7 @@ services:
       db:
         condition: service_healthy
     networks:
-      - beacon_telematics_network
+      - pinplot_network
     restart: unless-stopped
     environment:
       - DEBUG=False
@@ -50,13 +50,13 @@ services:
     build:
       context: ./admin-portal
       dockerfile: Dockerfile
-    container_name: beacon_telematics_admin
+    container_name: pinplot_admin
     ports:
       - "3010:80"
     depends_on:
       - backend
     networks:
-      - beacon_telematics_network
+      - pinplot_network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
@@ -68,7 +68,7 @@ services:
     build:
       context: ./customer-dashboard
       dockerfile: Dockerfile
-    container_name: beacon_telematics_customer
+    container_name: pinplot_customer
     ports:
       - "3011:3001"
     environment:
@@ -77,25 +77,25 @@ services:
     depends_on:
       - backend
     networks:
-      - beacon_telematics_network
+      - pinplot_network
     restart: unless-stopped
 
   flutter-web:
     build:
       context: ./mobile-app
       dockerfile: Dockerfile
-    container_name: beacon_telematics_flutter_web
+    container_name: pinplot_flutter_web
     ports:
       - "3012:80"
     depends_on:
       - backend
     networks:
-      - beacon_telematics_network
+      - pinplot_network
     restart: unless-stopped
 
   nginx:
     image: nginx:alpine
-    container_name: beacon_telematics_nginx
+    container_name: pinplot_nginx
     ports:
       - "80:80"
       - "443:443"
@@ -108,13 +108,13 @@ services:
       - customer
       - flutter-web
     networks:
-      - beacon_telematics_network
+      - pinplot_network
     restart: unless-stopped
 
 volumes:
-  beacon_telematics_postgres_data:
+  pinplot_postgres_data:
     driver: local
 
 networks:
-  beacon_telematics_network:
+  pinplot_network:
     driver: bridge

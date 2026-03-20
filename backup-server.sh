@@ -1,5 +1,5 @@
 #!/bin/bash
-# Beacon Telematics Backup & Rollback Script (FIXED)
+# Pinplot Backup & Rollback Script
 # Backs up only RUNTIME DATA, not code (code comes from git)
 # Usage: ./backup.sh backup    (saves timestamped backup)
 #        ./backup.sh list      (shows available backups)
@@ -7,10 +7,10 @@
 
 set -e
 
-BACKUP_DIR="/root/beacon-telematics-backups"
-APP_DIR="/root/beacon-telematics"
+BACKUP_DIR="/root/pinplot-backups"
+APP_DIR="/root/pinplot"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_NAME="beacon_backup_${TIMESTAMP}"
+BACKUP_NAME="pinplot_backup_${TIMESTAMP}"
 
 mkdir -p "$BACKUP_DIR"
 
@@ -33,7 +33,7 @@ backup() {
     docker volume ls --format "{{.Name}}" > "$BACKUP_PATH/volumes.txt"
     
     echo "  4️⃣  Backing up database..."
-    docker exec beacon_telematics_db pg_dump -U beacon_user -d beacon_telematics > "$BACKUP_PATH/database.sql" 2>/dev/null || echo "     (Could not dump database)"
+    docker exec pinplot_db pg_dump -U pinplot_db_user -d pinplot_db > "$BACKUP_PATH/database.sql" 2>/dev/null || echo "     (Could not dump database)"
     
     echo "  5️⃣  Git commit info..."
     cd "$APP_DIR"
@@ -90,7 +90,7 @@ rollback() {
     echo "🗄️  Restoring database..."
     docker compose up -d db
     sleep 5
-    docker exec beacon_telematics_db psql -U beacon_user -d beacon_telematics < "$BACKUP_DIR/$EXTRACTED_DIR/database.sql" 2>/dev/null || echo "   (Database restore skipped)"
+    docker exec pinplot_db psql -U pinplot_db_user -d pinplot_db < "$BACKUP_DIR/$EXTRACTED_DIR/database.sql" 2>/dev/null || echo "   (Database restore skipped)"
     
     echo "🔐 Restoring SSL certificates..."
     [ -d "$BACKUP_DIR/$EXTRACTED_DIR/letsencrypt" ] && \

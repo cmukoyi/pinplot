@@ -51,10 +51,10 @@ jobs:
             --exclude '__pycache__' \
             --exclude '*.pyc' \
             --exclude '.dart_tool' \
-            --exclude 'beacon_telematics_postgres_data' \
+            --exclude 'pinplot_postgres_data' \
             --exclude 'backend/.env' \
             --exclude '.env' \
-            ./gps-tracker/ $DO_USER@$DO_SERVER_IP:~/beacon-telematics/gps-tracker/
+            ./gps-tracker/ $DO_USER@$DO_SERVER_IP:~/pinplot/gps-tracker/
           echo "✅ Code synced (secrets on server untouched)"
 
       - name: Rebuild and restart containers
@@ -64,7 +64,7 @@ jobs:
         run: |
           ssh $DO_USER@$DO_SERVER_IP 'bash -s' << 'SSHEOF'
             set -e
-            cd ~/beacon-telematics/gps-tracker
+            cd ~/pinplot/gps-tracker
             docker compose down --remove-orphans || true
             docker compose build --no-cache flutter-web admin-portal
             docker compose build backend customer
@@ -78,7 +78,7 @@ jobs:
         if: always()
         run: |
           echo "========================================"
-          echo "⏪ Beacon Telematics — Rollback Complete"
+          echo "⏪ Pinplot — Rollback Complete"
           echo "Target  : ${{ inputs.version || 'previous tag' }}"
           echo "Commit  : $(git rev-parse --short HEAD)"
           echo "========================================"

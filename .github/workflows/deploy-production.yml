@@ -164,7 +164,7 @@ jobs:
             echo "DEBUG=False"
             echo "ENVIRONMENT=production"
           } | ssh $DO_USER@$DO_SERVER_IP \
-            'mkdir -p ~/beacon-telematics/gps-tracker/backend && \
+            'mkdir -p ~/pinplot/gps-tracker/backend && \
              cat > ~/pinplot/gps-tracker/backend/.env && \
              chmod 600 ~/pinplot/gps-tracker/backend/.env'
           echo "✅ backend/.env written to server"
@@ -201,13 +201,13 @@ jobs:
             --exclude '__pycache__' \
             --exclude '*.pyc' \
             --exclude '.dart_tool' \
-            --exclude 'beacon_telematics_postgres_data' \
+            --exclude 'pinplot_postgres_data' \
             --exclude 'backend/.env' \
             --exclude '.env' \
             ./gps-tracker/ $DO_USER@$DO_SERVER_IP:~/pinplot/gps-tracker/
 
           ssh $DO_USER@$DO_SERVER_IP \
-            'test -f ~/beacon-telematics/gps-tracker/mobile-app/ble_tracker_app/build/web/main.dart.js \
+            'test -f ~/pinplot/gps-tracker/mobile-app/ble_tracker_app/build/web/main.dart.js \
              && echo "✅ Flutter artifacts on server" \
              || (echo "❌ Flutter artifacts missing on server" && exit 1)'
 
@@ -253,7 +253,7 @@ jobs:
 
             echo "⏳ Waiting for database..."
             for i in $(seq 1 30); do
-              if docker exec beacon_telematics_db pg_isready -U beacon_user >/dev/null 2>&1; then
+              if docker exec pinplot_db pg_isready -U pinplot_db_user >/dev/null 2>&1; then
                 echo "✅ Database ready"
                 break
               fi
@@ -263,7 +263,7 @@ jobs:
 
             echo "⏳ Waiting for backend..."
             for i in $(seq 1 20); do
-              if docker ps --filter name=beacon_telematics_backend \
+              if docker ps --filter name=pinplot_backend \
                   --format '{{.Status}}' | grep -q 'Up'; then
                 echo "✅ Backend running"
                 break
@@ -279,7 +279,7 @@ jobs:
               sleep 15
               docker compose exec -T backend alembic upgrade head || {
                 echo "❌ Migration failed"
-                docker logs --tail 30 beacon_telematics_backend
+                docker logs --tail 30 pinplot_backend
                 exit 1
               }
             }
@@ -316,7 +316,7 @@ jobs:
             ssh $DO_USER@$DO_SERVER_IP \
               'cd ~/pinplot/gps-tracker && \
                docker compose ps && \
-               docker logs --tail 30 beacon_telematics_backend'
+               docker logs --tail 30 pinplot_backend'
             echo ""
             echo "🔁 AUTO-ROLLBACK: redeploying previous image..."
             ssh $DO_USER@$DO_SERVER_IP \

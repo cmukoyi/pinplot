@@ -27,7 +27,7 @@ test_*.py.db
 *.db
 *.sql
 postgres_data/
-beacon_telematics_postgres_data/
+pinplot_postgres_data/
 
 # Docker
 docker-compose.override.yml

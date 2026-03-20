@@ -12,7 +12,7 @@ echo ""
 # Variables from environment (passed from GitHub Actions)
 SSH_USER="${SSH_USER:-root}"
 SSH_HOST="${SSH_HOST:?SSH_HOST not set}"
-DEPLOY_DIR="~/beacon-telematics/gps-tracker"
+DEPLOY_DIR="~/pinplot/gps-tracker"
 
 echo "📍 Deploying to: $SSH_USER@$SSH_HOST:$DEPLOY_DIR"
 echo ""
@@ -30,10 +30,10 @@ echo ""
 echo "Step 2: Creating environment file on server..."
 ssh -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" bash << 'ENVEOF'
 set -e
-mkdir -p ~/beacon-telematics/gps-tracker/backend
+mkdir -p ~/pinplot/gps-tracker/backend
 
 # Create .env file with all secrets
-cat > ~/beacon-telematics/gps-tracker/backend/.env << 'EOF'
+cat > ~/pinplot/gps-tracker/backend/.env << 'EOF'
 DATABASE_URL=PLACEHOLDER_DATABASE_URL
 SECRET_KEY=PLACEHOLDER_SECRET_KEY
 POSTGRES_USER=PLACEHOLDER_POSTGRES_USER
@@ -50,16 +50,16 @@ DEBUG=False
 ENVIRONMENT=production
 EOF
 
-chmod 600 ~/beacon-telematics/gps-tracker/backend/.env
+chmod 600 ~/pinplot/gps-tracker/backend/.env
 
 # Verify file exists
-if [ ! -f ~/beacon-telematics/gps-tracker/backend/.env ]; then
+if [ ! -f ~/pinplot/gps-tracker/backend/.env ]; then
     echo "❌ .env file creation failed"
     exit 1
 fi
 
 echo "✅ Environment file created"
-ls -lh ~/beacon-telematics/gps-tracker/backend/.env
+ls -lh ~/pinplot/gps-tracker/backend/.env
 ENVEOF
 
 echo ""
@@ -75,7 +75,7 @@ rsync -avz --delete \
     --exclude '.env' \
     --exclude 'backend/.env' \
     --exclude '.dart_tool' \
-    --exclude 'beacon_telematics_postgres_data' \
+    --exclude 'pinplot_postgres_data' \
     ./gps-tracker/ "$SSH_USER@$SSH_HOST:$DEPLOY_DIR/" || {
         echo "❌ rsync failed"
         exit 1
@@ -87,7 +87,7 @@ echo ""
 echo "Step 4: Deploying containers..."
 ssh -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" bash << 'DEPLOYEOF'
 set -e
-cd ~/beacon-telematics/gps-tracker
+cd ~/pinplot/gps-tracker
 
 # Verify .env exists before any docker commands
 if [ ! -f backend/.env ]; then
@@ -137,7 +137,7 @@ docker compose ps
 # Test health endpoint
 echo ""
 echo "Testing backend health..."
-if docker logs beacon_telematics_backend 2>/dev/null | grep -q "Application startup complete"; then
+if docker logs pinplot_backend 2>/dev/null | grep -q "Application startup complete"; then
     echo "✅ Backend is ready"
 else
     echo "⚠️  Backend still initializing (check logs)"

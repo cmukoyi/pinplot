@@ -26,7 +26,7 @@ set -e
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-REMOTE_BASE_DIR="~/beacon-telematics/gps-tracker"
+REMOTE_BASE_DIR="~/pinplot/gps-tracker"
 
 # Required environment variables for deployment
 REQUIRED_VARS=(
@@ -141,7 +141,7 @@ ssh -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" bash -s << 'ENVSCRIPT'
 set -e
 
 # Create directory
-mkdir -p ~/beacon-telematics/gps-tracker/backend
+mkdir -p ~/pinplot/gps-tracker/backend
 
 # Create temporary file first (safer)
 temp_env=$(mktemp)
@@ -166,16 +166,16 @@ ENVIRONMENT=production
 EOF
 
 # Move to final location atomically (avoids partial writes)
-mv "$temp_env" ~/beacon-telematics/gps-tracker/backend/.env
-chmod 600 ~/beacon-telematics/gps-tracker/backend/.env
+mv "$temp_env" ~/pinplot/gps-tracker/backend/.env
+chmod 600 ~/pinplot/gps-tracker/backend/.env
 
 # Verify
-if [ ! -f ~/beacon-telematics/gps-tracker/backend/.env ]; then
+if [ ! -f ~/pinplot/gps-tracker/backend/.env ]; then
     echo "Error: .env creation failed" >&2
     exit 1
 fi
 
-echo "✓ .env created ($(wc -c < ~/beacon-telematics/gps-tracker/backend/.env) bytes)"
+echo "✓ .env created ($(wc -c < ~/pinplot/gps-tracker/backend/.env) bytes)"
 ENVSCRIPT
 
 log_success ".env file created on server"
@@ -191,7 +191,7 @@ escape_sed() {
 # Create a script that substitutes all placeholders
 substitute_script=$(cat <<'SUBSTITUTION'
 set -e
-ENV_FILE=~/beacon-telematics/gps-tracker/backend/.env
+ENV_FILE=~/pinplot/gps-tracker/backend/.env
 
 # Function to safely substitute a variable
 substitute() {
@@ -246,7 +246,7 @@ export MZONE_USERNAME="${10}"
 export MZONE_PASSWORD="${11}"
 export FROM_EMAIL="${12}"
 
-ENV_FILE=~/beacon-telematics/gps-tracker/backend/.env
+ENV_FILE=~/pinplot/gps-tracker/backend/.env
 
 substitute() {
     local placeholder="$1"
@@ -290,7 +290,7 @@ rsync -avz --delete \
     --exclude '.env' \
     --exclude 'backend/.env' \
     --exclude '.dart_tool' \
-    --exclude 'beacon_telematics_postgres_data' \
+    --exclude 'pinplot_postgres_data' \
     "$PROJECT_ROOT/gps-tracker/" \
     "$SSH_USER@$SSH_HOST:$REMOTE_BASE_DIR/" || die "rsync failed"
 
@@ -307,7 +307,7 @@ log_step "Deploying to server..."
 ssh -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" bash << 'DEPLOYEOF'
 set -e
 
-cd ~/beacon-telematics/gps-tracker
+cd ~/pinplot/gps-tracker
 
 # Verify .env exists
 if [ ! -f backend/.env ]; then
@@ -366,7 +366,7 @@ echo ""
 echo "Testing backend health..."
 health_check(){
     for i in {1..30}; do
-        if docker exec beacon_telematics_backend curl -s http://localhost:8000/api/health >/dev/null 2>&1; then
+        if docker exec pinplot_backend curl -s http://localhost:8000/api/health >/dev/null 2>&1; then
             echo "✓ Backend is healthy"
             return 0
         fi

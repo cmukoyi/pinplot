@@ -24,26 +24,26 @@ echo ""
 
 echo "Step 1b: Backing up current state on server..."
 ssh -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" << 'BACKUPEOF'
-BACKUP_DIR=~/beacon-telematics/backups/$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR=~/pinplot/backups/$(date +%Y%m%d_%H%M%S)
 mkdir -p "$BACKUP_DIR"
 
 # Backup .env files (secrets)
-if [ -f ~/beacon-telematics/gps-tracker/backend/.env ]; then
-    cp ~/beacon-telematics/gps-tracker/backend/.env "$BACKUP_DIR/backend.env"
+if [ -f ~/pinplot/gps-tracker/backend/.env ]; then
+    cp ~/pinplot/gps-tracker/backend/.env "$BACKUP_DIR/backend.env"
     echo "  ✅ backend.env backed up"
 fi
-if [ -f ~/beacon-telematics/gps-tracker/.env ]; then
-    cp ~/beacon-telematics/gps-tracker/.env "$BACKUP_DIR/root.env"
+if [ -f ~/pinplot/gps-tracker/.env ]; then
+    cp ~/pinplot/gps-tracker/.env "$BACKUP_DIR/root.env"
     echo "  ✅ root.env backed up"
 fi
 
 # Backup database (compressed)
-if docker ps --format '{{.Names}}' | grep -q beacon_telematics_db; then
-    docker exec beacon_telematics_db pg_dump -U beacon_user beacon_telematics | gzip > "$BACKUP_DIR/db.sql.gz" && echo "  ✅ Database backed up (compressed)" || echo "  ⚠️  DB backup skipped (container not ready)"
+if docker ps --format '{{.Names}}' | grep -q pinplot_db; then
+    docker exec pinplot_db pg_dump -U pinplot_db_user pinplot | gzip > "$BACKUP_DIR/db.sql.gz" && echo "  ✅ Database backed up (compressed)" || echo "  ⚠️  DB backup skipped (container not ready)"
 fi
 
 # Keep only last 10 backups
-ls -dt ~/beacon-telematics/backups/*/ 2>/dev/null | tail -n +11 | xargs -r rm -rf
+ls -dt ~/pinplot/backups/*/ 2>/dev/null | tail -n +11 | xargs -r rm -rf
 
 echo "✅ Backup saved to $BACKUP_DIR"
 BACKUPEOF
@@ -76,9 +76,9 @@ DEBUG=False
 ENVIRONMENT=production
 EOF
 
-ssh -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" 'mkdir -p ~/beacon-telematics/gps-tracker/backend'
-scp -o StrictHostKeyChecking=no /tmp/.env "$SSH_USER@$SSH_HOST:~/beacon-telematics/gps-tracker/backend/.env"
-ssh -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" 'chmod 600 ~/beacon-telematics/gps-tracker/backend/.env'
+ssh -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" 'mkdir -p ~/pinplot/gps-tracker/backend'
+scp -o StrictHostKeyChecking=no /tmp/.env "$SSH_USER@$SSH_HOST:~/pinplot/gps-tracker/backend/.env"
+ssh -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" 'chmod 600 ~/pinplot/gps-tracker/backend/.env'
 rm /tmp/.env
 
 echo "✅ .env created"
@@ -96,9 +96,9 @@ rsync -avz --delete \
     --exclude '.env' \
     --exclude 'backend/.env' \
     --exclude '.dart_tool' \
-    --exclude 'beacon_telematics_postgres_data' \
+    --exclude 'pinplot_postgres_data' \
     ./gps-tracker/ \
-    "$SSH_USER@$SSH_HOST:~/beacon-telematics/gps-tracker/" > /dev/null
+    "$SSH_USER@$SSH_HOST:~/pinplot/gps-tracker/" > /dev/null
 
 echo "✅ Code synced"
 echo ""
@@ -106,7 +106,7 @@ echo ""
 echo "Step 4: Deploying containers on server..."
 ssh -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" << 'DEPLOYEOF'
 set -e
-cd ~/beacon-telematics/gps-tracker
+cd ~/pinplot/gps-tracker
 if [ ! -f backend/.env ]; then
     echo "❌ .env not found!"
     exit 1
