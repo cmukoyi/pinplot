@@ -122,7 +122,12 @@ jobs:
           ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
 
       - name: Add server to known hosts
-        run: ssh-keyscan -H ${{ secrets.DO_SERVER_IP }} >> ~/.ssh/known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -t rsa,ecdsa,ed25519 -H ${{ secrets.DO_SERVER_IP }} >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+          echo "Known hosts entry count: $(wc -l < ~/.ssh/known_hosts)"
 
       # ── Write backend/.env (no heredoc — no indentation issues) ──
       - name: Write backend .env to server
