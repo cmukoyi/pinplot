@@ -14,6 +14,7 @@ Key concerns:
 
 import asyncio
 import logging
+import os
 import time
 
 import httpx
@@ -27,12 +28,11 @@ _BASE_URL = "https://eu.tracksolidpro.com"
 _LOGIN_URL = f"{_BASE_URL}/v3/new/homepage/login"
 _EQUIPMENT_URL = f"{_BASE_URL}/v3/new/newEquipment/queryEquipmentList"
 
-# Beacontelematics TrackSolid account credentials (server-side only).
-# Password is the pre-hashed MD5 value expected by the TrackSolid API.
-_ACCOUNT = "Beacontelematics"
-_PASSWORD_MD5 = "95d16ce0247f42706fca9eb7691e53d8"
-_USER_ID = 14566550
-_ORG_ID = "984a068e027c453081e81c457c115a91"
+# Credentials loaded from environment variables — never hardcode in source.
+_ACCOUNT = os.environ["TRACKSOLID_ACCOUNT"]
+_PASSWORD_MD5 = os.environ["TRACKSOLID_PASSWORD_MD5"]
+_USER_ID = int(os.environ["TRACKSOLID_USER_ID"])
+_ORG_ID = os.environ["TRACKSOLID_ORG_ID"]
 
 _TOKEN_TTL_SECONDS = 3600       # TrackSolid tokens last 1 hour
 _TOKEN_REFRESH_BUFFER = 60      # Refresh 60 s before expiry to be safe
