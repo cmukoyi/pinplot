@@ -179,11 +179,14 @@ class BLETag {
   final String imei;
   final String description;
   final String? vehicleId;
+  /// Vendor platform key, e.g. 'tracksolid' or 'scope'.
+  final String tagType;
   
   BLETag({
     required this.imei,
     required this.description,
     this.vehicleId,
+    this.tagType = 'scope',
   });
   
   factory BLETag.fromJson(Map<String, dynamic> json) {
@@ -191,6 +194,7 @@ class BLETag {
       imei: json['imei'] ?? '',
       description: json['description'] ?? 'BLE Tag',
       vehicleId: json['vehicle_id'],
+      tagType: json['tag_type'] ?? 'scope',
     );
   }
   
@@ -199,6 +203,7 @@ class BLETag {
       'imei': imei,
       'description': description,
       'vehicle_id': vehicleId,
+      'tag_type': tagType,
     };
   }
 }

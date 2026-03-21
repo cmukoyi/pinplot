@@ -8,6 +8,7 @@ import 'package:ble_tracker_app/services/auth_service.dart';
 import 'package:ble_tracker_app/services/location_service.dart';
 import 'package:ble_tracker_app/screens/map_screen.dart';
 import 'package:ble_tracker_app/screens/qr_scanner_screen.dart';
+import 'package:ble_tracker_app/screens/add_tag_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -406,7 +407,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       child: ElevatedButton(
                         onPressed: () {
-                          setState(() => _showAddTagModal = true);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AddTagScreen(
+                                isFirstTag: widget.isFirstTimeUser,
+                              ),
+                            ),
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.transparent,

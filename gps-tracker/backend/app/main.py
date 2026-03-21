@@ -22,6 +22,7 @@ from app.services.mzone_service import mzone_service
 from app.services.geofence_service import GeofenceService
 from app.services.location_poller_service import location_poller
 from app.routes_admin import router as admin_router
+from app.services.device_providers import DeviceProviderFactory
 import asyncio
 from app.schemas.poi import (
     POICreate, POIUpdate, POIResponse, POIWithArmedStatus,
@@ -87,6 +88,7 @@ class BLETagCreate(BaseModel):
     device_model: Optional[str] = None
     description: Optional[str] = None
     mac_address: Optional[str] = None
+    tag_type: Optional[str] = 'scope'  # 'tracksolid' | 'scope'
 
 class BLETagResponse(BaseModel):
     id: str
@@ -95,6 +97,7 @@ class BLETagResponse(BaseModel):
     device_model: Optional[str]
     description: Optional[str]
     mac_address: Optional[str]
+    tag_type: Optional[str]
     is_active: bool
     last_seen: Optional[datetime]
     battery_level: Optional[int]
@@ -116,6 +119,7 @@ class BLETagResponse(BaseModel):
             device_model=obj.device_model,
             description=obj.description,
             mac_address=obj.mac_address,
+            tag_type=getattr(obj, 'tag_type', 'scope'),
             is_active=obj.is_active,
             last_seen=obj.last_seen,
             battery_level=obj.battery_level,
@@ -717,13 +721,59 @@ def add_ble_tag(
         imei=tag_data.imei,
         device_name=tag_data.device_name,
         device_model=tag_data.device_model,
-        mac_address=tag_data.mac_address
+        mac_address=tag_data.mac_address,
+        tag_type=tag_data.tag_type or 'scope'
     )
     db.add(ble_tag)
     db.commit()
     db.refresh(ble_tag)
     
     return ble_tag
+
+
+class BLETagValidateRequest(BaseModel):
+    imei: str
+    tag_type: str  # 'tracksolid' | 'scope'
+
+
+class BLETagValidateResponse(BaseModel):
+    is_valid: bool
+    message: str
+
+
+@app.post("/api/v1/ble-tags/validate", response_model=BLETagValidateResponse)
+async def validate_ble_tag(
+    request: BLETagValidateRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Validate an IMEI against its vendor platform before the tag is saved.
+
+    - TrackSolid: checks the Beacontelematics FleetTrack account.
+    - Scope: structural IMEI / GUID check (MZone polling confirms live match).
+
+    Returns {is_valid, message}. The client should only call POST /api/v1/ble-tags
+    after receiving is_valid=true.
+    """
+    try:
+        provider = DeviceProviderFactory.get_provider(request.tag_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    result = await provider.validate_tag(request.imei)
+    return BLETagValidateResponse(is_valid=result.is_valid, message=result.message)
+
+
+@app.get("/api/v1/ble-tags/supported-types")
+async def get_supported_tag_types(_: User = Depends(get_current_user)):
+    """Return the list of supported BLE tag types for the dropdown."""
+    return {
+        "types": [
+            {"value": "tracksolid", "label": "TrackSolid"},
+            {"value": "scope",      "label": "Scope"},
+        ]
+    }
+
 
 @app.get("/api/v1/ble-tags", response_model=List[BLETagResponse])
 def list_user_ble_tags(

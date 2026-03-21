@@ -692,11 +692,11 @@ class AuthService {
     }
   }
   
-  Future<void> addBLETag({required String imei, String? name}) async {
+  Future<void> addBLETag({required String imei, String? name, String tagType = 'scope'}) async {
     print('\n========== ADD BLE TAG START ==========');
     print('⏰ Timestamp: ${DateTime.now().toIso8601String()}');
     print('📍 IMEI: $imei');
-    print('🏷️ Name: ${name ?? "(none)"}');
+    print('🏷️ Name: ${name ?? "(none)"} | Type: $tagType');
     
     if (_token == null) {
       print('❌ Not authenticated - no token available');
@@ -704,12 +704,13 @@ class AuthService {
     }
     
     try {
-      final url = '$baseUrl/api/tags/add';
+      final url = '$baseUrl/api/v1/ble-tags';
       print('📍 POST to: $url');
       
       final requestBody = json.encode({
         'imei': imei,
         'device_name': name,
+        'tag_type': tagType,
       });
       print('📦 Request body: $requestBody');
       
@@ -767,6 +768,44 @@ class AuthService {
         errorMsg = 'Server returned invalid response. Please check backend.';
       }
       throw Exception(errorMsg);
+    }
+  }
+
+  /// Validate an IMEI against its vendor platform before adding.
+  /// Calls POST /api/v1/ble-tags/validate and returns {is_valid, message}.
+  Future<Map<String, dynamic>> validateTagByType(String imei, String tagType) async {
+    print('\n========== VALIDATE TAG BY TYPE ==========');
+    print('📍 IMEI: $imei  Type: $tagType');
+
+    final token = await getToken();
+    if (token == null) throw Exception('Not authenticated.');
+
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/v1/ble-tags/validate'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({'imei': imei, 'tag_type': tagType}),
+      ).timeout(const Duration(seconds: 30));
+
+      print('📊 Status code: ${response.statusCode}');
+      print('📄 Response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        print('========== VALIDATE TAG BY TYPE END ==========\n');
+        return data;
+      } else {
+        final errorData = json.decode(response.body);
+        throw Exception(errorData['detail'] ?? 'Validation failed');
+      }
+    } on Exception {
+      rethrow;
+    } catch (e) {
+      throw Exception('Validation error: $e');
     }
   }
   
