@@ -279,7 +279,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                               children: [
                                 fmap.TileLayer(
                                   urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                  subdomains: ['a', 'b', 'c'],
+                                  subdomains: const ['a', 'b', 'c'],
+                                  userAgentPackageName: 'com.beacontelematics.tracker',
+                                  maxParallelLoadingCount: 4,
+                                  keepBuffer: 2,
+                                  panBuffer: 1,
                                 ),
                                 fmap.PolylineLayer(polylines: _tripPolylines),
                                 fmap.MarkerLayer(markers: _tripMarkers),

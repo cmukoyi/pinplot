@@ -1852,14 +1852,16 @@ View on $mapProvider to see the vehicle location.''';
             ),
             children: [
               fmap.TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                subdomains: const ['a', 'b', 'c'],
                 userAgentPackageName: 'com.beacontelematics.tracker',
                 maxZoom: 18,
-                keepBuffer: 4,   // Balanced: pre-load tiles for smooth scrolling
-                panBuffer: 3,    // Pre-load a few tiles ahead for panning
+                keepBuffer: 2,
+                panBuffer: 1,
                 maxNativeZoom: 18,
-                retinaMode: false, // Disable retina to save memory
+                retinaMode: false,
                 tileSize: 256,
+                maxParallelLoadingCount: 4,
                 tileDisplay: fmap.TileDisplay.fadeIn(
                   duration: Duration(milliseconds: 50),
                 ),
