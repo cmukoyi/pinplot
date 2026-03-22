@@ -1380,6 +1380,11 @@ View on $mapProvider to see the vehicle location.''';
                           ),
                         ),
                     ],
+                    if (vehicle.batteryLevel != null)
+                      Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: _buildBatteryInfoRow(vehicle.batteryLevel!),
+                      ),
                   ],
                 ),
               ),
@@ -1433,6 +1438,37 @@ View on $mapProvider to see the vehicle location.''';
           ),
         ],
       ),
+    );
+  }
+
+  /// Battery row with colour-coded icon (green/orange/red)
+  Widget _buildBatteryInfoRow(int battery) {
+    final Color color;
+    final IconData icon;
+    if (battery > 60) {
+      color = Colors.green.shade600;
+      icon = Icons.battery_full;
+    } else if (battery > 20) {
+      color = Colors.orange.shade700;
+      icon = Icons.battery_4_bar;
+    } else {
+      color = Colors.red.shade600;
+      icon = Icons.battery_alert;
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(icon, size: 16, color: color),
+        SizedBox(width: 8),
+        Text(
+          'Battery: $battery%',
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 

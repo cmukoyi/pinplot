@@ -41,7 +41,7 @@ class Vehicle {
           ? DateTime.tryParse(json['lastKnownEventUtcLastModified'])
           : null,
       attributes: json['attributes'] as Map<String, dynamic>?,
-      batteryLevel: json['battery_level'] as int?,
+      batteryLevel: (json['battery_level'] as num?)?.toInt(),
       tagType: json['tag_type'] as String?,
     );
   }
