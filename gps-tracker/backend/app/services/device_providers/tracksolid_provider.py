@@ -153,7 +153,7 @@ class TrackSolidTagProvider(DeviceTagProvider):
 
         _, _, user_id, org_id = _creds()
         payload = {
-            "imei": "",           # empty = all devices
+            "imei": imei.strip(),  # filter to this IMEI avoids pagination issues
             "startRow": "0",
             "userType": 8,
             "userId": user_id,
@@ -205,6 +205,7 @@ class TrackSolidTagProvider(DeviceTagProvider):
             )
 
         imei_strip = imei.strip()
+        logger.debug("TrackSolid returned %d device(s) for IMEI query '%s'", len(devices), imei_strip)
         found_device = None
         for device in devices:
             if str(device.get("imei", "")).strip() == imei_strip:
