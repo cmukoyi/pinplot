@@ -33,10 +33,12 @@ _LOGIN_URL = f"{_BASE_URL}/v3/new/homepage/login"
 _EQUIPMENT_URL = f"{_BASE_URL}/v3/new/newEquipment/queryEquipmentList"
 _TRACK_HISTORY_URL = f"{_BASE_URL}/v3/new/newTrackInfo/getPointList"
 
-# Open API — used for location polling (MD5-signed, separate credentials)
+# Open API — kept for signing helper, not used for location polling
 _OPEN_API_URL = "https://eu-open.tracksolidpro.com/route/rest"
 _OPEN_TOKEN_TTL_SECONDS = 7200    # expires_in requested from the API
 _OPEN_TOKEN_REFRESH_BUFFER = 120  # Refresh 2 min before expiry
+# V3 monitor endpoint — used for live location polling (Bearer JWT)
+_MONITOR_INFO_URL = f"{_BASE_URL}/v3/new/newMonitor/getMonitorInfo"
 
 
 @dataclass
@@ -342,87 +344,130 @@ _open_token_manager = TrackSolidOpenTokenManager()
 
 # ── Location helpers (used by location poller) ──────────────────────────────
 
-async def fetch_all_tracksolid_locations() -> "dict[str, TrackSolidLocationInfo]":
+def _parse_monitor_info_location(data: dict) -> "TrackSolidLocationInfo | None":
     """
-    Fetch current locations for ALL TrackSolid devices on the account in one
-    API call (jimi.user.device.location.list).
+    Parse a getMonitorInfo response dict into TrackSolidLocationInfo.
 
-    Returns a dict keyed by IMEI string. Entries where lat==0.0 and lng==0.0
-    indicate the device has no GPS fix and should be skipped by the caller.
+    Extracts:
+      - lat/lng from data[latestPosition].latlng[source_latlng] ("lat,lng")
+      - address from data[latestPosition].address
+      - battery from data[todayActivity].battery[battery]
     """
+    sections: list = data.get("data") or []
+    lat, lng = 0.0, 0.0
+    address: str | None = None
+    battery_level: int | None = None
+
+    for section in sections:
+        model = section.get("modeleName", "")
+        vos: list = section.get("monitorBaseVOS") or []
+
+        if model == "latestPosition":
+            for item in vos:
+                key = item.get("key", "")
+                if key == "latlng":
+                    for sub in (item.get("value") or []):
+                        if sub.get("key") == "source_latlng":
+                            try:
+                                parts = str(sub["value"]).split(",")
+                                lat = float(parts[0].strip())
+                                lng = float(parts[1].strip())
+                            except (ValueError, IndexError, KeyError):
+                                pass
+                elif key == "address":
+                    address = item.get("value") or None
+
+        elif model == "todayActivity":
+            for item in vos:
+                if item.get("key") == "battery":
+                    for sub in (item.get("value") or []):
+                        if sub.get("key") == "battery":
+                            try:
+                                battery_level = int(float(str(sub["value"])))
+                            except (ValueError, TypeError, KeyError):
+                                pass
+
+    if lat == 0.0 and lng == 0.0:
+        return None
+    return TrackSolidLocationInfo(
+        latitude=lat,
+        longitude=lng,
+        address=address,
+        battery_level=battery_level,
+    )
+
+
+async def _fetch_monitor_info_single(imei: str) -> "TrackSolidLocationInfo | None":
+    """Call getMonitorInfo for one IMEI using the V3 Bearer JWT."""
     try:
-        token = await _open_token_manager.get_token()
+        token = await _token_manager.get_token()
     except Exception as exc:
-        logger.error("TrackSolid Open API: token fetch failed: %s", exc)
-        return {}
+        logger.error("TrackSolid: token fetch failed for getMonitorInfo: %s", exc)
+        return None
 
-    account, app_key, app_secret = _creds_open()
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
-    params: dict = {
-        "access_token": token,
-        "app_key": app_key,
-        "format": "json",
-        "method": "jimi.user.device.location.list",
-        "sign_method": "md5",
-        "target": account,
-        "timestamp": timestamp,
-        "v": "1.0",
-    }
-    params["sign"] = _open_api_signature(params, app_secret)
+    _, _, user_id, _ = _creds()
+    payload = {"imei": imei.strip(), "userId": user_id, "isAllFlag": 1}
+    headers = {"Authorization": token, "Content-Type": "application/json"}
 
     try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post(_OPEN_API_URL, data=params)
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.post(_MONITOR_INFO_URL, json=payload, headers=headers)
             response.raise_for_status()
             data = response.json()
     except Exception as exc:
-        logger.error("TrackSolid Open API: device location list failed: %s", exc)
-        return {}
+        logger.error("TrackSolid: getMonitorInfo HTTP error for IMEI %s: %s", imei, exc)
+        return None
 
-    if data.get("code") != 0:
+    if not data.get("ok"):
         logger.error(
-            "TrackSolid Open API location list error: %s (code=%s)",
-            data.get("message"), data.get("code"),
+            "TrackSolid: getMonitorInfo error IMEI %s: code=%s msg=%s",
+            imei, data.get("code"), data.get("msg"),
         )
+        return None
+
+    return _parse_monitor_info_location(data)
+
+
+async def fetch_all_tracksolid_locations(
+    imeis: "list[str] | None" = None,
+) -> "dict[str, TrackSolidLocationInfo]":
+    """
+    Fetch current locations for TrackSolid devices using getMonitorInfo
+    (V3 Bearer JWT, per-IMEI calls run in parallel).
+
+    Args:
+        imeis: List of IMEI strings to query. When None/empty returns {}.
+
+    Returns a dict keyed by IMEI string. Missing entries mean no GPS fix.
+    """
+    if not imeis:
         return {}
 
-    devices: list = data.get("result") or []
-    result: dict[str, TrackSolidLocationInfo] = {}
-    for device in devices:
-        imei = str(device.get("imei", "")).strip()
-        if not imei:
-            continue
-        try:
-            lat = float(device.get("lat") or 0)
-            lng = float(device.get("lng") or 0)
-        except (ValueError, TypeError):
-            lat, lng = 0.0, 0.0
-        result[imei] = TrackSolidLocationInfo(
-            latitude=lat,
-            longitude=lng,
-            address=None,       # location list does not return addresses
-            battery_level=None, # battery comes from equipment list only
-        )
+    tasks = [_fetch_monitor_info_single(imei) for imei in imeis]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    logger.info("📡 TrackSolid Open API: fetched %d device locations", len(result))
-    return result
+    result_map: dict[str, TrackSolidLocationInfo] = {}
+    for imei, loc in zip(imeis, results):
+        if isinstance(loc, Exception):
+            logger.error("TrackSolid: getMonitorInfo exception for IMEI %s: %s", imei, loc)
+        elif loc is not None:
+            result_map[imei.strip()] = loc
+
+    logger.info(
+        "📍 TrackSolid getMonitorInfo: %d/%d locations fetched",
+        len(result_map), len(imeis),
+    )
+    return result_map
 
 
 async def fetch_tracksolid_location(imei: str) -> "TrackSolidLocationInfo | None":
     """
-    Fetch the current location for a single TrackSolid IMEI.
-
-    Calls fetch_all_tracksolid_locations() (bulk open API) and filters by IMEI.
-    Returns None when the IMEI is not found or has no GPS fix (lat=lng=0).
+    Fetch the current location for a single TrackSolid IMEI via getMonitorInfo.
+    Returns None when there is no GPS fix.
     """
-    all_locs = await fetch_all_tracksolid_locations()
-    loc = all_locs.get(imei.strip())
+    loc = await _fetch_monitor_info_single(imei)
     if not loc:
-        logger.warning("TrackSolid: IMEI %s not found in device location response", imei)
-        return None
-    if loc.latitude == 0.0 and loc.longitude == 0.0:
-        logger.warning("TrackSolid: IMEI %s has no GPS fix (lat=0, lng=0)", imei)
-        return None
+        logger.warning("TrackSolid: no location for IMEI %s", imei)
     return loc
 
 

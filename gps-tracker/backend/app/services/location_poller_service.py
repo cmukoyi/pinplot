@@ -65,11 +65,12 @@ class LocationPollerService:
 
             # ── Poll TrackSolid tags ──────────────────────────────────────
             if tracksolid_trackers:
-                # Single bulk API call fetches all device locations at once
+                # Parallel per-IMEI calls to getMonitorInfo (V3 Bearer JWT)
+                imeis = [t.imei for t in tracksolid_trackers]
                 try:
-                    ts_locations = await fetch_all_tracksolid_locations()
+                    ts_locations = await fetch_all_tracksolid_locations(imeis)
                 except Exception as exc:
-                    logger.error("TrackSolid bulk location fetch failed: %s", exc)
+                    logger.error("TrackSolid location fetch failed: %s", exc)
                     ts_locations = {}
 
                 for tracker in tracksolid_trackers:
