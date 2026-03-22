@@ -212,6 +212,12 @@ async def startup_event():
     print("Admin Portal available at: /admin/index.html")
     print("Admin API available at: /api/admin/")
     
+    # Wire up DB log handler so backend logs appear in admin portal
+    from app.db_log_handler import setup_db_logging
+    import logging
+    setup_db_logging(level=logging.WARNING)
+    print("Admin log handler attached (WARNING+)")
+
     # Start background location poller
     asyncio.create_task(location_poller.start())
     print("🚀 Location Poller Service started (60-second interval)")

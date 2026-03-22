@@ -833,11 +833,20 @@
                     <!-- LOGS TAB -->
                     <div id="logs" class="tab-content">
                         <div class="page-header">
-                            <h2 class="page-title">Application Logs</h2>
-                            <p class="page-subtitle">View and filter application logs from mobile app</p>
+                            <h2 class="page-title">System Logs</h2>
+                            <p class="page-subtitle">App logs, backend errors, and nginx access/error logs</p>
                         </div>
 
-                        <div class="card">
+                        <!-- Log source selector -->
+                        <div class="tabs" style="margin-bottom:20px;">
+                            <button class="tab active" id="logsrc-app"      onclick="switchLogSource('app')">📝 App Logs</button>
+                            <button class="tab"         id="logsrc-backend"  onclick="switchLogSource('backend')">⚙️ Backend</button>
+                            <button class="tab"         id="logsrc-nginx-access" onclick="switchLogSource('nginx-access')">🌐 Nginx Access</button>
+                            <button class="tab"         id="logsrc-nginx-error"  onclick="switchLogSource('nginx-error')">🚨 Nginx Error</button>
+                        </div>
+
+                        <!-- APP LOGS (table view) -->
+                        <div id="logview-app" class="card">
                             <div class="filters">
                                 <div class="filter-group">
                                     <label>Level</label>
@@ -854,53 +863,74 @@
                                     <label>Category</label>
                                     <select id="logCategoryFilter" onchange="loadLogs()">
                                         <option value="">All Categories</option>
-                                        <option value="auth">Authentication</option>
+                                        <option value="auth">Auth</option>
                                         <option value="location">Location</option>
                                         <option value="api">API</option>
-                                        <option value="ui">UI</option>
+                                        <option value="http">HTTP</option>
+                                        <option value="backend">Backend</option>
                                         <option value="device">Device</option>
                                     </select>
                                 </div>
                                 <div class="filter-group">
                                     <label>Days</label>
                                     <select id="logDaysFilter" onchange="loadLogs()">
-                                        <option value="1">Last 24 hours</option>
+                                        <option value="1">Last 24h</option>
                                         <option value="7" selected>Last 7 days</option>
                                         <option value="30">Last 30 days</option>
                                         <option value="90">Last 90 days</option>
                                     </select>
                                 </div>
                                 <div class="filter-group">
-                                    <button class="btn btn-danger btn-small" onclick="deleteLogs()">Delete Old Logs</button>
+                                    <button class="btn btn-danger btn-small" onclick="deleteLogs()">Delete Old</button>
                                 </div>
                             </div>
-
                             <div class="table-wrapper">
                                 <table>
                                     <thead>
-                                        <tr>
-                                            <th>Time</th>
-                                            <th>Level</th>
-                                            <th>Category</th>
-                                            <th>Message</th>
-                                            <th>Source</th>
-                                        </tr>
+                                        <tr><th>Time</th><th>Level</th><th>Category</th><th>Message</th><th>Source</th></tr>
                                     </thead>
                                     <tbody id="logsTableBody">
-                                        <tr>
-                                            <td colspan="5" style="text-align: center; padding: 40px;">
-                                                <span class="spinner"></span>
-                                            </td>
-                                        </tr>
+                                        <tr><td colspan="5" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr>
                                     </tbody>
                                 </table>
                             </div>
-
-                            <div id="logsEmpty" style="display: none;" class="empty-state">
+                            <div id="logsEmpty" style="display:none;" class="empty-state">
                                 <div class="empty-state-icon">📭</div>
-                                <div class="empty-state-title">No logs found</div>
-                                <div>Try adjusting your filters</div>
+                                <div class="empty-state-title">No logs yet</div>
+                                <div>Backend WARNING+ logs appear here automatically. Mobile app can also POST to /api/admin/app-log.</div>
                             </div>
+                        </div>
+
+                        <!-- CONTAINER LOG VIEWERS (terminal style) -->
+                        <div id="logview-container" style="display:none;" class="card">
+                            <div class="filters" style="margin-bottom:12px;">
+                                <div class="filter-group">
+                                    <label>Lines</label>
+                                    <select id="containerLinesFilter" onchange="loadContainerLogs()">
+                                        <option value="100">Last 100</option>
+                                        <option value="300" selected>Last 300</option>
+                                        <option value="500">Last 500</option>
+                                        <option value="1000">Last 1000</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group" style="flex:1;">
+                                    <label>Search</label>
+                                    <input type="text" id="containerSearchInput" placeholder="Filter lines (e.g. ERROR, 500, imei, tracksolid)" style="width:100%;max-width:400px;" oninput="debounceContainerSearch()">
+                                </div>
+                                <div class="filter-group">
+                                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                                        <input type="checkbox" id="autoRefreshToggle" onchange="toggleAutoRefresh()" style="width:auto;">
+                                        Auto-refresh (10s)
+                                    </label>
+                                </div>
+                                <div class="filter-group">
+                                    <button class="btn btn-primary btn-small" onclick="loadContainerLogs()">↻ Refresh</button>
+                                </div>
+                            </div>
+                            <div style="background:#0d1117;border-radius:8px;padding:16px;overflow:auto;max-height:600px;font-family:'Courier New',monospace;font-size:12px;line-height:1.5;" id="containerLogOutput">
+                                <span style="color:#555;">Loading...</span>
+                            </div>
+                            <div style="color:var(--gray);font-size:12px;margin-top:8px;" id="containerLogMeta"></div>
                         </div>
                     </div>
 
@@ -1278,96 +1308,160 @@
             }
         }
 
-        // LOGS
+        // ---- LOG SOURCE TABS ----
+        let currentLogSource = 'app';
+        let autoRefreshTimer = null;
+        let containerSearchDebounce = null;
+
+        function switchLogSource(src) {
+            currentLogSource = src;
+            ['app','backend','nginx-access','nginx-error'].forEach(function(k) {
+                var el = document.getElementById('logsrc-' + k);
+                if (el) el.classList.toggle('active', k === src);
+            });
+            document.getElementById('logview-app').style.display = src === 'app' ? '' : 'none';
+            document.getElementById('logview-container').style.display = src !== 'app' ? '' : 'none';
+            if (src === 'app') { loadLogs(); } else { loadContainerLogs(); }
+        }
+
+        // LOGS (App Logs — table)
         async function loadLogs() {
             try {
-                const level = document.getElementById('logLevelFilter')?.value || '';
-                const category = document.getElementById('logCategoryFilter')?.value || '';
-                const days = document.getElementById('logDaysFilter')?.value || '7';
-
-                let url = `${API_URL}/api/admin/logs?limit=100&days=${days}`;
-                if (level) url += `&level=${level}`;
-                if (category) url += `&category=${category}`;
-
-                const response = await fetch(url, {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
-
-                if (!response.ok) throw new Error('Failed to load logs');
-
+                const level    = document.getElementById('logLevelFilter') ? document.getElementById('logLevelFilter').value : '';
+                const category = document.getElementById('logCategoryFilter') ? document.getElementById('logCategoryFilter').value : '';
+                const days     = document.getElementById('logDaysFilter') ? document.getElementById('logDaysFilter').value : '7';
+                let url = API_URL + '/api/admin/logs?limit=200&days=' + days;
+                if (level)    url += '&level=' + level;
+                if (category) url += '&category=' + category;
+                const response = await fetch(url, { headers: { 'Authorization': 'Bearer ' + authToken } });
+                if (!response.ok) throw new Error(response.status + ' ' + response.statusText);
                 const logs = await response.json();
                 let tableHtml = '';
-
                 if (logs.length === 0) {
                     document.getElementById('logsEmpty').style.display = 'block';
                     document.getElementById('logsTableBody').innerHTML = '';
                 } else {
                     document.getElementById('logsEmpty').style.display = 'none';
-                    logs.slice(0, 10).forEach(log => {
-                        const levelBadge = {
-                            'DEBUG': 'badge-info',
-                            'INFO': 'badge-info',
-                            'WARNING': 'badge-warning',
-                            'ERROR': 'badge-danger',
-                            'CRITICAL': 'badge-danger'
-                        }[log.level] || 'badge-info';
-
-                        tableHtml += `
-                            <tr>
-                                <td>${new Date(log.created_at).toLocaleString()}</td>
-                                <td><span class="badge ${levelBadge}">${log.level}</span></td>
-                                <td>${log.category}</td>
-                                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${log.message}</td>
-                                <td style="font-size: 12px; color: var(--gray);">${log.source || '-'}</td>
-                            </tr>
-                        `;
+                    logs.forEach(function(log) {
+                        const lb = {'DEBUG':'badge-info','INFO':'badge-info','WARNING':'badge-warning','ERROR':'badge-danger','CRITICAL':'badge-danger'}[log.level] || 'badge-info';
+                        const msg = String(log.message || '').replace(/</g,'&lt;').replace(/>/g,'&gt;').substring(0, 300);
+                        tableHtml += '<tr>'
+                            + '<td style="white-space:nowrap;font-size:12px;">' + new Date(log.created_at).toLocaleString() + '</td>'
+                            + '<td><span class="badge ' + lb + '">' + log.level + '</span></td>'
+                            + '<td>' + (log.category || '') + '</td>'
+                            + '<td style="max-width:400px;word-break:break-all;font-size:12px;">' + msg + '</td>'
+                            + '<td style="font-size:11px;color:var(--gray);">' + (log.source || '') + '</td>'
+                            + '</tr>';
                     });
-
-                    // Show more in dashboard
+                    const recent = logs.slice(0,8).map(function(log) {
+                        const c = {'WARNING':'badge-warning','ERROR':'badge-danger','CRITICAL':'badge-danger'}[log.level] || 'badge-info';
+                        return '<tr>'
+                            + '<td style="font-size:12px;">' + new Date(log.created_at).toLocaleTimeString() + '</td>'
+                            + '<td><span class="badge ' + c + '">' + log.level + '</span></td>'
+                            + '<td>' + (log.category || '') + '</td>'
+                            + '<td style="font-size:12px;">' + String(log.message || '').substring(0,80) + '</td>'
+                            + '</tr>';
+                    }).join('');
                     if (document.getElementById('recentLogsContainer')) {
-                        document.getElementById('recentLogsContainer').innerHTML = `
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Time</th>
-                                        <th>Level</th>
-                                        <th>Category</th>
-                                        <th>Message</th>
-                                    </tr>
-                                </thead>
-                                <tbody>${tableHtml}</tbody>
-                            </table>
-                        `;
+                        document.getElementById('recentLogsContainer').innerHTML
+                            = '<table><thead><tr><th>Time</th><th>Level</th><th>Category</th><th>Message</th></tr></thead><tbody>'
+                            + recent + '</tbody></table>';
                     }
-
                     document.getElementById('logsTableBody').innerHTML = tableHtml;
                 }
             } catch (error) {
                 console.error('Error loading logs:', error);
+                document.getElementById('logsTableBody').innerHTML
+                    = '<tr><td colspan="5" style="color:var(--danger);padding:20px;text-align:center;">Error: ' + error.message + '</td></tr>';
             }
+        }
+
+        // CONTAINER LOG VIEWER (backend DB rows or nginx file lines)
+        async function loadContainerLogs() {
+            const src    = (currentLogSource === 'app') ? 'backend' : currentLogSource;
+            const linesEl = document.getElementById('containerLinesFilter');
+            const searchEl = document.getElementById('containerSearchInput');
+            const lines  = linesEl ? linesEl.value : '300';
+            const search = searchEl ? searchEl.value : '';
+            let url = API_URL + '/api/admin/container-logs?source=' + src + '&lines=' + lines;
+            if (search) url += '&search=' + encodeURIComponent(search);
+            const output = document.getElementById('containerLogOutput');
+            const meta   = document.getElementById('containerLogMeta');
+            if (output) output.innerHTML = '<span style="color:#555;">Loading...</span>';
+            try {
+                const response = await fetch(url, { headers: { 'Authorization': 'Bearer ' + authToken } });
+                if (!response.ok) {
+                    const err = await response.json().catch(function(){ return {}; });
+                    if (output) output.innerHTML = '<span style="color:#f87171;">Error ' + response.status + ': ' + (err.detail || response.statusText) + '</span>';
+                    return;
+                }
+                const rows = await response.json();
+                if (!rows.length) {
+                    if (output) output.innerHTML = '<span style="color:#555;">No entries found. Nginx logs appear after the nginx_logs volume is provisioned (redeploy required).<br>Backend logs appear once a WARNING/ERROR occurs.</span>';
+                    if (meta) meta.textContent = '';
+                    return;
+                }
+                const colorMap = {'ERROR':'#f87171','CRITICAL':'#f87171','WARNING':'#fbbf24','INFO':'#86efac','DEBUG':'#93c5fd'};
+                const html = rows.map(function(r) {
+                    const color = colorMap[r.level] || '#c9d1d9';
+                    const ts = r.timestamp
+                        ? '<span style="color:#8b949e;">[' + new Date(r.timestamp).toLocaleTimeString() + ']</span> '
+                        : '';
+                    const srclabel = r.source
+                        ? '<span style="color:#6e7681;font-size:10px;">' + escHtml(r.source) + '</span> '
+                        : '';
+                    const msg = escHtml(r.message || '')
+                        .replace(/\b(ERROR|CRITICAL)\b/g, '<span style="color:#f87171;font-weight:bold;">$1</span>')
+                        .replace(/\b(WARNING|WARN)\b/g, '<span style="color:#fbbf24;">$1</span>')
+                        .replace(/\b(500|422|400|404)\b/g, '<span style="color:#f87171;">$1</span>')
+                        .replace(/\b(200|201)\b/g, '<span style="color:#86efac;">$1</span>')
+                        .replace(/\b(POST|PUT|DELETE|PATCH)\b/g, '<span style="color:#c084fc;">$1</span>')
+                        .replace(/\b(GET)\b/g, '<span style="color:#60a5fa;">$1</span>');
+                    return '<div style="color:' + color + ';margin:1px 0;">' + ts + srclabel + msg + '</div>';
+                }).join('');
+                if (output) {
+                    output.innerHTML = html;
+                    output.scrollTop = output.scrollHeight;
+                }
+                if (meta) meta.textContent = rows.length + ' lines — ' + src + ' — ' + new Date().toLocaleTimeString();
+            } catch (error) {
+                if (output) output.innerHTML = '<span style="color:#f87171;">Fetch error: ' + error.message + '</span>';
+            }
+        }
+
+        function escHtml(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        function debounceContainerSearch() {
+            clearTimeout(containerSearchDebounce);
+            containerSearchDebounce = setTimeout(loadContainerLogs, 400);
+        }
+
+        function toggleAutoRefresh() {
+            const on = document.getElementById('autoRefreshToggle').checked;
+            if (on) { autoRefreshTimer = setInterval(loadContainerLogs, 10000); }
+            else    { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
         }
 
         // DELETE LOGS
         async function deleteLogs() {
             if (!confirm('Delete logs older than 30 days? This cannot be undone.')) return;
-
             try {
-                const response = await fetch(`${API_URL}/api/admin/logs?days=30`, {
+                const response = await fetch(API_URL + '/api/admin/logs?days=30', {
                     method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${authToken}` }
+                    headers: { 'Authorization': 'Bearer ' + authToken }
                 });
-
                 if (!response.ok) throw new Error('Failed to delete logs');
-
                 const result = await response.json();
-                showAlert('Successfully deleted ' + result.deleted + ' logs', 'success');
+                showAlert('Deleted ' + result.deleted + ' logs', 'success');
                 loadLogs();
             } catch (error) {
                 showAlert('Error deleting logs: ' + error.message, 'danger');
             }
         }
 
-        // ADMIN USERS
+                // ADMIN USERS
         async function loadAdminUsers() {
             try {
                 const response = await fetch(`${API_URL}/api/admin/users`, {

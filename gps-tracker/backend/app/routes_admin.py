@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 from uuid import UUID
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 import logging
 
 from app.database import get_db
@@ -44,6 +44,11 @@ class AdminResponse(BaseModel):
     last_login: Optional[datetime]
     created_at: datetime
 
+    @field_validator('id', mode='before')
+    @classmethod
+    def coerce_uuid_to_str(cls, v):
+        return str(v) if v is not None else v
+
     class Config:
         from_attributes = True
 
@@ -75,6 +80,11 @@ class AppLogResponse(BaseModel):
     source: Optional[str]
     ip_address: Optional[str]
     created_at: datetime
+
+    @field_validator('id', 'admin_user_id', mode='before')
+    @classmethod
+    def coerce_uuid_to_str(cls, v):
+        return str(v) if v is not None else v
 
     class Config:
         from_attributes = True
@@ -599,3 +609,72 @@ async def get_audit_logs(
     logs = query.order_by(AuditLog.created_at.desc()).offset(skip).limit(limit).all()
     
     return logs
+
+
+# ---------------------------------------------------------------------------
+# Container logs — backend from DB, nginx from mounted log files
+# ---------------------------------------------------------------------------
+
+import os
+
+
+def _tail_file(path: str, lines: int) -> list:
+    """Return the last N lines of a log file, or [] if not found."""
+    try:
+        with open(path, 'r', errors='replace') as fh:
+            all_lines = fh.readlines()
+        tail = all_lines[-lines:]
+        return [{"timestamp": None, "message": ln.rstrip(), "level": "INFO", "source": os.path.basename(path)}
+                for ln in tail]
+    except FileNotFoundError:
+        return []
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Cannot read {path}: {exc}")
+
+
+@router.get("/container-logs")
+async def get_container_logs(
+    request: Request,
+    db: Session = Depends(get_db),
+    source: str = Query("backend", description="backend | nginx-access | nginx-error"),
+    lines: int = Query(300, ge=10, le=2000),
+    search: Optional[str] = Query(None),
+):
+    """
+    Return recent container log lines for the admin portal log viewer.
+
+    - source=backend      → last N rows from app_logs (all categories)
+    - source=nginx-access → last N lines from /var/log/nginx/access.log
+    - source=nginx-error  → last N lines from /var/log/nginx/error.log
+    """
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires manager role")
+
+    if source == "nginx-access":
+        result = _tail_file("/var/log/nginx/access.log", lines)
+    elif source == "nginx-error":
+        result = _tail_file("/var/log/nginx/error.log", lines)
+    else:  # backend — return recent app_logs rows as plain log lines
+        rows = (
+            db.query(AppLog)
+            .order_by(AppLog.created_at.desc())
+            .limit(lines)
+            .all()
+        )
+        result = [
+            {
+                "timestamp": row.created_at.isoformat() if row.created_at else None,
+                "message": row.message,
+                "level": row.level,
+                "source": row.source or row.category,
+            }
+            for row in rows
+        ]
+
+    # Optional search filter (case-insensitive)
+    if search:
+        search_lower = search.lower()
+        result = [r for r in result if search_lower in r["message"].lower()]
+
+    return result
