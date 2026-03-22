@@ -1861,7 +1861,6 @@ View on $mapProvider to see the vehicle location.''';
                 maxNativeZoom: 18,
                 retinaMode: false,
                 tileSize: 256,
-                maxParallelLoadingCount: 4,
                 tileDisplay: fmap.TileDisplay.fadeIn(
                   duration: Duration(milliseconds: 50),
                 ),

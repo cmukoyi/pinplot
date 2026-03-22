@@ -281,7 +281,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                                   urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                                   subdomains: const ['a', 'b', 'c'],
                                   userAgentPackageName: 'com.beacontelematics.tracker',
-                                  maxParallelLoadingCount: 4,
                                   keepBuffer: 2,
                                   panBuffer: 1,
                                 ),
