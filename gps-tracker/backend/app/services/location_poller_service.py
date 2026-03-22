@@ -17,7 +17,7 @@ from app.database import SessionLocal
 from app.models import BLETag, User
 from app.services.mzone_service import MZoneService
 from app.services.geofence_service import GeofenceService
-from app.services.device_providers.tracksolid_provider import fetch_tracksolid_location
+from app.services.device_providers.tracksolid_provider import fetch_all_tracksolid_locations
 
 logger = logging.getLogger(__name__)
 
@@ -64,48 +64,54 @@ class LocationPollerService:
             updated_count = 0
 
             # ── Poll TrackSolid tags ──────────────────────────────────────
-            for tracker in tracksolid_trackers:
+            if tracksolid_trackers:
+                # Single bulk API call fetches all device locations at once
                 try:
-                    loc = await fetch_tracksolid_location(tracker.imei)
+                    ts_locations = await fetch_all_tracksolid_locations()
                 except Exception as exc:
-                    logger.error("TrackSolid poll error for IMEI %s: %s", tracker.imei, exc)
-                    continue
+                    logger.error("TrackSolid bulk location fetch failed: %s", exc)
+                    ts_locations = {}
 
-                if not loc:
-                    logger.warning("⚠️  No TrackSolid location for IMEI: %s", tracker.imei)
-                    continue
+                for tracker in tracksolid_trackers:
+                    loc = ts_locations.get(tracker.imei.strip())
+                    if not loc:
+                        logger.warning("⚠️  TrackSolid IMEI %s not in location response", tracker.imei)
+                        continue
+                    if loc.latitude == 0.0 and loc.longitude == 0.0:
+                        logger.warning("⚠️  TrackSolid IMEI %s has no GPS fix", tracker.imei)
+                        continue
 
-                tracker.latitude = str(loc.latitude)
-                tracker.longitude = str(loc.longitude)
-                if loc.address:
-                    tracker.location_description = loc.address
-                tracker.last_seen = datetime.utcnow()
+                    tracker.latitude = str(loc.latitude)
+                    tracker.longitude = str(loc.longitude)
+                    if loc.address:
+                        tracker.location_description = loc.address
+                    tracker.last_seen = datetime.utcnow()
 
-                # Refresh battery level and keep the attributes dict in sync
-                if loc.battery_level is not None:
-                    tracker.battery_level = loc.battery_level
-                    attrs = tracker.attributes or {}
-                    attrs["Battery"] = {
-                        "value": f"{loc.battery_level}%",
-                        "show_on_map": True,
-                    }
-                    tracker.attributes = attrs
+                    # Refresh battery level and attributes dict if available
+                    if loc.battery_level is not None:
+                        tracker.battery_level = loc.battery_level
+                        attrs = tracker.attributes or {}
+                        attrs["Battery"] = {
+                            "value": f"{loc.battery_level}%",
+                            "show_on_map": True,
+                        }
+                        tracker.attributes = attrs
 
-                # Check geofences
-                user = db.query(User).filter(User.id == tracker.user_id).first()
-                if user:
-                    try:
-                        GeofenceService.check_geofences_for_tracker(
-                            db,
-                            str(tracker.id),
-                            loc.latitude,
-                            loc.longitude,
-                            str(user.id),
-                        )
-                    except Exception as exc:
-                        logger.error("❌ Geofence check error for tracker %s: %s", tracker.id, exc)
+                    # Check geofences
+                    user = db.query(User).filter(User.id == tracker.user_id).first()
+                    if user:
+                        try:
+                            GeofenceService.check_geofences_for_tracker(
+                                db,
+                                str(tracker.id),
+                                loc.latitude,
+                                loc.longitude,
+                                str(user.id),
+                            )
+                        except Exception as exc:
+                            logger.error("❌ Geofence check error for tracker %s: %s", tracker.id, exc)
 
-                updated_count += 1
+                    updated_count += 1
 
             # ── Poll MZone tags ───────────────────────────────────────────
             if mzone_trackers:
