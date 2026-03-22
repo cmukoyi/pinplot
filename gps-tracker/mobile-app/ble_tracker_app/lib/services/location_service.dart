@@ -228,41 +228,11 @@ class LocationService {
   
   /// Save IMEI to backend and local storage
   Future<void> saveIMEI(String imei, {String? description}) async {
+    // NOTE: The backend save is handled by AuthService.addBLETag (POST /api/v1/ble-tags).
+    // This method only saves to local storage for offline access.
     try {
-      // Get auth token
-      final authToken = await _getAuthToken();
-      if (authToken == null) {
-        throw Exception('No authentication token found');
-      }
-      
-      // Save to backend first
-      final url = Uri.parse('$backendUrl/api/tags/add');
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $authToken',
-        },
-        body: json.encode({
-          'imei': imei,
-          if (description != null && description.isNotEmpty) 'device_name': description,
-        }),
-      ).timeout(const Duration(seconds: 10));
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success']) {
-          print('✅ IMEI added to backend: $imei');
-          
-          // Also save locally for offline access
-          await _saveIMEILocally(imei, description: description);
-        } else {
-          throw Exception(data['error'] ?? 'Failed to add tag');
-        }
-      } else {
-        final errorData = json.decode(response.body);
-        throw Exception(errorData['error'] ?? 'Failed to add tag');
-      }
+      await _saveIMEILocally(imei, description: description);
+      print('✅ IMEI saved locally: $imei');
     } catch (e) {
       print('❌ Error saving IMEI: $e');
       rethrow;
