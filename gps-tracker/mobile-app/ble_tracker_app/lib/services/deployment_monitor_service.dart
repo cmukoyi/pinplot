@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:ble_tracker_app/config/environment.dart';
 
 class DeploymentMonitorService {
   static final DeploymentMonitorService _instance = DeploymentMonitorService._internal();
@@ -31,25 +33,38 @@ class DeploymentMonitorService {
     }
   }
 
-  /// Check if error indicates deployment in progress
+  /// Check if error indicates deployment in progress.
+  /// Only returns true for HTTP gateway errors (502/503/504) where the server
+  /// is genuinely being replaced. Common errors like connection timeouts,
+  /// JSON parse failures, or 500s are NOT deployment indicators.
   static bool isDeploymentError(dynamic error) {
-    final errorStr = error.toString().toLowerCase();
-    return (errorStr.contains('html') ||
-        errorStr.contains('syntax') ||
-        errorStr.contains('<html') ||
-        errorStr.contains('502') ||
-        errorStr.contains('503') ||
-        errorStr.contains('504') ||
-        errorStr.contains('connection refused') ||
-        errorStr.contains('not valid json'));
+    final errorStr = error.toString();
+    // Match only explicit HTTP 502/503/504 status codes in the error string.
+    // These are the codes a reverse-proxy (nginx/Caddy) returns when the
+    // upstream container is being restarted during a deployment.
+    return RegExp(r'\b(502|503|504)\b').hasMatch(errorStr);
   }
 
   void _startHealthChecks() {
     _healthCheckTimer?.cancel();
-    _healthCheckTimer = Timer.periodic(_checkInterval, (timer) {
+    _healthCheckTimer = Timer.periodic(_checkInterval, (timer) async {
       final elapsed = DateTime.now().difference(_deploymentStartTime!);
       if (elapsed > _maxWaitTime) {
         stopMonitoring();
+        return;
+      }
+
+      // Actually ping the backend health endpoint.
+      // If it responds with 2xx the deployment is complete.
+      try {
+        final response = await http
+            .get(Uri.parse('${Environment.apiBaseUrl}/health'))
+            .timeout(const Duration(seconds: 5));
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          stopMonitoring();
+        }
+      } catch (_) {
+        // Still down — keep waiting
       }
     });
   }
