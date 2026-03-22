@@ -13,6 +13,7 @@ Key concerns:
 """
 
 import asyncio
+import hashlib
 import logging
 import os
 import time
@@ -28,11 +29,16 @@ _BASE_URL = "https://eu.tracksolidpro.com"
 _LOGIN_URL = f"{_BASE_URL}/v3/new/homepage/login"
 _EQUIPMENT_URL = f"{_BASE_URL}/v3/new/newEquipment/queryEquipmentList"
 
-# Credentials loaded from environment variables — never hardcode in source.
-_ACCOUNT = os.environ["TRACKSOLID_ACCOUNT"]
-_PASSWORD_MD5 = os.environ["TRACKSOLID_PASSWORD_MD5"]
-_USER_ID = int(os.environ["TRACKSOLID_USER_ID"])
-_ORG_ID = os.environ["TRACKSOLID_ORG_ID"]
+# Credentials are read lazily from env vars when first needed.
+# Reading them at module level would crash startup if they aren't set yet.
+def _creds() -> tuple[str, str, int, str]:
+    """Return (account, password, user_id, org_id) from environment."""
+    return (
+        os.environ["TRACKSOLID_ACCOUNT"],
+        os.environ["TRACKSOLID_PASSWORD"],
+        int(os.environ["TRACKSOLID_USER_ID"]),
+        os.environ["TRACKSOLID_ORG_ID"],
+    )
 
 _TOKEN_TTL_SECONDS = 3600       # TrackSolid tokens last 1 hour
 _TOKEN_REFRESH_BUFFER = 60      # Refresh 60 s before expiry to be safe
@@ -81,9 +87,11 @@ class TrackSolidTokenManager:
             return self._token
 
     async def _fetch_token(self) -> str:
+        account, password, _, _ = _creds()
+        password_md5 = hashlib.md5(password.encode()).hexdigest().lower()
         payload = {
-            "account": _ACCOUNT,
-            "password": _PASSWORD_MD5,
+            "account": account,
+            "password": password_md5,
             "language": "en",
             "validCode": "",
             "nodeId": "",
@@ -143,12 +151,13 @@ class TrackSolidTagProvider(DeviceTagProvider):
                 message="Could not connect to TrackSolid. Please try again later.",
             )
 
+        _, _, user_id, org_id = _creds()
         payload = {
             "imei": "",           # empty = all devices
             "startRow": "0",
             "userType": 8,
-            "userId": _USER_ID,
-            "orgId": _ORG_ID,
+            "userId": user_id,
+            "orgId": org_id,
             "siftType": "",
             "sortType": "",
             "sortRule": "",
