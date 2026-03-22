@@ -5,7 +5,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from uuid import UUID
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 import random
 import secrets
 import os
@@ -104,28 +104,13 @@ class BLETagResponse(BaseModel):
     battery_level: Optional[int]
     added_at: datetime
     
+    @field_validator('id', mode='before')
+    @classmethod
+    def coerce_uuid_to_str(cls, v):
+        return str(v)
+    
     class Config:
         from_attributes = True
-        json_encoders = {
-            UUID: lambda v: str(v)
-        }
-    
-    @classmethod
-    def from_orm(cls, obj):
-        """Convert ORM object to Pydantic model with UUID to string conversion"""
-        return cls(
-            id=str(obj.id),
-            imei=obj.imei,
-            device_name=obj.device_name,
-            device_model=obj.device_model,
-            description=obj.description,
-            mac_address=obj.mac_address,
-            tag_type=getattr(obj, 'tag_type', 'scope'),
-            is_active=obj.is_active,
-            last_seen=obj.last_seen,
-            battery_level=obj.battery_level,
-            added_at=obj.added_at
-        )
 
 class BLETagWithUser(BaseModel):
     """BLE Tag with associated user information for admin billing"""
@@ -139,15 +124,19 @@ class BLETagWithUser(BaseModel):
     user_id: str
     user_email: str
     
+    user_name: str
+    
+    @field_validator('id', 'user_id', mode='before')
+    @classmethod
+    def coerce_uuid_to_str(cls, v):
+        return str(v)
+    
     class Config:
         from_attributes = True
-        json_encoders = {
-            UUID: lambda v: str(v)
-        }
     
     @classmethod
-    def from_db_model(cls, tag, user_email: str):
-        """Create from BLETag and user email with UUID conversion"""
+    def from_db_model(cls, tag, user_email: str, user_name: str = ""):
+        """Create from BLETag and user email/name with UUID conversion"""
         return cls(
             id=str(tag.id),
             imei=tag.imei,
@@ -157,12 +146,9 @@ class BLETagWithUser(BaseModel):
             added_at=tag.added_at,
             activated_at=tag.added_at,
             user_id=str(tag.user_id),
-            user_email=user_email
+            user_email=user_email,
+            user_name=user_name
         )
-    user_name: str
-    
-    class Config:
-        from_attributes = True
 
 class UserWithTags(BaseModel):
     """User information with their BLE tags for admin billing"""
