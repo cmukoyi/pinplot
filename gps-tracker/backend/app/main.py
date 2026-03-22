@@ -1448,7 +1448,9 @@ def get_vehicles(
                 "registration": tag.imei,
                 "ignitionOn": False,  # Not stored in database currently
                 "lastKnownPosition": last_known_position,
-                "attributes": tag.attributes or {}  # Include custom attributes (job_accessories, notes, etc.)
+                "attributes": tag.attributes or {},  # Include custom attributes (job_accessories, notes, etc.)
+                "battery_level": tag.battery_level,  # Battery % for TrackSolid tags
+                "tag_type": tag.tag_type,
             })
         
         if debug:

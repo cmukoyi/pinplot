@@ -3,6 +3,9 @@ Background service that polls MZone API every 60 seconds to:
 1. Update tracker positions in database
 2. Check geofences automatically
 3. Enable real-time alerts without manual refresh
+
+TrackSolid tags are polled via the TrackSolid getMonitorInfo endpoint instead
+of MZone, and their battery level is refreshed at the same interval.
 """
 
 import asyncio
@@ -14,6 +17,7 @@ from app.database import SessionLocal
 from app.models import BLETag, User
 from app.services.mzone_service import MZoneService
 from app.services.geofence_service import GeofenceService
+from app.services.device_providers.tracksolid_provider import fetch_tracksolid_location
 
 logger = logging.getLogger(__name__)
 
@@ -53,81 +57,120 @@ class LocationPollerService:
                 logger.debug("No active trackers to poll")
                 return
             
-            # Get IMEIs
-            imeis = [tracker.imei for tracker in trackers]
-            logger.info(f"📡 Polling {len(imeis)} trackers from MZone API")
-            
-            # Get locations from MZone API
-            vehicles = self.mzone_service.get_vehicles_with_locations(imeis)
-            
-            # Create a map of IMEI -> vehicle data
-            # IMPORTANT: MZone stores IMEI in either 'registration' OR 'unit_Description'
-            # Build map checking both fields
-            vehicle_map = {}
-            for v in vehicles:
-                # Check which field contains the IMEI and use it as key
-                reg = v.get('registration', '')
-                unit_desc = v.get('unit_Description', '')
-                for imei in imeis:
-                    if reg == imei or unit_desc == imei:
-                        vehicle_map[imei] = v
-                        break
-            
-            logger.info(f"🗺️  Built vehicle map with {len(vehicle_map)} entries for {len(imeis)} trackers")
-            
-            # Update each tracker
+            # Split by provider type
+            tracksolid_trackers = [t for t in trackers if (t.tag_type or "").lower() == "tracksolid"]
+            mzone_trackers = [t for t in trackers if (t.tag_type or "").lower() != "tracksolid"]
+
             updated_count = 0
-            for tracker in trackers:
-                vehicle = vehicle_map.get(tracker.imei)
-                if not vehicle:
-                    logger.warning(f"⚠️  No vehicle data found for tracker IMEI: {tracker.imei}")
-                    continue
-                
-                position = vehicle.get('lastKnownPosition', {})
-                if not position or not position.get('latitude') or not position.get('longitude'):
-                    logger.warning(f"⚠️  No location data for tracker IMEI: {tracker.imei}, vehicle ID: {vehicle.get('id')}")
-                    continue
-                
-                # Update tracker position in database
-                tracker.latitude = str(position.get('latitude'))
-                tracker.longitude = str(position.get('longitude'))
-                tracker.location_description = position.get('locationDescription')  # Save address from MZone
-                tracker.last_seen = datetime.utcnow()
-                
-                # Cache MZone vehicle_Id for faster trips API lookups
-                mzone_vehicle_id = vehicle.get('id')
-                if mzone_vehicle_id and tracker.mzone_vehicle_id != mzone_vehicle_id:
-                    tracker.mzone_vehicle_id = mzone_vehicle_id
-                    logger.debug(f"💾 Cached MZone vehicle_Id {mzone_vehicle_id} for IMEI {tracker.imei}")
-                
-                # Update description if available
-                description = vehicle.get('description')
-                if description and tracker.description != description:
-                    tracker.description = description
-                    tracker.updated_at = datetime.utcnow()
-                
-                # Get user for this tracker
-                user = db.query(User).filter(User.id == tracker.user_id).first()
-                if not user:
-                    continue
-                
-                # Check geofences for this tracker
+
+            # ── Poll TrackSolid tags ──────────────────────────────────────
+            for tracker in tracksolid_trackers:
                 try:
-                    GeofenceService.check_geofences_for_tracker(
-                        db,
-                        str(tracker.id),
-                        position.get('latitude'),
-                        position.get('longitude'),
-                        str(user.id)
-                    )
-                except Exception as e:
-                    logger.error(f"❌ Error checking geofences for tracker {tracker.id}: {str(e)}")
-                
+                    loc = await fetch_tracksolid_location(tracker.imei)
+                except Exception as exc:
+                    logger.error("TrackSolid poll error for IMEI %s: %s", tracker.imei, exc)
+                    continue
+
+                if not loc:
+                    logger.warning("⚠️  No TrackSolid location for IMEI: %s", tracker.imei)
+                    continue
+
+                tracker.latitude = str(loc.latitude)
+                tracker.longitude = str(loc.longitude)
+                if loc.address:
+                    tracker.location_description = loc.address
+                tracker.last_seen = datetime.utcnow()
+
+                # Refresh battery level and keep the attributes dict in sync
+                if loc.battery_level is not None:
+                    tracker.battery_level = loc.battery_level
+                    attrs = tracker.attributes or {}
+                    attrs["Battery"] = {
+                        "value": f"{loc.battery_level}%",
+                        "show_on_map": True,
+                    }
+                    tracker.attributes = attrs
+
+                # Check geofences
+                user = db.query(User).filter(User.id == tracker.user_id).first()
+                if user:
+                    try:
+                        GeofenceService.check_geofences_for_tracker(
+                            db,
+                            str(tracker.id),
+                            loc.latitude,
+                            loc.longitude,
+                            str(user.id),
+                        )
+                    except Exception as exc:
+                        logger.error("❌ Geofence check error for tracker %s: %s", tracker.id, exc)
+
                 updated_count += 1
-            
+
+            # ── Poll MZone tags ───────────────────────────────────────────
+            if mzone_trackers:
+                imeis = [tracker.imei for tracker in mzone_trackers]
+                logger.info(f"📡 Polling {len(imeis)} MZone trackers")
+                vehicles = self.mzone_service.get_vehicles_with_locations(imeis)
+
+                vehicle_map = {}
+                for v in vehicles:
+                    reg = v.get('registration', '')
+                    unit_desc = v.get('unit_Description', '')
+                    for imei in imeis:
+                        if reg == imei or unit_desc == imei:
+                            vehicle_map[imei] = v
+                            break
+
+                logger.info(f"🗺️  Built vehicle map with {len(vehicle_map)} entries for {len(imeis)} MZone trackers")
+
+                for tracker in mzone_trackers:
+                    vehicle = vehicle_map.get(tracker.imei)
+                    if not vehicle:
+                        logger.warning(f"⚠️  No vehicle data found for tracker IMEI: {tracker.imei}")
+                        continue
+
+                    position = vehicle.get('lastKnownPosition', {})
+                    if not position or not position.get('latitude') or not position.get('longitude'):
+                        logger.warning(f"⚠️  No location data for tracker IMEI: {tracker.imei}")
+                        continue
+
+                    tracker.latitude = str(position.get('latitude'))
+                    tracker.longitude = str(position.get('longitude'))
+                    tracker.location_description = position.get('locationDescription')
+                    tracker.last_seen = datetime.utcnow()
+
+                    mzone_vehicle_id = vehicle.get('id')
+                    if mzone_vehicle_id and tracker.mzone_vehicle_id != mzone_vehicle_id:
+                        tracker.mzone_vehicle_id = mzone_vehicle_id
+                        logger.debug(f"💾 Cached MZone vehicle_Id {mzone_vehicle_id} for IMEI {tracker.imei}")
+
+                    description = vehicle.get('description')
+                    if description and tracker.description != description:
+                        tracker.description = description
+                        tracker.updated_at = datetime.utcnow()
+
+                    user = db.query(User).filter(User.id == tracker.user_id).first()
+                    if not user:
+                        continue
+
+                    try:
+                        GeofenceService.check_geofences_for_tracker(
+                            db,
+                            str(tracker.id),
+                            position.get('latitude'),
+                            position.get('longitude'),
+                            str(user.id)
+                        )
+                    except Exception as e:
+                        logger.error(f"❌ Error checking geofences for tracker {tracker.id}: {str(e)}")
+
+                    updated_count += 1
+
             # Commit all updates
             db.commit()
-            logger.info(f"✅ Updated {updated_count} tracker positions and checked geofences")
+            logger.info(f"✅ Updated {updated_count} tracker positions and checked geofences "
+                        f"({len(tracksolid_trackers)} TrackSolid, {len(mzone_trackers)} MZone)")
             
         except Exception as e:
             logger.error(f"❌ Error in _poll_locations: {str(e)}")

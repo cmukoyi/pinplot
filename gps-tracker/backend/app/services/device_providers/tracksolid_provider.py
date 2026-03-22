@@ -10,6 +10,7 @@ Key concerns:
   fetches a fresh one when the current token is within 60 seconds of expiry.
 - Credentials are stored server-side only — never sent to the mobile client.
 - Validation: log in → list all equipment → check if the IMEI appears.
+- Location: getMonitorInfo endpoint returns current lat/lng, address, battery.
 """
 
 import asyncio
@@ -17,6 +18,7 @@ import hashlib
 import logging
 import os
 import time
+from dataclasses import dataclass
 
 import httpx
 
@@ -28,6 +30,16 @@ logger = logging.getLogger(__name__)
 _BASE_URL = "https://eu.tracksolidpro.com"
 _LOGIN_URL = f"{_BASE_URL}/v3/new/homepage/login"
 _EQUIPMENT_URL = f"{_BASE_URL}/v3/new/newEquipment/queryEquipmentList"
+_MONITOR_URL = f"{_BASE_URL}/v3/new/newMonitor/getMonitorInfo"
+
+
+@dataclass
+class TrackSolidLocationInfo:
+    """Location data returned by the TrackSolid getMonitorInfo endpoint."""
+    latitude: float
+    longitude: float
+    address: str | None = None
+    battery_level: int | None = None  # 0-100 parsed from elecQuantity
 
 # Credentials are read lazily from env vars when first needed.
 # Reading them at module level would crash startup if they aren't set yet.
@@ -231,3 +243,112 @@ class TrackSolidTagProvider(DeviceTagProvider):
             is_valid=False,
             message="Tag not supported — IMEI not found on TrackSolid account.",
         )
+
+
+# ── TrackSolid location helper (used by location poller) ───────────────────
+
+async def fetch_tracksolid_location(imei: str) -> "TrackSolidLocationInfo | None":
+    """
+    Fetch the current location for a TrackSolid IMEI via getMonitorInfo.
+
+    Parses lat/lng from the nested ``latlng`` → ``source_latlng`` field and
+    also extracts the human-readable address and battery level when present.
+    Returns None if the location cannot be determined.
+    """
+    try:
+        token = await _token_manager.get_token()
+    except Exception as exc:
+        logger.error("TrackSolid location: token fetch failed: %s", exc)
+        return None
+
+    _, _, user_id, _ = _creds()
+    payload = {
+        "imei": imei.strip(),
+        "userId": user_id,
+        "isAllFlag": 1,
+    }
+    headers = {"Authorization": token, "Content-Type": "application/json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(_MONITOR_URL, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+    except Exception as exc:
+        logger.error("TrackSolid getMonitorInfo failed for IMEI %s: %s", imei, exc)
+        return None
+
+    # The response wraps an info list; handle multiple shapes
+    raw = data.get("data") or {}
+    if isinstance(raw, list):
+        info_list = raw
+    elif isinstance(raw, dict):
+        info_list = (
+            raw.get("infoList")
+            or raw.get("list")
+            or raw.get("info")
+            or []
+        )
+    else:
+        info_list = []
+
+    if not info_list:
+        logger.warning("TrackSolid getMonitorInfo: empty info list for IMEI %s. Response keys: %s", imei, list(data.keys()))
+        return None
+
+    # Build a dict keyed by the "key" field for easy access
+    info_map: dict = {}
+    for item in info_list:
+        if isinstance(item, dict) and "key" in item:
+            info_map[item["key"]] = item.get("value")
+
+    # ── Parse lat/lng ──
+    lat: float | None = None
+    lng: float | None = None
+    latlng_data = info_map.get("latlng")
+    if isinstance(latlng_data, list):
+        for entry in latlng_data:
+            if isinstance(entry, dict) and entry.get("key") == "source_latlng":
+                coords = str(entry.get("value", "")).strip()
+                if "," in coords:
+                    try:
+                        parts = coords.split(",", 1)
+                        lat = float(parts[0])
+                        lng = float(parts[1])
+                    except (ValueError, IndexError):
+                        pass
+    elif isinstance(latlng_data, str) and "," in latlng_data:
+        try:
+            parts = latlng_data.split(",", 1)
+            lat = float(parts[0])
+            lng = float(parts[1])
+        except (ValueError, IndexError):
+            pass
+
+    if lat is None or lng is None:
+        logger.warning("TrackSolid: could not parse latlng for IMEI %s, info_map keys: %s", imei, list(info_map.keys()))
+        return None
+
+    # ── Parse address ──
+    raw_address = info_map.get("address")
+    address: str | None = raw_address if isinstance(raw_address, str) else None
+
+    # ── Parse battery ──
+    battery_level: int | None = None
+    elec = info_map.get("elecQuantity") or info_map.get("electricity") or ""
+    if elec:
+        try:
+            battery_level = int(float(str(elec).rstrip("%")))
+        except (ValueError, TypeError):
+            pass
+
+    logger.info(
+        "✅ TrackSolid location for IMEI %s: lat=%.6f lng=%.6f battery=%s",
+        imei, lat, lng, battery_level,
+    )
+    return TrackSolidLocationInfo(
+        latitude=lat,
+        longitude=lng,
+        address=address,
+        battery_level=battery_level,
+    )

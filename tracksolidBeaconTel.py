@@ -1,4 +1,3 @@
-import os
 import time
 import hashlib
 import requests
@@ -7,20 +6,16 @@ import requests
 # TrackSolidBLEScope1 => scope1
 # TrackSolidBLENeoTrak => NEOTRAK
 # TrackSolidBLEScopeT => ScopeTesting
+ 
 
-
-# Credentials loaded from environment variables.
-# Set them before running:
-#   $env:TRACKSOLID_ACCOUNT="..."
-#   $env:TRACKSOLID_USER_ID="..."
-#   $env:TRACKSOLID_USER_PWD="..."
-#   $env:TRACKSOLID_APP_KEY="..."
-#   $env:TRACKSOLID_APP_SECRET="..."
-account = os.environ["TRACKSOLID_ACCOUNT"]
-user_id = os.environ["TRACKSOLID_USER_ID"]
-user_pwd = os.environ["TRACKSOLID_USER_PWD"]
-appKey = os.environ["TRACKSOLID_APP_KEY"]
-appSecret = os.environ["TRACKSOLID_APP_SECRET"]
+# TrackSolidBLEScopeT => ScopeTesting
+# ---------- YOUR CREDENTIALS ----------
+account = "Beacontelematics"
+user_id = "Beacontelematics"  # Your tracksolid account username
+user_pwd = "Transport01!"  # Replace with your actual password
+appKey = "8FB345B8693CCD00705B2242580910A0339A22A4105B6558"
+appSecret = "860d274a6c50445d86a93ed89de79278"
+# --------------------------------------
 
 url = "https://eu-open.tracksolidpro.com/route/rest"
 

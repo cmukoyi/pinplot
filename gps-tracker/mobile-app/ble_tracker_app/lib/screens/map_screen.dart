@@ -2538,6 +2538,11 @@ View on $mapProvider to see the vehicle location.''';
                             letterSpacing: 1.2,
                           ),
                         ),
+                      if (vehicle.batteryLevel != null)
+                        Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: _buildBatteryIndicator(vehicle.batteryLevel!),
+                        ),
                       if (isNew)
                         Padding(
                           padding: EdgeInsets.only(top: 4),
@@ -2601,8 +2606,51 @@ View on $mapProvider to see the vehicle location.''';
     );
   }
   
-  List<Widget> _buildAttributeChips(Vehicle vehicle) {
-    print('🏷️ Building attribute chips for ${vehicle.description}');
+  /// Compact battery level row: icon + percentage + colour-coded bar.
+  Widget _buildBatteryIndicator(int level) {
+    final Color barColor = level > 50
+        ? Colors.green.shade600
+        : level > 20
+            ? Colors.orange.shade600
+            : Colors.red.shade600;
+    final IconData icon = level > 50
+        ? Icons.battery_full
+        : level > 20
+            ? Icons.battery_3_bar
+            : Icons.battery_alert;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: barColor),
+        SizedBox(width: 3),
+        Text(
+          'Battery: $level%',
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: barColor,
+          ),
+        ),
+        SizedBox(width: 6),
+        // tiny progress bar
+        ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: SizedBox(
+            width: 48,
+            height: 6,
+            child: LinearProgressIndicator(
+              value: level / 100.0,
+              backgroundColor: Colors.grey.shade200,
+              valueColor: AlwaysStoppedAnimation<Color>(barColor),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _buildAttributeChips(Vehicle vehicle) {    print('🏷️ Building attribute chips for ${vehicle.description}');
     print('   Attributes data: ${vehicle.attributes}');
     final chips = <Widget>[];
     
