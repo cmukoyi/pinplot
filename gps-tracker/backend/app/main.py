@@ -89,6 +89,7 @@ class BLETagCreate(BaseModel):
     description: Optional[str] = None
     mac_address: Optional[str] = None
     tag_type: Optional[str] = 'scope'  # 'tracksolid' | 'scope'
+    battery_level: Optional[int] = None  # Initial battery % from validation (TrackSolid)
 
 class BLETagResponse(BaseModel):
     id: str
@@ -716,13 +717,22 @@ def add_ble_tag(
         )
     
     # Create new tag
+    # Build initial attributes — store battery so it appears on the map via visibleAttributes
+    initial_attributes: dict | None = None
+    if tag_data.battery_level is not None:
+        initial_attributes = {
+            "Battery": {"value": f"{tag_data.battery_level}%", "show_on_map": True}
+        }
+
     ble_tag = BLETag(
         user_id=current_user.id,
         imei=tag_data.imei,
         device_name=tag_data.device_name,
         device_model=tag_data.device_model,
         mac_address=tag_data.mac_address,
-        tag_type=tag_data.tag_type or 'scope'
+        tag_type=tag_data.tag_type or 'scope',
+        battery_level=tag_data.battery_level,
+        attributes=initial_attributes,
     )
     db.add(ble_tag)
     db.commit()
@@ -739,6 +749,7 @@ class BLETagValidateRequest(BaseModel):
 class BLETagValidateResponse(BaseModel):
     is_valid: bool
     message: str
+    battery_level: Optional[int] = None  # Battery % for TrackSolid tags
 
 
 @app.post("/api/v1/ble-tags/validate", response_model=BLETagValidateResponse)
@@ -761,7 +772,11 @@ async def validate_ble_tag(
         raise HTTPException(status_code=400, detail=str(exc))
 
     result = await provider.validate_tag(request.imei)
-    return BLETagValidateResponse(is_valid=result.is_valid, message=result.message)
+    return BLETagValidateResponse(
+        is_valid=result.is_valid,
+        message=result.message,
+        battery_level=result.battery_level,
+    )
 
 
 @app.get("/api/v1/ble-tags/supported-types")

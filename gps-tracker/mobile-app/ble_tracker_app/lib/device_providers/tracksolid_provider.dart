@@ -25,6 +25,7 @@ class TrackSolidTagProvider implements BleTagProvider {
     return TagValidationResult(
       isValid: result['is_valid'] as bool,
       message: result['message'] as String,
+      batteryLevel: result['battery_level'] as int?,
     );
   }
 }

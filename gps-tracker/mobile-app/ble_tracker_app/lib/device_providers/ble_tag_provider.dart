@@ -10,8 +10,14 @@ import 'ble_tag_type.dart';
 class TagValidationResult {
   final bool isValid;
   final String message;
+  /// Battery level 0–100 returned by TrackSolid on successful validation, null for other providers.
+  final int? batteryLevel;
 
-  const TagValidationResult({required this.isValid, required this.message});
+  const TagValidationResult({
+    required this.isValid,
+    required this.message,
+    this.batteryLevel,
+  });
 }
 
 /// Abstract Strategy: one implementation per supported tag/device type.

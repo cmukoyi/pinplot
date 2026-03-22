@@ -5,13 +5,15 @@ Every supported BLE tag type (TrackSolid, Scope, …) implements this
 interface so callers never need to know the underlying vendor API.
 """
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Optional
 
 
 @dataclass
 class TagValidationResult:
     is_valid: bool
     message: str
+    battery_level: Optional[int] = field(default=None)  # Battery % as integer, e.g. 98
 
 
 class DeviceTagProvider(ABC):

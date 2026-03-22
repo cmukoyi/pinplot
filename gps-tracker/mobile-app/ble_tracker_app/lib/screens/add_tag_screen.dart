@@ -38,6 +38,7 @@ class _AddTagScreenState extends State<AddTagScreen> {
   BleTagType _selectedType = BleTagType.scope;
   bool _isLoading = false;
   String? _validationMessage; // feedback shown below IMEI field
+  int? _validatedBatteryLevel; // battery level returned by TrackSolid validation
 
   @override
   void dispose() {
@@ -93,15 +94,19 @@ class _AddTagScreenState extends State<AddTagScreen> {
         return;
       }
 
+      // Capture battery level from TrackSolid validation
+      _validatedBatteryLevel = validationResult.batteryLevel;
+
       // 2. Save locally
       final tagName = _tagNameController.text.trim();
       await _locationService.saveIMEI(imei, description: tagName.isEmpty ? null : tagName);
 
-      // 3. Persist to backend (includes tag_type)
+      // 3. Persist to backend (includes tag_type and battery_level)
       await _authService.addBLETag(
         imei: imei,
         name: tagName.isEmpty ? null : tagName,
         tagType: _selectedType.apiValue,
+        batteryLevel: _validatedBatteryLevel,
       );
 
       if (!mounted) return;

@@ -205,15 +205,26 @@ class TrackSolidTagProvider(DeviceTagProvider):
             )
 
         imei_strip = imei.strip()
-        found = any(
-            str(device.get("imei", "")).strip() == imei_strip
-            for device in devices
-        )
+        found_device = None
+        for device in devices:
+            if str(device.get("imei", "")).strip() == imei_strip:
+                found_device = device
+                break
 
-        if found:
+        if found_device is not None:
+            # Parse elecQuantity "98.30%" → int 98
+            battery_level: int | None = None
+            elec = found_device.get("elecQuantity", "") or ""
+            if elec:
+                try:
+                    battery_level = int(float(str(elec).rstrip("%")))
+                except (ValueError, TypeError):
+                    pass
+
             return TagValidationResult(
                 is_valid=True,
                 message="Tag verified on TrackSolid.",
+                battery_level=battery_level,
             )
         return TagValidationResult(
             is_valid=False,

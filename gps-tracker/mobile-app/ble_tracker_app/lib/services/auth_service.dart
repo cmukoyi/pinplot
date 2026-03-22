@@ -692,11 +692,11 @@ class AuthService {
     }
   }
   
-  Future<void> addBLETag({required String imei, String? name, String tagType = 'scope'}) async {
+  Future<void> addBLETag({required String imei, String? name, String tagType = 'scope', int? batteryLevel}) async {
     print('\n========== ADD BLE TAG START ==========');
     print('⏰ Timestamp: ${DateTime.now().toIso8601String()}');
     print('📍 IMEI: $imei');
-    print('🏷️ Name: ${name ?? "(none)"} | Type: $tagType');
+    print('🏷️ Name: ${name ?? "(none)"} | Type: $tagType | Battery: ${batteryLevel ?? "N/A"}');
     
     if (_token == null) {
       print('❌ Not authenticated - no token available');
@@ -707,11 +707,13 @@ class AuthService {
       final url = '$baseUrl/api/v1/ble-tags';
       print('📍 POST to: $url');
       
-      final requestBody = json.encode({
+      final body = <String, dynamic>{
         'imei': imei,
         'device_name': name,
         'tag_type': tagType,
-      });
+      };
+      if (batteryLevel != null) body['battery_level'] = batteryLevel;
+      final requestBody = json.encode(body);
       print('📦 Request body: $requestBody');
       
       final response = await http.post(
