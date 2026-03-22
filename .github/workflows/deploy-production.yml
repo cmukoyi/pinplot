@@ -131,70 +131,9 @@ jobs:
           printf 'Host %s\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n' "${{ secrets.DO_SERVER_IP }}" >> ~/.ssh/config
           chmod 600 ~/.ssh/config
 
-      # ── Write backend/.env (no heredoc — no indentation issues) ──
-      - name: Write backend .env to server
-        env:
-          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
-          DO_USER: ${{ secrets.DO_USER }}
-          # Pass secrets via env vars so their values are NOT inline-expanded by
-          # bash — prevents $, !, backticks etc. in secret values being corrupted.
-          ENV_DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ENV_SECRET_KEY: ${{ secrets.SECRET_KEY }}
-          ENV_POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          ENV_POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          ENV_POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-          ENV_SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
-          ENV_ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
-          ENV_MZONE_CLIENT_ID: ${{ secrets.MZONE_CLIENT_ID }}
-          ENV_MZONE_CLIENT_SECRET: ${{ secrets.MZONE_CLIENT_SECRET }}
-          ENV_MZONE_USERNAME: ${{ secrets.MZONE_USERNAME }}
-          ENV_MZONE_PASSWORD: ${{ secrets.MZONE_PASSWORD }}
-          ENV_MZONE_VEHICLE_GROUP_ID: ${{ secrets.MZONE_VEHICLE_GROUP_ID }}
-          ENV_FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
-        run: |
-          {
-            echo "DATABASE_URL=$ENV_DATABASE_URL"
-            echo "SECRET_KEY=$ENV_SECRET_KEY"
-            echo "POSTGRES_USER=$ENV_POSTGRES_USER"
-            echo "POSTGRES_PASSWORD=$ENV_POSTGRES_PASSWORD"
-            echo "POSTGRES_DB=$ENV_POSTGRES_DB"
-            echo "SENDGRID_API_KEY=$ENV_SENDGRID_API_KEY"
-            echo "ALLOWED_ORIGINS=$ENV_ALLOWED_ORIGINS"
-            echo "MZONE_TOKEN_URL=https://login.mzoneweb.net/connect/token"
-            echo "MZONE_API_BASE=https://live.mzoneweb.net/mzone62.api"
-            echo "MZONE_CLIENT_ID=$ENV_MZONE_CLIENT_ID"
-            echo "MZONE_CLIENT_SECRET=$ENV_MZONE_CLIENT_SECRET"
-            echo "MZONE_USERNAME=$ENV_MZONE_USERNAME"
-            echo "MZONE_PASSWORD=$ENV_MZONE_PASSWORD"
-            echo "MZONE_VEHICLE_GROUP_ID=$ENV_MZONE_VEHICLE_GROUP_ID"
-            echo "FROM_EMAIL=$ENV_FROM_EMAIL"
-            echo "DEBUG=False"
-            echo "ENVIRONMENT=production"
-          } | ssh $DO_USER@$DO_SERVER_IP \
-            'mkdir -p ~/pinplot/gps-tracker/backend && \
-             cat > ~/pinplot/gps-tracker/backend/.env && \
-             chmod 600 ~/pinplot/gps-tracker/backend/.env'
-          echo "✅ backend/.env written to server"
-
-      # ── Write root gps-tracker/.env for docker compose interpolation ──
-      - name: Write root .env to server
-        env:
-          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
-          DO_USER: ${{ secrets.DO_USER }}
-          ENV_POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          ENV_POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          ENV_POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-        run: |
-          {
-            echo "POSTGRES_PASSWORD=$ENV_POSTGRES_PASSWORD"
-            echo "POSTGRES_USER=$ENV_POSTGRES_USER"
-            echo "POSTGRES_DB=$ENV_POSTGRES_DB"
-          } | ssh $DO_USER@$DO_SERVER_IP \
-            'cat > ~/pinplot/gps-tracker/.env && \
-             chmod 600 ~/pinplot/gps-tracker/.env'
-          echo "✅ root .env written to server"
-
       # ── Sync code (includes pre-built Flutter artifacts) ─────────
+      # NOTE: .env files are managed manually on the server and are NEVER
+      # written or overwritten by this pipeline. rsync excludes them below.
       - name: Sync code to server
         env:
           DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
