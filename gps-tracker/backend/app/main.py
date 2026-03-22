@@ -1475,14 +1475,16 @@ def get_vehicles(
 # ==================== Trips / Journeys Management ====================
 
 @app.post("/api/trips")
-def get_trips(
+async def get_trips(
     request: dict,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Fetch trips for a vehicle within date range (proxy to MZone API)
-    
+    Fetch trips for a vehicle within date range.
+    Routes to TrackSolid getPointList (V3 Bearer token) or MZone API
+    depending on the tag type.
+
     Request body:
     {
         "vehicleId": "xxx-xxx-xxx",
@@ -1533,8 +1535,61 @@ def get_trips(
         print(f"   Tag ID: {tag.id}")
         print(f"   Tag IMEI: {tag.imei}")
         print(f"   Tag description: {tag.description}")
+        print(f"   Tag type: {tag.tag_type}")
         print(f"   Cached MZone vehicle_Id: {tag.mzone_vehicle_id}")
-        
+
+        # ── TrackSolid tags: use V3 getPointList API (Bearer JWT) ────────────
+        if (tag.tag_type or "").lower() == "tracksolid":
+            from app.services.device_providers.tracksolid_provider import fetch_tracksolid_journey_points
+            from datetime import datetime as _dt
+
+            def _to_ts_dt(iso_str: str) -> str:
+                return iso_str.replace("T", " ").replace("Z", "").split(".")[0][:19]
+
+            ts_start = _to_ts_dt(start_date)
+            ts_end = _to_ts_dt(end_date)
+            print(f"🔵 TrackSolid journey: IMEI={tag.imei} {ts_start} → {ts_end}")
+
+            track_data = await fetch_tracksolid_journey_points(tag.imei, ts_start, ts_end)
+
+            if not track_data or not (track_data.get("gpsPointStrList") or []):
+                print(f"⚠️  TrackSolid: no points returned for IMEI {tag.imei}")
+                return {"success": True, "count": 0, "trips": []}
+
+            try:
+                t0 = _dt.strptime(track_data["startDate"], "%Y-%m-%d %H:%M:%S")
+                t1 = _dt.strptime(track_data["endDate"], "%Y-%m-%d %H:%M:%S")
+                duration_secs = int((t1 - t0).total_seconds())
+            except Exception:
+                duration_secs = 0
+
+            try:
+                distance_mi = float(track_data.get("totalMileage") or 0)
+            except (ValueError, TypeError):
+                distance_mi = 0.0
+
+            trip_id = (
+                f"tracksolid__{tag.imei}"
+                f"__{ts_start.replace(' ', 'T')}"
+                f"__{ts_end.replace(' ', 'T')}"
+            )
+            synthetic_trip = {
+                "id": trip_id,
+                "vehicle_Id": str(tag.id),
+                "vehicle_Description": track_data.get("deviceName") or tag.description or tag.imei,
+                "driver_Description": None,
+                "driverKeyCode": None,
+                "distance": distance_mi,
+                "duration": duration_secs,
+                "startUtcTimestamp": track_data["startDate"].replace(" ", "T") + "Z",
+                "endUtcTimestamp": track_data["endDate"].replace(" ", "T") + "Z",
+                "startLocationDescription": track_data.get("startAddress"),
+                "endLocationDescription": track_data.get("endAddress"),
+            }
+            print(f"✅ TrackSolid: {len(track_data['gpsPointStrList'])} pts, {distance_mi} mi, {duration_secs}s")
+            return {"success": True, "count": 1, "trips": [synthetic_trip]}
+
+        # MZone path ──────────────────────────────────────────────────────────
         # Use cached MZone vehicle ID if available (much faster!)
         mzone_vehicle_id = tag.mzone_vehicle_id
         
@@ -1629,7 +1684,7 @@ def get_trips(
 
 
 @app.get("/api/trips/{trip_id}/events")
-def get_trip_events(
+async def get_trip_events(
     trip_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -1646,9 +1701,56 @@ def get_trip_events(
             print(f"📱 User {current_user.email} requesting trip events")
             print(f"   Trip ID: {trip_id}")
             print(f"{'='*60}\n")
-        
+
+        # ── TrackSolid compound trip ID: tracksolid__{imei}__{start}__{end} ──
+        if trip_id.startswith("tracksolid__"):
+            from app.services.device_providers.tracksolid_provider import fetch_tracksolid_journey_points
+
+            parts = trip_id.split("__")
+            if len(parts) != 4:
+                return {"success": False, "error": "Invalid TrackSolid trip ID format", "events": []}
+
+            _, imei, ts_start_raw, ts_end_raw = parts
+            ts_start = ts_start_raw.replace("T", " ")
+            ts_end = ts_end_raw.replace("T", " ")
+            print(f"🔵 TrackSolid events: IMEI={imei} {ts_start} → {ts_end}")
+
+            track_data = await fetch_tracksolid_journey_points(imei, ts_start, ts_end)
+            if not track_data:
+                return {"success": True, "count": 0, "events": []}
+
+            points_raw = track_data.get("gpsPointStrList") or []
+            events = []
+            for idx, point_str in enumerate(points_raw):
+                try:
+                    p = point_str.split("|")
+                    if len(p) < 10:
+                        continue
+                    lat = float(p[8])
+                    lng = float(p[9])
+                    if lat == 0.0 and lng == 0.0:
+                        continue
+                    events.append({
+                        "id": str(idx),
+                        "utcTimestamp": p[7].replace(" ", "T") + "Z",
+                        "latitude": lat,
+                        "longitude": lng,
+                        "direction": int(float(p[1])) if p[1] else 0,
+                        "speed": int(float(p[0])) if p[0] else 0,
+                        "decimalOdometer": None,
+                        "eventType_Id": None,
+                        "eventType_Description": None,
+                        "eventType_MapMarker2": None,
+                    })
+                except (ValueError, IndexError):
+                    continue
+
+            print(f"✅ TrackSolid events: {len(events)} valid waypoints from {len(points_raw)} total")
+            return {"success": True, "count": len(events), "events": events}
+
+        # ── MZone trip events ─────────────────────────────────────────────────
         from app.services.mzone_service import mzone_service
-        
+
         # Fetch trip events from MZone
         events_data = mzone_service.get_trip_events(trip_id)
         

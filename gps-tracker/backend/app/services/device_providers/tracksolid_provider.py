@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 _BASE_URL = "https://eu.tracksolidpro.com"
 _LOGIN_URL = f"{_BASE_URL}/v3/new/homepage/login"
 _EQUIPMENT_URL = f"{_BASE_URL}/v3/new/newEquipment/queryEquipmentList"
+_TRACK_HISTORY_URL = f"{_BASE_URL}/v3/new/newTrackInfo/getPointList"
 
 # Open API — used for location polling (MD5-signed, separate credentials)
 _OPEN_API_URL = "https://eu-open.tracksolidpro.com/route/rest"
@@ -423,3 +424,74 @@ async def fetch_tracksolid_location(imei: str) -> "TrackSolidLocationInfo | None
         logger.warning("TrackSolid: IMEI %s has no GPS fix (lat=0, lng=0)", imei)
         return None
     return loc
+
+
+async def fetch_tracksolid_journey_points(
+    imei: str,
+    start_time: str,
+    end_time: str,
+) -> "dict | None":
+    """
+    Fetch GPS track points for a TrackSolid device over a date range.
+
+    Uses the V3 Bearer token (JWT from login endpoint — same token used for
+    equipment validation, NOT the Open API MD5 token).
+
+    start_time / end_time format: "YYYY-MM-DD HH:MM:SS"
+
+    Returns the raw API ``data`` dict on success, which contains:
+      - ``gpsPointStrList``: pipe-delimited point strings
+      - ``startAddress``, ``endAddress``
+      - ``totalMileage``, ``showUnit``, ``avgSpeed``, ``speedUnit``
+      - ``startDate``, ``endDate`` ("YYYY-MM-DD HH:MM:SS")
+      - ``deviceName``, ``imei``
+    Returns None on error.
+    """
+    try:
+        token = await _token_manager.get_token()
+    except Exception as exc:
+        logger.error("TrackSolid: token fetch failed for journey points: %s", exc)
+        return None
+
+    payload = {
+        "startTime": start_time,
+        "endTime": end_time,
+        "imei": imei,
+        "confidenceLevel": "",
+        "selectMap": "googleMap",
+        "selectType": "all",
+    }
+    headers = {
+        "Authorization": token,
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                _TRACK_HISTORY_URL,
+                json=payload,
+                headers=headers,
+            )
+            response.raise_for_status()
+            data = response.json()
+    except Exception as exc:
+        logger.error("TrackSolid: getPointList failed for IMEI %s: %s", imei, exc)
+        return None
+
+    if not data.get("ok"):
+        logger.error(
+            "TrackSolid: getPointList ok=false for IMEI %s: code=%s msg=%s",
+            imei, data.get("code"), data.get("msg"),
+        )
+        return None
+
+    track_data = data.get("data")
+    logger.info(
+        "📍 TrackSolid journey: IMEI %s — %d points, %s %s",
+        imei,
+        len((track_data or {}).get("gpsPointStrList") or []),
+        (track_data or {}).get("totalMileage", "0"),
+        (track_data or {}).get("showUnit", ""),
+    )
+    return track_data
