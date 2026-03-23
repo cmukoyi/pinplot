@@ -19,6 +19,7 @@ import 'package:ble_tracker_app/models/trip_model.dart';
 import 'package:ble_tracker_app/screens/home_screen.dart';
 import 'package:ble_tracker_app/screens/alerts_screen.dart';
 import 'package:ble_tracker_app/screens/trip_detail_screen.dart';
+import 'package:ble_tracker_app/screens/scan_screen.dart';
 
 // App version
 const String APP_VERSION = '1.0.0';
@@ -1592,6 +1593,10 @@ View on $mapProvider to see the vehicle location.''';
           ),
           Offstage(
             offstage: _selectedIndex != 3,
+            child: const ScanScreen(),
+          ),
+          Offstage(
+            offstage: _selectedIndex != 4,
             child: _buildSettingsView(),
           ),
           
@@ -1769,9 +1774,14 @@ View on $mapProvider to see the vehicle location.''';
                   index: 2,
                 ),
                 _buildNavItem(
+                  icon: Icons.bluetooth_searching,
+                  label: 'SCAN',
+                  index: 3,
+                ),
+                _buildNavItem(
                   icon: Icons.settings,
                   label: 'SETTINGS',
-                  index: 3,
+                  index: 4,
                 ),
               ],
             ),

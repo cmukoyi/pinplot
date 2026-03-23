@@ -49,6 +49,7 @@ class User(Base):
     verification_pins = relationship("VerificationPIN", back_populates="user")
     pois = relationship("POI", back_populates="user")
     geofence_alerts = relationship("GeofenceAlert", back_populates="user")
+    beacon_sightings = relationship("BeaconSighting", back_populates="user")
 
 
 class VerificationPIN(Base):
@@ -196,3 +197,26 @@ class GeofenceAlert(Base):
     poi = relationship("POI", back_populates="alerts")
     tracker = relationship("BLETag", back_populates="geofence_alerts")
     user = relationship("User")
+
+
+class BeaconSighting(Base):
+    """Crowdsourced BLE tag sighting reported by a user's phone.
+
+    Each row is one sighting: phone detected [tag_id] at [latitude, longitude]
+    with signal strength [rssi] at [sighted_at]. Multiple sightings per tag
+    accumulate over time; the latest per tag is used as last known location.
+    """
+    __tablename__ = "beacon_sightings"
+
+    id = get_uuid_column()
+    user_id = get_uuid_fk("users.id")
+    tag_id = Column(String(64), nullable=False, index=True)    # BLE MAC / UUID
+    tag_name = Column(String(255), nullable=True)              # Advertised name
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    rssi = Column(Integer, nullable=True)                      # dBm, e.g. -65
+    sighted_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    user = relationship("User", back_populates="beacon_sightings")

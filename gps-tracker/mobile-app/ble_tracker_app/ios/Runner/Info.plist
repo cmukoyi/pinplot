@@ -49,6 +49,14 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Pinplot scans for nearby BLE asset tags to report their location.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Pinplot scans for nearby BLE asset tags to report their location.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Pinplot uses your location to record where BLE tags were sighted.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Pinplot uses your location to record where BLE tags were sighted.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
