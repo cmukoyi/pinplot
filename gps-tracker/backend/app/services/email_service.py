@@ -49,7 +49,7 @@ class EmailService:
                 print(f"{'='*60}\n")
             
             msg = MIMEMultipart('alternative')
-            msg['Subject'] = 'Your BLE Tracker Verification Code'
+            msg['Subject'] = 'Your Pinplot Verification Code'
             msg['From'] = self.from_email
             msg['To'] = to_email
             
@@ -62,7 +62,7 @@ class EmailService:
             If you didn't request this code, please ignore this email.
             
             Best regards,
-            Beacon Telematics Team
+            Pinplot Team
             """
             
             # HTML version
@@ -70,7 +70,7 @@ class EmailService:
             <html>
               <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                 <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                  <h2 style="color: #173C64;">BLE Tracker Verification</h2>
+                  <h2 style="color: #173C64;">Pinplot Verification</h2>
                   <p>Your verification code is:</p>
                   <div style="background-color: #f4f4f4; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
                     <h1 style="color: #173C64; font-size: 36px; letter-spacing: 8px; margin: 0;">{pin}</h1>
@@ -78,7 +78,7 @@ class EmailService:
                   <p style="color: #666;">This code will expire in <strong>10 minutes</strong>.</p>
                   <p style="color: #666;">If you didn't request this code, please ignore this email.</p>
                   <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-                  <p style="color: #999; font-size: 12px;">Best regards,<br>Beacon Telematics Team</p>
+                  <p style="color: #999; font-size: 12px;">Best regards,<br>Pinplot Team</p>
                 </div>
               </body>
             </html>
@@ -88,7 +88,7 @@ class EmailService:
             if self.use_sendgrid:
                 return self._send_via_sendgrid(
                     to_email=to_email,
-                    subject='Your BLE Tracker Verification Code',
+                    subject='Your Pinplot Verification Code',
                     text_content=text,
                     html_content=html
                 )
@@ -114,7 +114,7 @@ class EmailService:
         """Send welcome email after successful registration"""
         try:
             msg = MIMEMultipart('alternative')
-            msg['Subject'] = 'Welcome to BLE Tracker'
+            msg['Subject'] = 'Welcome to Pinplot'
             msg['From'] = self.from_email
             msg['To'] = to_email
             
@@ -124,12 +124,12 @@ class EmailService:
             <html>
               <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                 <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                  <h2 style="color: #173C64;">Welcome to BLE Tracker!</h2>
+                  <h2 style="color: #173C64;">Welcome to Pinplot!</h2>
                   <p>Hi {name},</p>
                   <p>Thank you for joining BLE Tracker. Your account has been successfully created.</p>
                   <p>You can now start adding and tracking your BLE devices.</p>
                   <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-                  <p style="color: #999; font-size: 12px;">Best regards,<br>Beacon Telematics Team</p>
+                  <p style="color: #999; font-size: 12px;">Best regards,<br>Pinplot Team</p>
                 </div>
               </body>
             </html>
@@ -139,7 +139,7 @@ class EmailService:
             if self.use_sendgrid:
                 return self._send_via_sendgrid(
                     to_email=to_email,
-                    subject='Welcome to BLE Tracker',
+                    subject='Welcome to Pinplot',
                     text_content="Welcome to BLE Tracker!",
                     html_content=html
                 )
@@ -207,7 +207,7 @@ class EmailService:
             View location on map: https://www.google.com/maps?q={latitude},{longitude}
             
             Best regards,
-            Beacon Telematics Team
+            Pinplot Team
             """
             
             # HTML version
@@ -265,7 +265,7 @@ class EmailService:
                     </p>
                   </div>
                   <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-                  <p style="color: #999; font-size: 12px;">Best regards,<br>Beacon Telematics Team</p>
+                  <p style="color: #999; font-size: 12px;">Best regards,<br>Pinplot Team</p>
                 </div>
               </body>
             </html>
@@ -301,7 +301,7 @@ class EmailService:
         """Send password reset email with reset link"""
         try:
             # Get base URL from environment or default
-            base_url = os.getenv("FRONTEND_URL", "https://beacontelematics.co.uk")
+            base_url = os.getenv("FRONTEND_URL", "https://pinplot.me")
             reset_link = f"{base_url}?reset_token={reset_token}"
             
             # Development mode - print to console (but still send email)
@@ -315,7 +315,7 @@ class EmailService:
             name = first_name if first_name else "there"
             
             msg = MIMEMultipart('alternative')
-            msg['Subject'] = 'Reset Your Beacon Telematics Password'
+            msg['Subject'] = 'Reset Your Pinplot Password'
             msg['From'] = self.from_email
             msg['To'] = to_email
             
@@ -325,7 +325,7 @@ class EmailService:
             
             Hi {name},
             
-            You requested to reset your password for your Beacon Telematics account.
+            You requested to reset your password for your Pinplot account.
             
             Click the link below to reset your password:
             {reset_link}
@@ -335,7 +335,7 @@ class EmailService:
             If you didn't request a password reset, please ignore this email and your password will remain unchanged.
             
             Best regards,
-            Beacon Telematics Team
+            Pinplot Team
             """
             
             # HTML version
@@ -349,7 +349,7 @@ class EmailService:
                   <div style="background-color: #f4f4f4; padding: 30px; border-radius: 0 0 8px 8px;">
                     <p style="font-size: 16px;">Hi {name},</p>
                     <p style="font-size: 16px;">
-                      You requested to reset your password for your Beacon Telematics account.
+                      You requested to reset your password for your Pinplot account.
                     </p>
                     <p style="color: #666; font-size: 14px;">
                       Click the link below to reset your password:
@@ -366,7 +366,7 @@ class EmailService:
                     </p>
                   </div>
                   <p style="color: #999; font-size: 12px; margin-top: 20px; text-align: center;">
-                    Best regards,<br>Beacon Telematics Team
+                    Best regards,<br>Pinplot Team
                   </p>
                 </div>
               </body>
@@ -377,7 +377,7 @@ class EmailService:
             if self.use_sendgrid:
                 return self._send_via_sendgrid(
                     to_email=to_email,
-                    subject='Reset Your Beacon Telematics Password',
+                    subject='Reset Your Pinplot Password',
                     text_content=text,
                     html_content=html
                 )
