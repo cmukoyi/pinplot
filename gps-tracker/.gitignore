@@ -1,7 +1,18 @@
-# Environment variables
+# Environment variables — NEVER commit real .env files
+# These patterns cover all subdirectories (backend/.env, etc.)
 .env
 .env.local
 .env.production
+.env.staging
+.env.development
+**/.env
+**/.env.local
+**/.env.production
+**/.env.staging
+**/.env.development
+# Allow only example/template files
+!**/.env.example
+!**/.env.local.example
 
 # Python
 __pycache__/
