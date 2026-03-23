@@ -20,7 +20,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ActivityMonitor(
       child: MaterialApp(
-        title: 'Asset Tracker',
+        title: 'Pinplot',
         theme: AppTheme.lightTheme,
         debugShowCheckedModeBanner: false,
         home: const SplashScreen(),
@@ -131,10 +131,10 @@ class _SplashScreenState extends State<SplashScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.location_on,
-                size: 80,
-                color: Colors.white,
+              Image.asset(
+                'assets/MainLogo.png',
+                height: 120,
+                fit: BoxFit.contain,
               ),
               SizedBox(height: 24),
               Text(
