@@ -92,14 +92,9 @@ class WelcomeScreen extends StatelessWidget {
                             width: double.infinity,
                             height: 120,
                             alignment: Alignment.center,
-                            child: Text(
-                              'Pinplot',
-                              style: GoogleFonts.poppins(
-                                fontSize: 52,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.brandPrimary,
-                                letterSpacing: 2.0,
-                              ),
+                            child: Image.asset(
+                              'assets/MainLogo.png',
+                              fit: BoxFit.contain,
                             ),
                           ),
                         ).animate()

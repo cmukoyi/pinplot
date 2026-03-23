@@ -1604,7 +1604,7 @@ View on $mapProvider to see the vehicle location.''';
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [AppTheme.brandPrimary, Color(0xFF1f4f7e)],
+                    colors: [AppTheme.brandPrimary, Color(0xFF007A00)],
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -1617,14 +1617,10 @@ View on $mapProvider to see the vehicle location.''';
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
                     children: [
-                      Text(
-                        'Pinplot',
-                        style: GoogleFonts.poppins(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 1.2,
-                        ),
+                      Image.asset(
+                        'assets/FullLogowhite.png',
+                        height: 36,
+                        fit: BoxFit.contain,
                       ),
                       Spacer(),
                       // Alerts button with badge
@@ -1742,7 +1738,7 @@ View on $mapProvider to see the vehicle location.''';
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [AppTheme.brandPrimary, Color(0xFF1f4f7e)],
+            colors: [AppTheme.brandPrimary, Color(0xFF007A00)],
           ),
           boxShadow: [
             BoxShadow(
@@ -3394,7 +3390,7 @@ View on $mapProvider to see the vehicle location.''';
                 padding: EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [AppTheme.brandPrimary, Color(0xFF1f4f7e)],
+                    colors: [AppTheme.brandPrimary, Color(0xFF007A00)],
                   ),
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [

@@ -3,9 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // Brand Colors
-  static const Color brandPrimary = Color(0xFF173C64);
-  static const Color brandPrimaryHover = Color(0xFF1F4F7E);
-  static const Color brandPrimaryLight = Color(0xFFE8EEF5);
+  static const Color brandPrimary = Color(0xFF006400);
+  static const Color brandPrimaryHover = Color(0xFF007A00);
+  static const Color brandPrimaryLight = Color(0xFFE8F5E8);
   
   // Gradient Colors
   static const Color gradientStart = Color(0xFFE3F2FD);
@@ -79,11 +79,11 @@ class AppTheme {
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [
-        Color(0xFFE8EEF5),  // Very light blue-grey
-        Color(0xFF9BB4D4),  // Light blue
-        Color(0xFF5A7BA8),  // Medium blue
-        Color(0xFF2E5180),  // Deeper blue
-        Color(0xFF173C64),  // Base color
+        Color(0xFFE8F5E8),  // Very light green
+        Color(0xFF80C080),  // Light green
+        Color(0xFF3D8B3D),  // Medium green
+        Color(0xFF1C6B1C),  // Deeper green
+        Color(0xFF006400),  // Base color
       ],
     );
   }
