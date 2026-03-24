@@ -12,12 +12,17 @@ class DiscoveredBeacon {
   final DateTime lastSeen;
   final Map<int, List<int>> manufacturerData;
 
+  /// BLE service data keyed by lowercase UUID string
+  /// (e.g. "0000feaa-0000-1000-8000-00805f9b34fb" for Eddystone).
+  final Map<String, List<int>> serviceData;
+
   const DiscoveredBeacon({
     required this.id,
     this.name,
     required this.rssi,
     required this.lastSeen,
     this.manufacturerData = const {},
+    this.serviceData = const {},
   });
 
   /// A human-readable identifier: preferred name, otherwise truncated device ID.
@@ -47,6 +52,7 @@ class DiscoveredBeacon {
         rssi: rssi ?? this.rssi,
         lastSeen: lastSeen ?? this.lastSeen,
         manufacturerData: manufacturerData,
+        serviceData: serviceData,
       );
 }
 

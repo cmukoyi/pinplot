@@ -31,6 +31,10 @@ class BlePlatform {
                 rssi: r.rssi,
                 lastSeen: DateTime.now(),
                 manufacturerData: r.advertisementData.manufacturerData,
+                serviceData: {
+                  for (final e in r.advertisementData.serviceData.entries)
+                    e.key.toString().toLowerCase(): e.value,
+                },
               ),
             )
             .toList(),

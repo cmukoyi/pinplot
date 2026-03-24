@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart' as latlong;
 
 import 'package:ble_tracker_app/models/beacon_sighting_model.dart';
 import 'package:ble_tracker_app/services/ble_scan_service.dart';
+import 'package:ble_tracker_app/services/pareto_decoder.dart';
 import 'package:ble_tracker_app/theme/app_theme.dart';
 
 class ScanScreen extends StatefulWidget {
@@ -137,26 +138,40 @@ class _ScanScreenState extends State<ScanScreen> {
   List<fmap.Marker> _buildMarkers() {
     final markers = <fmap.Marker>[];
 
-    // Saved server-side locations → solid teal pin.
+    // Build a set of IDs that were detected as Pareto devices in this session.
+    final paretoIds = {
+      for (final b in _discovered)
+        if (ParetoDecoder.decode(b).isPareto) b.id,
+    };
+
     for (final loc in _savedLocations) {
+      final isPareto = paretoIds.contains(loc.tagId);
+      final color = isPareto ? Colors.indigo.shade700 : Colors.teal.shade700;
+      final icon = isPareto ? Icons.sensors : Icons.bluetooth;
+      final paretoType = isPareto
+          ? ParetoDecoder.decode(
+              _discovered.firstWhere((b) => b.id == loc.tagId))
+          : null;
+
       markers.add(
         fmap.Marker(
           point: latlong.LatLng(loc.lat, loc.lon),
           width: 44,
           height: 44,
           child: Tooltip(
-            message: '${loc.displayName}\n'
+            message: '${loc.displayName}'
+                '${paretoType != null ? ' · ${paretoType.typeLabel}' : ''}\n'
                 'Last seen: ${_formatTime(loc.lastSeen)}',
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.teal.shade700,
+                color: color,
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2),
                 boxShadow: const [
                   BoxShadow(color: Colors.black26, blurRadius: 4)
                 ],
               ),
-              child: const Icon(Icons.bluetooth, color: Colors.white, size: 20),
+              child: Icon(icon, color: Colors.white, size: 20),
             ),
           ),
         ),
@@ -215,7 +230,32 @@ class _ScanScreenState extends State<ScanScreen> {
           // ── Nearby beacons list ──
           _buildNearbyList(),
 
+          // ── Pareto summary bar ──
+          _buildParetoSummary(),
+
           const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildParetoSummary() {
+    final paretoCount =
+        _discovered.where((b) => ParetoDecoder.decode(b).isPareto).length;
+    if (paretoCount == 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: Row(
+        children: [
+          Icon(Icons.sensors, size: 14, color: Colors.indigo.shade600),
+          const SizedBox(width: 6),
+          Text(
+            '$paretoCount Pareto-compatible device${paretoCount != 1 ? 's' : ''} nearby',
+            style: GoogleFonts.inter(
+                fontSize: 12,
+                color: Colors.indigo.shade700,
+                fontWeight: FontWeight.w500),
+          ),
         ],
       ),
     );
@@ -353,13 +393,22 @@ class _BeaconListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final paretoInfo = ParetoDecoder.decode(beacon);
+    final isPareto = paretoInfo.isPareto;
+
+    final iconBg = isPareto ? Colors.indigo.shade50 : AppTheme.brandPrimaryLight;
+    final iconColor = isPareto ? Colors.indigo.shade700 : AppTheme.brandPrimary;
+    final iconData = isPareto ? Icons.sensors : Icons.bluetooth;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: isPareto ? Colors.indigo.shade50.withOpacity(0.4) : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(
+          color: isPareto ? Colors.indigo.shade100 : Colors.grey.shade200,
+        ),
       ),
       child: Row(
         children: [
@@ -367,11 +416,10 @@ class _BeaconListTile extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppTheme.brandPrimaryLight,
+              color: iconBg,
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.bluetooth,
-                color: AppTheme.brandPrimary, size: 20),
+            child: Icon(iconData, color: iconColor, size: 20),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -392,6 +440,25 @@ class _BeaconListTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                if (isPareto) ...
+                  [
+                    const SizedBox(height: 3),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.indigo.shade100,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        paretoInfo.typeLabel,
+                        style: GoogleFonts.inter(
+                            fontSize: 10,
+                            color: Colors.indigo.shade800,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
               ],
             ),
           ),
