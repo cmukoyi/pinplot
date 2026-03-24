@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -87,7 +86,7 @@ class _SignInScreenState extends State<SignInScreen> {
             errorMsg.toLowerCase().contains('connection refused');
 
         final String displayMsg = isNetworkError
-            ? 'Unable to login, please retry after 5 minutes — deployment in progress'
+            ? 'Unable to connect. Please check your connection and try again.'
             : 'Sign in failed: $errorMsg';
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -439,61 +438,6 @@ class _SignInScreenState extends State<SignInScreen> {
                         .slideY(begin: 0.2, end: 0, delay: 600.ms, duration: 600.ms)
                         .shimmer(delay: 1100.ms, duration: 2000.ms, color: Colors.white.withValues(alpha: 0.3)),
                       SizedBox(height: 24),
-
-                      // ── DEV ONLY: quick-login shortcut ──────────────────
-                      if (kDebugMode) ...
-                        [
-                          Row(
-                            children: [
-                              Expanded(child: Divider(color: Colors.orange.shade200)),
-                              Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 8),
-                                child: Text(
-                                  'DEV',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.orange.shade400,
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
-                              ),
-                              Expanded(child: Divider(color: Colors.orange.shade200)),
-                            ],
-                          ),
-                          SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 48,
-                            child: OutlinedButton.icon(
-                              onPressed: _isLoading
-                                  ? null
-                                  : () {
-                                      _emailController.text = 'carlmukoyi@gmail.com';
-                                      _passwordController.text = '123456789_PLus';
-                                      _signIn();
-                                    },
-                              icon: Icon(Icons.flash_on, size: 18, color: Colors.orange.shade700),
-                              label: Text(
-                                'Quick Login (Carl)',
-                                style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.orange.shade700,
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: Colors.orange.shade300, width: 1.5),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                backgroundColor: Colors.orange.shade50,
-                              ),
-                            ),
-                          ),
-                          SizedBox(height: 16),
-                        ],
-                      // ── END DEV ─────────────────────────────────────────
 
                       // Footer - Forgot password
                       Center(

@@ -33,15 +33,13 @@ class Environment {
   /// 
   /// No manual configuration needed!
   static String get apiBaseUrl {
-    if (kDebugMode) {
-      // Running with: flutter run
-      // OR: flutter run -d chrome (web debug)
-      print('🛠️  DEBUG MODE: Using development server → $_developmentUrl');
+    if (kDebugMode && kIsWeb) {
+      // Web debug only (flutter run -d chrome) → localhost
+      print('🛠️  DEBUG WEB: Using development server → $_developmentUrl');
       return _developmentUrl;
     } else {
-      // Running with: flutter build web --release
-      // OR: flutter build apk --release
-      print('🚀 RELEASE MODE: Using production server → $_productionUrl');
+      // All mobile builds (debug or release APK) + all release builds → production
+      print('🚀 Using production server → $_productionUrl');
       return _productionUrl;
     }
   }
