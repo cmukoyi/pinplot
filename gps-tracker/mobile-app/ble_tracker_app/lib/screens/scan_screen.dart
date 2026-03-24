@@ -28,6 +28,11 @@ class _ScanScreenState extends State<ScanScreen> {
   bool _loadingLocations = false;
   String? _error;
 
+  // Local plots: beacon ID → position pinned by user tap
+  final Map<String, latlong.LatLng> _localPlotPositions = {};
+  final Map<String, DiscoveredBeacon> _localPlotBeacons = {};
+  final Set<String> _plotting = {};
+
   StreamSubscription<List<DiscoveredBeacon>>? _beaconSub;
   StreamSubscription<bool>? _scanningSub;
 
@@ -68,6 +73,31 @@ class _ScanScreenState extends State<ScanScreen> {
         _mapZoom = 13.0;
       }
     });
+  }
+
+  Future<void> _plotBeacon(DiscoveredBeacon beacon) async {
+    if (_plotting.contains(beacon.id)) return;
+    setState(() => _plotting.add(beacon.id));
+    try {
+      final pos = await _service.getCurrentPosition();
+      if (pos != null && mounted) {
+        final ll = latlong.LatLng(pos.latitude, pos.longitude);
+        setState(() {
+          _localPlotPositions[beacon.id] = ll;
+          _localPlotBeacons[beacon.id] = beacon;
+          _plotting.remove(beacon.id);
+        });
+        _mapController.move(ll, 15.0);
+      } else if (mounted) {
+        setState(() => _plotting.remove(beacon.id));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Could not get your location. Check GPS permissions.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _plotting.remove(beacon.id));
+    }
   }
 
   Future<void> _toggleScan() async {
@@ -178,6 +208,33 @@ class _ScanScreenState extends State<ScanScreen> {
       );
     }
 
+    // Local user-tapped plot markers (pinned by tapping a device in the list)
+    for (final id in _localPlotPositions.keys) {
+      final ll = _localPlotPositions[id]!;
+      final beacon = _localPlotBeacons[id];
+      markers.add(
+        fmap.Marker(
+          point: ll,
+          width: 44,
+          height: 44,
+          child: Tooltip(
+            message: '${beacon?.displayName ?? id}\nPinned by you',
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.orange.shade600,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 4),
+                ],
+              ),
+              child: const Icon(Icons.my_location, color: Colors.white, size: 20),
+            ),
+          ),
+        ),
+      );
+    }
+
     return markers;
   }
 
@@ -233,7 +290,7 @@ class _ScanScreenState extends State<ScanScreen> {
           // ── Pareto summary bar ──
           _buildParetoSummary(),
 
-          const SizedBox(height: 8),
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
         ],
       ),
     );
@@ -262,24 +319,23 @@ class _ScanScreenState extends State<ScanScreen> {
   }
 
   Widget _buildScanButton() {
-    return SizedBox(
-      height: 48,
-      child: ElevatedButton.icon(
-        onPressed: _toggleScan,
-        icon: Icon(
-          _isScanning ? Icons.stop_circle_outlined : Icons.bluetooth_searching,
-          size: 22,
-        ),
-        label: Text(
-          _isScanning ? 'Stop Scan' : 'Start Scan',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 15),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _isScanning ? Colors.red.shade600 : AppTheme.brandPrimary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
+    return ElevatedButton.icon(
+      onPressed: _toggleScan,
+      icon: Icon(
+        _isScanning ? Icons.stop_circle_outlined : Icons.bluetooth_searching,
+        size: 22,
+      ),
+      label: Text(
+        _isScanning ? 'Stop Scan' : 'Start Scan',
+        style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 15),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _isScanning ? Colors.red.shade600 : AppTheme.brandPrimary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        minimumSize: const Size(0, 52),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -336,7 +392,12 @@ class _ScanScreenState extends State<ScanScreen> {
         itemCount: _discovered.isEmpty ? 0 : _discovered.length,
         itemBuilder: (context, index) {
           final beacon = _discovered[index];
-          return _BeaconListTile(beacon: beacon);
+          return _BeaconListTile(
+            beacon: beacon,
+            isPlotting: _plotting.contains(beacon.id),
+            isPlotted: _localPlotPositions.containsKey(beacon.id),
+            onTap: () => _plotBeacon(beacon),
+          );
         },
       ),
     );
@@ -388,8 +449,16 @@ class _ScanScreenState extends State<ScanScreen> {
 // ── Beacon list tile ─────────────────────────────────────────────────────────
 
 class _BeaconListTile extends StatelessWidget {
-  const _BeaconListTile({required this.beacon});
+  const _BeaconListTile({
+    required this.beacon,
+    this.onTap,
+    this.isPlotting = false,
+    this.isPlotted = false,
+  });
   final DiscoveredBeacon beacon;
+  final VoidCallback? onTap;
+  final bool isPlotting;
+  final bool isPlotted;
 
   @override
   Widget build(BuildContext context) {
@@ -463,7 +532,45 @@ class _BeaconListTile extends StatelessWidget {
             ),
           ),
           _SignalBars(bars: beacon.signalBars, rssi: beacon.rssi),
+          const SizedBox(width: 6),
+          _buildPlotButton(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPlotButton() {
+    if (isPlotting) {
+      return SizedBox(
+        width: 32,
+        height: 32,
+        child: Center(
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.orange.shade400,
+            ),
+          ),
+        ),
+      );
+    }
+    return SizedBox(
+      width: 32,
+      height: 32,
+      child: Material(
+        color: isPlotted ? Colors.green.shade50 : Colors.orange.shade50,
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Icon(
+            isPlotted ? Icons.location_on : Icons.location_on_outlined,
+            size: 18,
+            color: isPlotted ? Colors.green.shade600 : Colors.orange.shade600,
+          ),
+        ),
       ),
     );
   }

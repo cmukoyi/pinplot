@@ -108,6 +108,9 @@ class BLEScanService {
     _setScanning(false);
   }
 
+  /// Returns the device's current GPS position, or `null` on failure / timeout.
+  Future<Position?> getCurrentPosition() => _getPosition();
+
   /// Returns the last known location of every BLE tag sighted by this user.
   Future<List<BeaconLocation>> getBeaconLocations() async {
     try {
