@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-apk:
-    name: Build Android Debug APK
+    name: Build Android Release APKs (split per ABI)
     runs-on: ubuntu-latest
 
     steps:
@@ -34,16 +34,30 @@ jobs:
           cd gps-tracker/mobile-app/ble_tracker_app
           flutter pub get
 
-      - name: Build debug APK
+      - name: Build release APKs (split per ABI)
         run: |
           cd gps-tracker/mobile-app/ble_tracker_app
-          flutter build apk --debug
-          echo "✅ APK built"
+          flutter build apk --release --split-per-abi
+          echo "✅ APKs built"
           ls -lh build/app/outputs/flutter-apk/
 
-      - name: Upload APK artifact
+      - name: Upload arm64-v8a APK
         uses: actions/upload-artifact@v4
         with:
-          name: pinplot-debug-${{ github.run_number }}
-          path: gps-tracker/mobile-app/ble_tracker_app/build/app/outputs/flutter-apk/app-debug.apk
+          name: pinplot-arm64-${{ github.run_number }}
+          path: gps-tracker/mobile-app/ble_tracker_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          retention-days: 14
+
+      - name: Upload armeabi-v7a APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinplot-armv7-${{ github.run_number }}
+          path: gps-tracker/mobile-app/ble_tracker_app/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+          retention-days: 14
+
+      - name: Upload x86_64 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinplot-x86_64-${{ github.run_number }}
+          path: gps-tracker/mobile-app/ble_tracker_app/build/app/outputs/flutter-apk/app-x86_64-release.apk
           retention-days: 14
