@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show pow;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -176,27 +177,32 @@ class _ScanScreenState extends State<ScanScreen> {
 
     for (final loc in _savedLocations) {
       final isPareto = paretoIds.contains(loc.tagId);
+      final liveMatches = _discovered.where((b) => b.id == loc.tagId);
+      final liveBeacon = liveMatches.isEmpty ? null : liveMatches.first;
+      final isLive = liveBeacon != null;
       final color = isPareto ? Colors.indigo.shade700 : Colors.teal.shade700;
       final icon = isPareto ? Icons.sensors : Icons.bluetooth;
-      final paretoType = isPareto
-          ? ParetoDecoder.decode(
-              _discovered.firstWhere((b) => b.id == loc.tagId))
-          : null;
 
       markers.add(
         fmap.Marker(
           point: latlong.LatLng(loc.lat, loc.lon),
           width: 44,
           height: 44,
-          child: Tooltip(
-            message: '${loc.displayName}'
-                '${paretoType != null ? ' · ${paretoType.typeLabel}' : ''}\n'
-                'Last seen: ${_formatTime(loc.lastSeen)}',
+          child: GestureDetector(
+            onTap: () => _showMarkerDetail(
+              id: loc.tagId,
+              displayName: loc.displayName,
+              liveBeacon: liveBeacon,
+              savedLocation: loc,
+            ),
             child: Container(
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
+                border: Border.all(
+                  color: isLive ? Colors.greenAccent.shade400 : Colors.white,
+                  width: isLive ? 3 : 2,
+                ),
                 boxShadow: const [
                   BoxShadow(color: Colors.black26, blurRadius: 4)
                 ],
@@ -217,8 +223,12 @@ class _ScanScreenState extends State<ScanScreen> {
           point: ll,
           width: 44,
           height: 44,
-          child: Tooltip(
-            message: '${beacon?.displayName ?? id}\nPinned by you',
+          child: GestureDetector(
+            onTap: () => _showMarkerDetail(
+              id: id,
+              displayName: beacon?.displayName ?? id,
+              liveBeacon: beacon,
+            ),
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.orange.shade600,
@@ -444,6 +454,36 @@ class _ScanScreenState extends State<ScanScreen> {
     if (diff.inDays < 1) return '${diff.inHours}h ago';
     return '${diff.inDays}d ago';
   }
+
+  void _showMarkerDetail({
+    required String id,
+    required String displayName,
+    DiscoveredBeacon? liveBeacon,
+    BeaconLocation? savedLocation,
+  }) {
+    if (!mounted) return;
+    final rssi = liveBeacon?.rssi ?? savedLocation?.rssi;
+    final lastSeen =
+        liveBeacon?.lastSeen ?? savedLocation?.lastSeen ?? DateTime.now();
+    final paretoInfo =
+        liveBeacon != null ? ParetoDecoder.decode(liveBeacon) : null;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (_) => _MarkerDetailSheet(
+        displayName: displayName,
+        id: id,
+        isLive: liveBeacon != null,
+        rssi: rssi,
+        lastSeen: lastSeen,
+        paretoInfo: paretoInfo,
+      ),
+    );
+  }
 }
 
 // ── Beacon list tile ─────────────────────────────────────────────────────────
@@ -610,6 +650,227 @@ class _SignalBars extends StatelessWidget {
           '${rssi} dBm',
           style:
               GoogleFonts.inter(fontSize: 10, color: Colors.grey.shade600),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Marker detail bottom sheet ──────────────────────────────────────────────────────────
+
+class _MarkerDetailSheet extends StatelessWidget {
+  const _MarkerDetailSheet({
+    required this.displayName,
+    required this.id,
+    required this.isLive,
+    this.rssi,
+    required this.lastSeen,
+    this.paretoInfo,
+  });
+
+  final String displayName;
+  final String id;
+  final bool isLive;
+  final int? rssi;
+  final DateTime lastSeen;
+  final ParetoInfo? paretoInfo;
+
+  String _distanceText() {
+    if (rssi == null) return '–';
+    final tx = paretoInfo?.txPower ?? -59; // 1 m reference power
+    final dist = pow(10.0, (tx - rssi!) / 20.0); // path loss n=2
+    if (dist < 1) return '< 1 m';
+    if (dist < 1000) return '~${dist.toStringAsFixed(1)} m';
+    return '~${(dist / 1000).toStringAsFixed(2)} km';
+  }
+
+  String _batteryText() {
+    final mv = paretoInfo?.batteryMv;
+    if (mv == null) return '–';
+    final pct = ((mv - 2800) / (3600 - 2800) * 100).clamp(0.0, 100.0).round();
+    return '$mv mV  ($pct%)';
+  }
+
+  Color _batteryColor() {
+    final mv = paretoInfo?.batteryMv;
+    if (mv == null) return Colors.grey;
+    final pct = (mv - 2800) / (3600 - 2800) * 100;
+    if (pct > 50) return Colors.green.shade600;
+    if (pct > 20) return Colors.orange.shade600;
+    return Colors.red.shade600;
+  }
+
+  String _ageText() {
+    final diff = DateTime.now().difference(lastSeen);
+    if (diff.inSeconds < 10) return 'just now';
+    if (diff.inMinutes < 1) return '${diff.inSeconds}s ago';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final info = paretoInfo;
+    final isIBeacon = info?.type == ParetoDeviceType.iBeacon;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, 12, 20, MediaQuery.of(context).padding.bottom + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle bar
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Name + live/age badge
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  displayName,
+                  style: GoogleFonts.inter(
+                      fontSize: 17, fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (isLive)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade500,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                            color: Colors.white, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 4),
+                      Text('LIVE',
+                          style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    _ageText(),
+                    style: GoogleFonts.inter(
+                        color: Colors.grey.shade700,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            id,
+            style:
+                GoogleFonts.inter(fontSize: 11, color: Colors.grey.shade500),
+          ),
+          const Divider(height: 24),
+          // Signal + distance estimate
+          _InfoRow(
+            icon: Icons.signal_cellular_alt,
+            iconColor: Colors.blue.shade600,
+            label: 'Signal',
+            value: rssi != null ? '$rssi dBm  ≈ ${_distanceText()}' : '–',
+          ),
+          // Battery (Eddystone TLM only)
+          if (info?.batteryMv != null) ...[  
+            const SizedBox(height: 10),
+            _InfoRow(
+              icon: Icons.battery_full,
+              iconColor: _batteryColor(),
+              label: 'Battery',
+              value: _batteryText(),
+            ),
+          ],
+          // Major / Minor (iBeacon only)
+          if (isIBeacon && info != null && info.major != null) ...[  
+            const SizedBox(height: 10),
+            _InfoRow(
+              icon: Icons.tag,
+              iconColor: Colors.indigo.shade600,
+              label: 'Major / Minor',
+              value: '${info.major}  /  ${info.minor ?? '–'}',
+            ),
+          ],
+          // Format label
+          if (info?.isPareto == true) ...[  
+            const SizedBox(height: 10),
+            _InfoRow(
+              icon: Icons.sensors,
+              iconColor: Colors.indigo.shade400,
+              label: 'Format',
+              value: info!.typeLabel,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Info row widget ─────────────────────────────────────────────────────────────────
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: iconColor),
+        const SizedBox(width: 8),
+        Text(
+          '$label:  ',
+          style: GoogleFonts.inter(fontSize: 13, color: Colors.grey.shade600),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: GoogleFonts.inter(
+                fontSize: 13, fontWeight: FontWeight.w600),
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ],
     );

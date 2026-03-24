@@ -43,6 +43,9 @@ class ParetoInfo {
   /// Calibrated TX power at 0 m (dBm).
   final int? txPower;
 
+  /// Eddystone TLM battery voltage in millivolts (null if not TLM or not parsed).
+  final int? batteryMv;
+
   const ParetoInfo({
     required this.type,
     this.beaconId,
@@ -51,6 +54,7 @@ class ParetoInfo {
     this.url,
     this.instanceId,
     this.txPower,
+    this.batteryMv,
   });
 
   bool get isPareto => type != ParetoDeviceType.none;
@@ -159,8 +163,10 @@ class ParetoDecoder {
           url: _decodeEddystoneUrl(data[2], data.sublist(3)),
         );
 
-      case 0x20: // Eddystone-TLM (telemetry — no position data)
-        return const ParetoInfo(type: ParetoDeviceType.eddystoneTlm);
+      case 0x20: // Eddystone-TLM
+        // Layout: [0]=0x20 [1]=version [2-3]=battery mV (uint16 BE) [4-5]=temp [6-9]=adv count
+        final batt = data.length >= 4 ? ((data[2] << 8) | data[3]) : null;
+        return ParetoInfo(type: ParetoDeviceType.eddystoneTlm, batteryMv: batt);
 
       default:
         return ParetoInfo.unknown;
