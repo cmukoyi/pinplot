@@ -698,12 +698,36 @@ def update_user_email(
 
 # BLE Tag Management endpoints
 @app.post("/api/v1/ble-tags", response_model=BLETagResponse)
-def add_ble_tag(
+async def add_ble_tag(
     tag_data: BLETagCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Add a new BLE tag to user's account"""
+    """Add a new BLE tag to user's account.
+
+    Validation against the vendor platform is enforced here — a tag can never
+    be saved with a tag_type that doesn't match what the vendor API confirms.
+    This prevents a TrackSolid IMEI being silently saved as Scope (or vice versa)
+    if the client sends the wrong type.
+    """
+    # Normalise and validate tag_type
+    tag_type = (tag_data.tag_type or 'scope').lower()
+    try:
+        provider = DeviceProviderFactory.get_provider(tag_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported tag_type: '{tag_type}'"
+        )
+
+    # Enforce vendor validation — client cannot bypass this
+    validation = await provider.validate_tag(tag_data.imei)
+    if not validation.is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=validation.message,
+        )
+
     # Check if IMEI already exists
     existing_tag = db.query(BLETag).filter(BLETag.imei == tag_data.imei).first()
     if existing_tag:
@@ -711,13 +735,14 @@ def add_ble_tag(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="IMEI already registered"
         )
-    
-    # Create new tag
-    # Build initial attributes — store battery so it appears on the map via visibleAttributes
+
+    # Seed battery into attributes so the map marker shows it immediately.
+    # Use battery_level from validation (most accurate) falling back to client-supplied.
+    battery = validation.battery_level if validation.battery_level is not None else tag_data.battery_level
     initial_attributes: dict | None = None
-    if tag_data.battery_level is not None:
+    if battery is not None:
         initial_attributes = {
-            "Battery": {"value": f"{tag_data.battery_level}%", "show_on_map": True}
+            "Battery": {"value": f"{battery}%", "show_on_map": True}
         }
 
     ble_tag = BLETag(
@@ -726,14 +751,14 @@ def add_ble_tag(
         device_name=tag_data.device_name,
         device_model=tag_data.device_model,
         mac_address=tag_data.mac_address,
-        tag_type=tag_data.tag_type or 'scope',
-        battery_level=tag_data.battery_level,
+        tag_type=tag_type,
+        battery_level=battery,
         attributes=initial_attributes,
     )
     db.add(ble_tag)
     db.commit()
     db.refresh(ble_tag)
-    
+
     return ble_tag
 
 
