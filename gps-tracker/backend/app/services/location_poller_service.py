@@ -57,9 +57,13 @@ class LocationPollerService:
                 logger.debug("No active trackers to poll")
                 return
             
-            # Split by provider type
+            # Split by provider type — only known types are routed; unknowns are logged and skipped
             tracksolid_trackers = [t for t in trackers if (t.tag_type or "").lower() == "tracksolid"]
-            mzone_trackers = [t for t in trackers if (t.tag_type or "").lower() != "tracksolid"]
+            mzone_trackers      = [t for t in trackers if (t.tag_type or "scope").lower() == "scope"]
+            unknown_trackers    = [t for t in trackers
+                                   if (t.tag_type or "scope").lower() not in ("tracksolid", "scope")]
+            for t in unknown_trackers:
+                logger.warning("⚠️  Tracker IMEI %s has unrecognised tag_type '%s' — skipping", t.imei, t.tag_type)
 
             updated_count = 0
 
