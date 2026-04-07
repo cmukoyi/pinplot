@@ -379,13 +379,11 @@ class _TagTypeHint extends StatelessWidget {
 
     switch (type) {
       case BleTagType.trackSolid:
-        hint = 'The IMEI will be verified against the Beacontelematics '
-            'TrackSolid account before the tag is saved.';
+        hint = 'Choose your tag type';
         icon = Icons.verified_outlined;
         break;
       case BleTagType.scope:
-        hint = 'Scope tags are matched against the Scope / MZone platform. '
-            'The asset will appear on the map once active.';
+        hint = 'Choose your tag type';
         icon = Icons.info_outline;
         break;
     }

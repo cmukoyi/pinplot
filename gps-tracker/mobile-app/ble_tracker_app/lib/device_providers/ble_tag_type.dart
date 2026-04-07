@@ -4,8 +4,8 @@
 /// Add a new value here (and a matching provider) to support a new
 /// device platform.
 enum BleTagType {
-  trackSolid('tracksolid', 'TrackSolid'),
-  scope('scope', 'Scope');
+  trackSolid('tracksolid', 'Series 2'),
+  scope('scope', 'Series 1');
 
   const BleTagType(this.apiValue, this.displayName);
 
