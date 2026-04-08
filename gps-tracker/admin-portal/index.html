@@ -1235,6 +1235,22 @@
             }
         });
 
+        // Global 401 handler — called whenever any API request gets an expired/invalid token.
+        // Clears the session and forces re-login.
+        function handle401() {
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('currentUser');
+            authToken = null;
+            currentUser = null;
+            showLoginPage();
+            // Show a friendly message on the login form
+            const errEl = document.getElementById('loginError');
+            if (errEl) {
+                errEl.textContent = 'Your session has expired. Please log in again.';
+                errEl.style.display = 'block';
+            }
+        }
+
         function showLoginPage() {
             document.getElementById('loginPage').style.display = 'flex';
             document.getElementById('dashboardPage').style.display = 'none';
@@ -1665,14 +1681,20 @@
         }
 
         // APP FEATURES
+        let _featuresLoaded = false; // guard: don't auto-save before first load completes
+
         async function loadFeatures() {
+            _featuresLoaded = false;
             document.getElementById('featuresLoadError').style.display = 'none';
+            document.getElementById('featuresSaveMsg').style.display = 'none';
             try {
                 const response = await fetch(`${API_URL}/api/admin/app-features`, {
                     headers: { 'Authorization': `Bearer ${authToken}` }
                 });
+                if (response.status === 401) { handle401(); return; }
                 if (!response.ok) throw new Error(`Server returned HTTP ${response.status}`);
                 const data = await response.json();
+                _featuresLoaded = true; // set BEFORE assigning checked so onchange won't fire a bad save
                 document.getElementById('feat_show_map').checked       = data.show_map;
                 document.getElementById('feat_show_journey').checked   = data.show_journey;
                 document.getElementById('feat_show_assets').checked    = data.show_assets;
@@ -1687,6 +1709,7 @@
         }
 
         async function saveFeatures() {
+            if (!_featuresLoaded) return; // ignore any onchange fired before load completes
             const msgEl = document.getElementById('featuresSaveMsg');
             msgEl.style.display = 'none';
             const payload = {
@@ -1706,6 +1729,7 @@
                     },
                     body: JSON.stringify(payload)
                 });
+                if (response.status === 401) { handle401(); return; }
                 if (!response.ok) {
                     const err = await response.json().catch(() => ({}));
                     throw new Error(err.detail || 'Save failed');
