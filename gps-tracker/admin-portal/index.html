@@ -1671,7 +1671,7 @@
                 const response = await fetch(`${API_URL}/api/admin/app-features`, {
                     headers: { 'Authorization': `Bearer ${authToken}` }
                 });
-                if (!response.ok) throw new Error('Failed to load features');
+                if (!response.ok) throw new Error(`Server returned HTTP ${response.status}`);
                 const data = await response.json();
                 document.getElementById('feat_show_map').checked       = data.show_map;
                 document.getElementById('feat_show_journey').checked   = data.show_journey;

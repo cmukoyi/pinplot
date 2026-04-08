@@ -716,7 +716,16 @@ def get_app_features(
     admin = get_admin_from_request(request, db)
     if not check_role_permission(admin.role, "viewer"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires viewer role")
-    return _get_or_create_features(db)
+    try:
+        return _get_or_create_features(db)
+    except Exception as exc:
+        logger.error(f"app-features GET failed: {exc}")
+        db.rollback()
+        # Return safe defaults so the portal stays usable even if migration hasn't run
+        return AppFeaturesSchema(
+            show_map=True, show_journey=True, show_assets=True,
+            show_scan=True, show_settings=True, show_solutions=False,
+        )
 
 
 @router.put("/app-features", response_model=AppFeaturesSchema)
