@@ -333,6 +333,26 @@
             display: block;
         }
 
+        /* FEATURE TOGGLE ROWS */
+        .feature-toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .feature-toggle-row:hover { background: #f9fafb; }
+        .feature-toggle-label { font-weight: 500; color: #111; }
+        .feature-toggle-cb {
+            width: 44px;
+            height: 24px;
+            cursor: pointer;
+            accent-color: #4f46e5;
+        }
+
         /* CARDS */
         .card {
             background: white;
@@ -761,6 +781,12 @@
                             <span>Audit</span>
                         </button>
                     </li>
+                    <li class="sidebar-item">
+                        <button class="sidebar-link" onclick="switchTab('features')">
+                            <span>🎛️</span>
+                            <span>Features</span>
+                        </button>
+                    </li>
                 </ul>
 
                 <div style="position: absolute; bottom: 24px; left: 24px; right: 24px;">
@@ -1038,6 +1064,50 @@
                     </div>
 
                     <!-- AUDIT TAB -->
+                    <!-- ===== FEATURES TAB ===== -->
+                    <div id="features" class="tab-content">
+                        <div class="page-header">
+                            <h2 class="page-title">App Features</h2>
+                            <p class="page-subtitle">Toggle which tabs are visible in the Pinplot mobile app</p>
+                        </div>
+
+                        <div class="card">
+                            <p style="margin-bottom:20px;color:var(--text-secondary)">
+                                Changes take effect the next time a user opens the app (or re-logs in).
+                            </p>
+
+                            <div id="featuresLoadError" class="alert alert-error" style="display:none"></div>
+                            <div id="featuresSaveMsg" style="display:none;margin-bottom:16px"></div>
+
+                            <div style="display:flex;flex-direction:column;gap:16px;max-width:400px">
+                                <label class="feature-toggle-row">
+                                    <span class="feature-toggle-label">Map</span>
+                                    <input type="checkbox" id="feat_show_map" class="feature-toggle-cb" onchange="saveFeatures()">
+                                </label>
+                                <label class="feature-toggle-row">
+                                    <span class="feature-toggle-label">Journey</span>
+                                    <input type="checkbox" id="feat_show_journey" class="feature-toggle-cb" onchange="saveFeatures()">
+                                </label>
+                                <label class="feature-toggle-row">
+                                    <span class="feature-toggle-label">Assets</span>
+                                    <input type="checkbox" id="feat_show_assets" class="feature-toggle-cb" onchange="saveFeatures()">
+                                </label>
+                                <label class="feature-toggle-row">
+                                    <span class="feature-toggle-label">Scan</span>
+                                    <input type="checkbox" id="feat_show_scan" class="feature-toggle-cb" onchange="saveFeatures()">
+                                </label>
+                                <label class="feature-toggle-row">
+                                    <span class="feature-toggle-label">Settings</span>
+                                    <input type="checkbox" id="feat_show_settings" class="feature-toggle-cb" onchange="saveFeatures()">
+                                </label>
+                                <label class="feature-toggle-row">
+                                    <span class="feature-toggle-label">Solutions <em style="font-size:11px;color:var(--text-secondary)">(new tab)</em></span>
+                                    <input type="checkbox" id="feat_show_solutions" class="feature-toggle-cb" onchange="saveFeatures()">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
                     <div id="audit" class="tab-content">
                         <div class="page-header">
                             <h2 class="page-title">Audit Logs</h2>
@@ -1240,7 +1310,8 @@
                 'logs': 'Application Logs',
                 'billing': 'Billing & Usage',
                 'users': 'Admin Users',
-                'audit': 'Audit Logs'
+                'audit': 'Audit Logs',
+                'features': 'App Features'
             };
             document.getElementById('pageTitle').textContent = titles[tabName];
 
@@ -1249,6 +1320,7 @@
             if (tabName === 'billing') loadBillingData();
             if (tabName === 'users') loadAdminUsers();
             if (tabName === 'audit') loadAuditLogs();
+            if (tabName === 'features') loadFeatures();
         }
 
         // DASHBOARD
@@ -1589,6 +1661,61 @@
                 }
             } catch (error) {
                 console.error('Error loading audit logs:', error);
+            }
+        }
+
+        // APP FEATURES
+        async function loadFeatures() {
+            document.getElementById('featuresLoadError').style.display = 'none';
+            try {
+                const response = await fetch(`${API_URL}/api/admin/app-features`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (!response.ok) throw new Error('Failed to load features');
+                const data = await response.json();
+                document.getElementById('feat_show_map').checked       = data.show_map;
+                document.getElementById('feat_show_journey').checked   = data.show_journey;
+                document.getElementById('feat_show_assets').checked    = data.show_assets;
+                document.getElementById('feat_show_scan').checked      = data.show_scan;
+                document.getElementById('feat_show_settings').checked  = data.show_settings;
+                document.getElementById('feat_show_solutions').checked = data.show_solutions;
+            } catch (error) {
+                const el = document.getElementById('featuresLoadError');
+                el.textContent = 'Could not load features: ' + error.message;
+                el.style.display = 'block';
+            }
+        }
+
+        async function saveFeatures() {
+            const msgEl = document.getElementById('featuresSaveMsg');
+            msgEl.style.display = 'none';
+            const payload = {
+                show_map:       document.getElementById('feat_show_map').checked,
+                show_journey:   document.getElementById('feat_show_journey').checked,
+                show_assets:    document.getElementById('feat_show_assets').checked,
+                show_scan:      document.getElementById('feat_show_scan').checked,
+                show_settings:  document.getElementById('feat_show_settings').checked,
+                show_solutions: document.getElementById('feat_show_solutions').checked,
+            };
+            try {
+                const response = await fetch(`${API_URL}/api/admin/app-features`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.detail || 'Save failed');
+                }
+                msgEl.textContent = '✅ Saved';
+                msgEl.style.cssText = 'display:block;color:green;font-weight:500';
+                setTimeout(() => { msgEl.style.display = 'none'; }, 2500);
+            } catch (error) {
+                msgEl.textContent = '❌ ' + error.message;
+                msgEl.style.cssText = 'display:block;color:red;font-weight:500';
             }
         }
 

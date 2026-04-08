@@ -11,6 +11,7 @@ import logging
 
 from app.database import get_db
 from app.models_admin import AdminUser, AppLog, AuditLog, BillingData, BillingTransaction
+from app.models import AppFeatures
 from app.admin_auth import (
     hash_password, verify_password, create_admin_access_token,
     decode_admin_token, check_role_permission
@@ -678,3 +679,64 @@ async def get_container_logs(
         result = [r for r in result if search_lower in r["message"].lower()]
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# App Feature Flags
+# ---------------------------------------------------------------------------
+
+class AppFeaturesSchema(BaseModel):
+    show_map: bool
+    show_journey: bool
+    show_assets: bool
+    show_scan: bool
+    show_settings: bool
+    show_solutions: bool
+
+    class Config:
+        from_attributes = True
+
+
+def _get_or_create_features(db: Session) -> AppFeatures:
+    row = db.query(AppFeatures).filter(AppFeatures.id == "global").first()
+    if not row:
+        row = AppFeatures(id="global")
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return row
+
+
+@router.get("/app-features", response_model=AppFeaturesSchema)
+def get_app_features(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Return the global app feature flags (admin auth required)."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "viewer"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires viewer role")
+    return _get_or_create_features(db)
+
+
+@router.put("/app-features", response_model=AppFeaturesSchema)
+def update_app_features(
+    data: AppFeaturesSchema,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Update the global app feature flags (manager or above required)."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires manager role")
+
+    row = _get_or_create_features(db)
+    row.show_map       = data.show_map
+    row.show_journey   = data.show_journey
+    row.show_assets    = data.show_assets
+    row.show_scan      = data.show_scan
+    row.show_settings  = data.show_settings
+    row.show_solutions = data.show_solutions
+    db.commit()
+    db.refresh(row)
+    return row

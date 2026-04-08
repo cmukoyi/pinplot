@@ -20,6 +20,8 @@ import 'package:ble_tracker_app/screens/home_screen.dart';
 import 'package:ble_tracker_app/screens/alerts_screen.dart';
 import 'package:ble_tracker_app/screens/trip_detail_screen.dart';
 import 'package:ble_tracker_app/screens/scan_screen.dart';
+import 'package:ble_tracker_app/screens/solutions_screen.dart';
+import 'package:ble_tracker_app/services/app_features_service.dart';
 
 // App version
 const String APP_VERSION = '1.0.0';
@@ -38,6 +40,7 @@ class _MapScreenState extends State<MapScreen> {
   final _poiService = POIService();
   final _deploymentMonitor = DeploymentMonitorService();
   int _selectedIndex = 0;
+  AppFeatures _features = AppFeatures.defaults();
   int _unreadAlertCount = 0;
   Timer? _locationRefreshTimer; // Auto-refresh timer
   String? _userEmail; // Store logged-in user's email
@@ -117,6 +120,7 @@ class _MapScreenState extends State<MapScreen> {
     _loadTags();
     _loadUnreadAlertCount();
     _loadPOIs();
+    _loadAppFeatures();
     
     // Auto-refresh locations every 60 seconds for armed geofences
     _locationRefreshTimer = Timer.periodic(Duration(seconds: 60), (timer) {
@@ -125,6 +129,20 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
   
+  /// Load app feature flags from backend (cached fallback on error)
+  Future<void> _loadAppFeatures() async {
+    try {
+      final features = await AppFeaturesService().fetchFeatures();
+      if (mounted) {
+        setState(() {
+          _features = features;
+        });
+      }
+    } catch (e) {
+      // Keep defaults — app stays fully functional
+    }
+  }
+
   /// Load all custom vehicle names from persistent storage
   Future<void> _loadCustomVehicleNames() async {
     try {
@@ -1599,6 +1617,10 @@ View on $mapProvider to see the vehicle location.''';
             offstage: _selectedIndex != 4,
             child: _buildSettingsView(),
           ),
+          Offstage(
+            offstage: _selectedIndex != 5,
+            child: const SolutionsScreen(),
+          ),
           
           // Top Navigation Bar
           Positioned(
@@ -1757,38 +1779,34 @@ View on $mapProvider to see the vehicle location.''';
           child: Container(
             height: 65,
             child: Row(
-              children: [
-                _buildNavItem(
-                  icon: Icons.map_outlined,
-                  label: 'MAP',
-                  index: 0,
-                ),
-                _buildNavItem(
-                  icon: Icons.route,
-                  label: 'JOURNEYS',
-                  index: 1,
-                ),
-                _buildNavItem(
-                  icon: Icons.widgets, // Very distinctive icon - 4 squares
-                  label: 'ASSETS',
-                  index: 2,
-                ),
-                _buildNavItem(
-                  icon: Icons.bluetooth_searching,
-                  label: 'SCAN',
-                  index: 3,
-                ),
-                _buildNavItem(
-                  icon: Icons.settings,
-                  label: 'SETTINGS',
-                  index: 4,
-                ),
-              ],
+              children: _buildNavItems(),
             ),
           ),
         ),
       ),
     );
+  }
+
+  /// Build the list of bottom-nav items, filtering by feature flags.
+  /// The physical index stored in [_selectedIndex] always matches the
+  /// position of the tab in the [Offstage] stack (0-5), so we keep a
+  /// mapping from physical index → visibility.
+  List<Widget> _buildNavItems() {
+    final specs = [
+      if (_features.showMap)
+        _NavSpec(icon: Icons.map_outlined,        label: 'MAP',      index: 0),
+      if (_features.showJourney)
+        _NavSpec(icon: Icons.route,               label: 'JOURNEYS', index: 1),
+      if (_features.showAssets)
+        _NavSpec(icon: Icons.widgets,             label: 'ASSETS',   index: 2),
+      if (_features.showScan)
+        _NavSpec(icon: Icons.bluetooth_searching, label: 'SCAN',     index: 3),
+      if (_features.showSettings)
+        _NavSpec(icon: Icons.settings,            label: 'SETTINGS', index: 4),
+      if (_features.showSolutions)
+        _NavSpec(icon: Icons.lightbulb_outline,   label: 'SOLUTIONS',index: 5),
+    ];
+    return specs.map((s) => _buildNavItem(icon: s.icon, label: s.label, index: s.index)).toList();
   }
 
   Widget _buildNavItem({
@@ -4896,5 +4914,13 @@ class _CustomDateRangeDialogState extends State<_CustomDateRangeDialog> {
   int _getDayCount() {
     return _endDate.difference(_startDate).inDays + 1;
   }
+}
+
+/// Simple data holder used by [_MapScreenState._buildNavItems].
+class _NavSpec {
+  final IconData icon;
+  final String label;
+  final int index;
+  const _NavSpec({required this.icon, required this.label, required this.index});
 }
 

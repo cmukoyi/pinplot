@@ -199,6 +199,25 @@ class GeofenceAlert(Base):
     user = relationship("User")
 
 
+class AppFeatures(Base):
+    """Global feature flags that control which tabs/features are visible
+    in the mobile app. There is exactly one row (id='global').
+
+    The admin portal reads and writes this row via the /api/v1/admin/app-features
+    endpoint. The mobile app fetches it on login and caches locally.
+    """
+    __tablename__ = "app_features"
+
+    id = Column(String(36), primary_key=True, default='global')
+    show_map       = Column(Boolean, nullable=False, default=True)
+    show_journey   = Column(Boolean, nullable=False, default=True)
+    show_assets    = Column(Boolean, nullable=False, default=True)
+    show_scan      = Column(Boolean, nullable=False, default=True)
+    show_settings  = Column(Boolean, nullable=False, default=True)
+    show_solutions = Column(Boolean, nullable=False, default=False)
+    updated_at     = Column(DateTime(timezone=True), onupdate=func.now())
+
+
 class BeaconSighting(Base):
     """Crowdsourced BLE tag sighting reported by a user's phone.
 

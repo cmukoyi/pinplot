@@ -13,7 +13,7 @@ import logging
 from sqlalchemy.orm import Session
 
 from app.database import get_db, init_db
-from app.models import User, VerificationPIN, BLETag, POI, POITrackerLink, GeofenceAlert, PasswordResetToken, GeofenceState
+from app.models import User, VerificationPIN, BLETag, POI, POITrackerLink, GeofenceAlert, PasswordResetToken, GeofenceState, AppFeatures
 from app.models_admin import AdminUser, AppLog, AuditLog, BillingData
 from app.auth import verify_password, get_password_hash, create_access_token, decode_token
 from app.admin_auth import hash_password as admin_hash_password
@@ -2509,6 +2509,30 @@ def get_trips_v1(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching trips: {str(e)}"
         )
+
+
+# ---------------------------------------------------------------------------
+# App Feature Flags (public — mobile app fetches on login)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/v1/app-features")
+def get_app_features_public(db: Session = Depends(get_db)):
+    """Return the global app feature flags. No auth required so the app
+    can fetch them before (or immediately after) login."""
+    row = db.query(AppFeatures).filter(AppFeatures.id == "global").first()
+    if not row:
+        row = AppFeatures(id="global")
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return {
+        "show_map":       row.show_map,
+        "show_journey":   row.show_journey,
+        "show_assets":    row.show_assets,
+        "show_scan":      row.show_scan,
+        "show_settings":  row.show_settings,
+        "show_solutions": row.show_solutions,
+    }
 
 
 if __name__ == "__main__":
