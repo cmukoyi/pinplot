@@ -8,7 +8,7 @@ class SolutionsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundLight,
+      backgroundColor: Colors.grey[50],
       body: SafeArea(
         child: Center(
           child: Padding(
