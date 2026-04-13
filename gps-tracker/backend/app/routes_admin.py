@@ -767,7 +767,7 @@ class UserGroupCreate(BaseModel):
 
 
 class PortalUserOut(BaseModel):
-    id: str
+    id: UUID
     email: str
     first_name: Optional[str]
     last_name: Optional[str]
@@ -779,11 +779,11 @@ class PortalUserOut(BaseModel):
 
 
 class UserGroupOut(BaseModel):
-    id: str
+    id: UUID
     name: str
     slug: str
     is_active: bool
-    created_at: datetime
+    created_at: Optional[datetime] = None
     portal_users: List[PortalUserOut] = []
 
     class Config:
@@ -856,7 +856,16 @@ def create_usergroup(
     )
     db.add(portal_admin)
     db.commit()
-    db.refresh(group)
+
+    # Re-query with relationships loaded so Pydantic serialization doesn't
+    # trigger a lazy-load on an expired object
+    from sqlalchemy.orm import selectinload as _selectinload
+    group = (
+        db.query(UserGroup)
+        .options(_selectinload(UserGroup.portal_users))
+        .filter(UserGroup.id == group.id)
+        .first()
+    )
 
     return UserGroupCreateResponse(
         usergroup=UserGroupOut.model_validate(group),
@@ -873,7 +882,13 @@ def list_usergroups(
     admin = get_admin_from_request(request, db)
     if not check_role_permission(admin.role, "viewer"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires viewer role")
-    groups = db.query(UserGroup).order_by(UserGroup.created_at.desc()).all()
+    from sqlalchemy.orm import selectinload as _selectinload
+    groups = (
+        db.query(UserGroup)
+        .options(_selectinload(UserGroup.portal_users))
+        .order_by(UserGroup.created_at.desc())
+        .all()
+    )
     return [UserGroupOut.model_validate(g) for g in groups]
 
 

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import List, Optional
+from uuid import UUID
 from pydantic import BaseModel, EmailStr
 import jwt
 import os
@@ -35,7 +36,7 @@ class PortalLoginRequest(BaseModel):
 
 
 class PortalUserOut(BaseModel):
-    id: str
+    id: UUID
     email: str
     first_name: Optional[str]
     last_name: Optional[str]
@@ -46,7 +47,7 @@ class PortalUserOut(BaseModel):
 
 
 class UserGroupOut(BaseModel):
-    id: str
+    id: UUID
     name: str
     slug: str
 
