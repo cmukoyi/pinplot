@@ -18,7 +18,7 @@ from app.database import get_db
 from app.models import UserGroup, PortalUser
 from app.admin_auth import hash_password, verify_password
 
-router = APIRouter(prefix="/api/v1/portal", tags=["portal"])
+router = APIRouter(prefix="/api/portal", tags=["portal"])
 logger = logging.getLogger(__name__)
 
 PORTAL_SECRET_KEY = os.getenv("PORTAL_SECRET_KEY", os.getenv("ADMIN_SECRET_KEY", "portal-secret-key-change-me"))
