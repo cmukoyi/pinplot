@@ -96,6 +96,35 @@ services:
       - pinplot_network
     restart: unless-stopped
 
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: pinplot_mosquitto
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+    networks:
+      - pinplot_network
+    restart: unless-stopped
+
+  mqtt-bridge:
+    build:
+      context: ./mqtt-bridge
+      dockerfile: Dockerfile
+    container_name: pinplot_mqtt_bridge
+    environment:
+      # URL of the Pareto Anywhere Socket.IO server (container must be on this network)
+      - PARETO_URL=http://pareto-anywhere:3001
+      # Internal MQTT broker
+      - MQTT_URL=mqtt://mosquitto:1883
+      # Gateway positions: JSON map of receiverId (lowercase hex, no colons) → {x, y}
+      # Example: '{"aabbccddeeff":{"x":100,"y":200},"112233445566":{"x":400,"y":350}}'
+      - GATEWAY_POSITIONS={}
+    depends_on:
+      - mosquitto
+    networks:
+      - pinplot_network
+    restart: unless-stopped
+
   nginx:
     image: nginx:alpine
     container_name: pinplot_nginx
@@ -111,6 +140,7 @@ services:
       - admin-portal
       - customer
       - flutter-web
+      - mosquitto
     networks:
       - pinplot_network
     restart: unless-stopped
@@ -119,6 +149,8 @@ volumes:
   pinplot_postgres_data:
     driver: local
   nginx_logs:
+    driver: local
+  mosquitto_data:
     driver: local
 
 networks:

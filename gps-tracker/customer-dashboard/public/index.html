@@ -458,9 +458,9 @@
                 <div class="card" id="mqttCard" style="display:none;padding:16px 24px">
                     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
                         <span style="font-weight:600;font-size:14px;white-space:nowrap">Pareto Anywhere:</span>
-                        <input id="mqttUrlInput" type="text" placeholder="ws://192.168.1.x:9001"
+                        <input id="mqttUrlInput" type="text" placeholder="wss://pinplot.me/mqtt"
                             style="flex:1;min-width:200px;padding:8px 12px;border:2px solid var(--border);border-radius:8px;font-size:13px">
-                        <input id="mqttTopicInput" type="text" placeholder="raddec/#" value="raddec/#"
+                        <input id="mqttTopicInput" type="text" placeholder="position/#" value="position/#"
                             style="width:140px;padding:8px 12px;border:2px solid var(--border);border-radius:8px;font-size:13px">
                         <button id="mqttConnBtn" class="btn btn-primary btn-small" onclick="toggleMQTT()">Connect</button>
                         <span id="mqttStatus" style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--gray)">
@@ -671,13 +671,13 @@
         <p style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);margin-bottom:10px">Pareto Anywhere / MQTT Settings</p>
         <div class="form-group">
             <label>Broker WebSocket URL</label>
-            <input type="text" id="newBldgMqttUrl" placeholder="ws://192.168.1.100:9001">
-            <p style="font-size:12px;color:var(--gray);margin-top:4px">Mosquitto needs <code>listener 9001 / protocol websockets</code> enabled.</p>
+            <input type="text" id="newBldgMqttUrl" placeholder="wss://pinplot.me/mqtt">
+            <p style="font-size:12px;color:var(--gray);margin-top:4px">Use <code>wss://pinplot.me/mqtt</code> (routed through nginx → Mosquitto).</p>
         </div>
         <div class="form-group">
             <label>Topic</label>
-            <input type="text" id="newBldgMqttTopic" value="raddec/#" placeholder="raddec/#">
-            <p style="font-size:12px;color:var(--gray);margin-top:4px">Pareto Anywhere publishes raddecs on <code>raddec/#</code> by default.</p>
+            <input type="text" id="newBldgMqttTopic" value="position/#" placeholder="position/#">
+            <p style="font-size:12px;color:var(--gray);margin-top:4px">The pinplot mqtt-bridge publishes on <code>position/#</code> and raw raddecs on <code>raddec/#</code>.</p>
         </div>
         <div style="display:flex;gap:10px;margin-bottom:6px">
             <div class="form-group" style="flex:1;margin-bottom:0">
@@ -999,7 +999,7 @@ function saveNewBuilding() {
     const name = document.getElementById('newBldgName').value.trim();
     if (!name) { alert('Please enter a building name.'); return; }
     const mqttUrl   = document.getElementById('newBldgMqttUrl').value.trim();
-    const mqttTopic = document.getElementById('newBldgMqttTopic').value.trim() || 'raddec/#';
+    const mqttTopic = document.getElementById('newBldgMqttTopic').value.trim() || 'position/#';
     const mapW = parseInt(document.getElementById('newBldgW').value) || 800;
     const mapH = parseInt(document.getElementById('newBldgH').value) || 500;
     const file = document.getElementById('newBldgFile').files[0];
@@ -1011,7 +1011,7 @@ function saveNewBuilding() {
         renderBuildingDropdown();
         closeModal('createBuildingModal');
         ['newBldgName','newBldgMqttUrl'].forEach(i => document.getElementById(i).value = '');
-        document.getElementById('newBldgMqttTopic').value = 'raddec/#';
+        document.getElementById('newBldgMqttTopic').value = 'position/#';
         document.getElementById('newBldgW').value = '800';
         document.getElementById('newBldgH').value = '500';
         document.getElementById('newBldgFile').value = '';
@@ -1040,7 +1040,7 @@ function selectBuilding(id) {
     if (!bldg) return;
     document.getElementById('bldgMapTitle').textContent  = bldg.name;
     document.getElementById('mqttUrlInput').value        = bldg.mqttUrl   || '';
-    document.getElementById('mqttTopicInput').value      = bldg.mqttTopic || 'raddec/#';
+    document.getElementById('mqttTopicInput').value      = bldg.mqttTopic || 'position/#';
     document.getElementById('bStats_gw').textContent     = (bldg.gateways || []).length || '—';
     initIndoorMap(bldg);
 }
@@ -1130,7 +1130,7 @@ function setMQTTStatus(state) {
 function toggleMQTT() {
     if (_mqttClient && _mqttClient.connected) { disconnectMQTT(); return; }
     const url   = document.getElementById('mqttUrlInput').value.trim();
-    const topic = document.getElementById('mqttTopicInput').value.trim() || 'raddec/#';
+    const topic = document.getElementById('mqttTopicInput').value.trim() || 'position/#';
     if (!url) { showTabAlert('building', 'Enter the Pareto Anywhere broker WebSocket URL first.', 'error'); return; }
 
     // Save URL + topic back to building record
@@ -1176,24 +1176,34 @@ function startMQTTRateTimer() {
     }, 1000);
 }
 
-// Parse Pareto Anywhere raddec/spatem messages and move tag markers
+// Parse incoming MQTT messages and move tag markers on the indoor map.
+// Handles three payload formats:
+//   1. Bridge position:  { deviceId, x, y, rssi, nearestGateway, timestamp }
+//   2. Pareto raddec:    { transmitterId, rssiSignature, position:{x,y}|null, ... }
+//   3. Pareto spatem:    GeoJSON FeatureCollection with { type:'spatem', features:[...] }
 function handleParetoMessage(data) {
     _mqttMsgCount++;
     if (!_indoorMap) return;
 
     const bldg = _buildings.find(b => b.id === _activeBldg);
-    const W = bldg?.mapW || 800, H = bldg?.mapH || 500;
+    const H = bldg?.mapH || 500;
 
-    // Pareto Anywhere raddec format
     let deviceId, x, y, rssi;
-    if (data.transmitterId) {
-        // raddec: { transmitterId, rssiSignature:[{receiverId,rssi}...], ..., position:{x,y} or no position yet }
+
+    if (data.deviceId != null && (data.x != null || data.y != null)) {
+        // Format 1: pinplot mqtt-bridge position payload
+        deviceId = data.deviceId;
+        x        = data.x;
+        y        = data.y;
+        rssi     = data.rssi;
+    } else if (data.transmitterId) {
+        // Format 2: raw Pareto Anywhere raddec
         deviceId = data.transmitterId;
         rssi     = data.rssiSignature?.[0]?.rssi;
         x        = data.position?.x;
         y        = data.position?.y;
     } else if (data.type === 'spatem' || data.features) {
-        // GeoJSON spatem
+        // Format 3: GeoJSON spatem from chimps
         const feat = (data.features || data.data?.features)?.[0];
         if (!feat) return;
         deviceId = data.deviceId || feat.properties?.deviceId;
