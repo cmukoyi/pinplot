@@ -6,6 +6,7 @@
     <title>Pinplot — Customer Portal</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -453,11 +454,27 @@
                     </div>
                 </div>
 
+                <!-- MQTT connection card (shown when building selected) -->
+                <div class="card" id="mqttCard" style="display:none;padding:16px 24px">
+                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                        <span style="font-weight:600;font-size:14px;white-space:nowrap">Pareto Anywhere:</span>
+                        <input id="mqttUrlInput" type="text" placeholder="ws://192.168.1.x:9001"
+                            style="flex:1;min-width:200px;padding:8px 12px;border:2px solid var(--border);border-radius:8px;font-size:13px">
+                        <input id="mqttTopicInput" type="text" placeholder="raddec/#" value="raddec/#"
+                            style="width:140px;padding:8px 12px;border:2px solid var(--border);border-radius:8px;font-size:13px">
+                        <button id="mqttConnBtn" class="btn btn-primary btn-small" onclick="toggleMQTT()">Connect</button>
+                        <span id="mqttStatus" style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--gray)">
+                            <span id="mqttDot" style="width:10px;height:10px;border-radius:50%;background:#d1d5db;display:inline-block"></span>
+                            <span id="mqttStatusText">Disconnected</span>
+                        </span>
+                    </div>
+                </div>
+
                 <!-- Stats row -->
-                <div class="stats-grid" style="margin-bottom:0" id="bldgStats" style="display:none">
+                <div class="stats-grid" id="bldgStats" style="display:none;margin-bottom:0">
                     <div class="stat-card"><div class="stat-value" id="bStats_tags">0</div><div class="stat-label">Active Tags</div></div>
-                    <div class="stat-card"><div class="stat-value" id="bStats_gw">0</div><div class="stat-label">Gateways</div></div>
-                    <div class="stat-card"><div class="stat-value" id="bStats_rate">0</div><div class="stat-label">Updates/sec</div></div>
+                    <div class="stat-card"><div class="stat-value" id="bStats_gw">—</div><div class="stat-label">Gateways Configured</div></div>
+                    <div class="stat-card"><div class="stat-value" id="bStats_rate">0</div><div class="stat-label">Msg/sec</div></div>
                 </div>
 
                 <!-- Map card -->
@@ -468,26 +485,37 @@
                     <div id="bldgPlaceholder" class="floor-plan-area">
                         <span class="fp-icon">🏗️</span>
                         <p style="font-weight:600;color:var(--dark)">No building selected</p>
-                        <p style="font-size:13px">Create a building and upload a floor plan to start tracking BLE tags indoors.</p>
+                        <p style="font-size:13px">Create a building, upload a floor plan, then connect to your Pareto Anywhere broker to see live BLE tags.</p>
                     </div>
 
                     <!-- Map container (hidden until building selected) -->
                     <div id="bldgMapWrap" style="display:none">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
                             <span style="font-weight:700;font-size:15px" id="bldgMapTitle">Floor Plan</span>
-                            <div style="display:flex;gap:8px">
-                                <button class="btn btn-secondary btn-small" onclick="openModal('uploadFloorModal')">⬆ Update Floor Plan</button>
-                                <button class="btn btn-small" style="background:#f3f4f6;color:var(--dark)" onclick="toggleSimulation()">⏸ Pause</button>
-                            </div>
+                            <button class="btn btn-secondary btn-small" onclick="openModal('uploadFloorModal')">⬆ Update Floor Plan</button>
                         </div>
 
-                        <div id="indoorMap" style="width:100%;height:440px;border-radius:10px;border:1px solid var(--border);overflow:hidden"></div>
+                        <div id="indoorMap" style="width:100%;height:420px;border-radius:10px;border:1px solid var(--border);overflow:hidden"></div>
 
                         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:13px;color:var(--gray)">
                             <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:50%;background:#378ADD;border:2px solid #185FA5;display:inline-block"></span>ESP32 Gateway</span>
-                            <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:50%;background:#1D9E75;display:inline-block"></span>BLE Tag</span>
-                            <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:50%;background:#E24B4A;border:2px solid #A32D2D;display:inline-block"></span>Tag in Alert Zone</span>
+                            <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:50%;background:#1D9E75;display:inline-block"></span>BLE Tag (live)</span>
+                            <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:50%;background:#f59e0b;display:inline-block"></span>Tag &gt;30s stale</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Live tag list -->
+                <div class="card" id="tagListCard" style="display:none">
+                    <div class="card-header">
+                        <span class="card-title">Live Tag Positions</span>
+                        <button class="btn btn-small" style="background:#f3f4f6;color:var(--dark)" onclick="clearStaleTags()">Clear stale</button>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead><tr><th>Device ID</th><th>X</th><th>Y</th><th>RSSI (dBm)</th><th>Last Seen</th></tr></thead>
+                            <tbody id="liveTagTable"><tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray)">Waiting for tag data…</td></tr></tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -622,7 +650,7 @@
 
 <!-- Create Building -->
 <div id="createBuildingModal" class="modal">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width:520px">
         <div class="modal-header">
             <span class="modal-title">New Building / Floor</span>
             <button class="modal-close" onclick="closeModal('createBuildingModal')">×</button>
@@ -632,7 +660,7 @@
             <input type="text" id="newBldgName" placeholder="e.g. Head Office — Floor 2" maxlength="80">
         </div>
         <div class="form-group">
-            <label>Floor Plan Image (optional — can upload later)</label>
+            <label>Floor Plan Image <span style="color:var(--gray);font-weight:400">(optional — upload later via map)</span></label>
             <div class="drop-zone" onclick="document.getElementById('newBldgFile').click()" style="padding:20px">
                 <div class="dz-icon" style="font-size:28px">🖼️</div>
                 <p id="newBldgFileName"><strong>Click to browse</strong> or drag & drop</p>
@@ -640,7 +668,29 @@
             <input type="file" id="newBldgFile" accept="image/*" style="display:none"
                 onchange="document.getElementById('newBldgFileName').innerHTML='<strong>'+this.files[0].name+'</strong>'">
         </div>
-        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+        <p style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);margin-bottom:10px">Pareto Anywhere / MQTT Settings</p>
+        <div class="form-group">
+            <label>Broker WebSocket URL</label>
+            <input type="text" id="newBldgMqttUrl" placeholder="ws://192.168.1.100:9001">
+            <p style="font-size:12px;color:var(--gray);margin-top:4px">Mosquitto needs <code>listener 9001 / protocol websockets</code> enabled.</p>
+        </div>
+        <div class="form-group">
+            <label>Topic</label>
+            <input type="text" id="newBldgMqttTopic" value="raddec/#" placeholder="raddec/#">
+            <p style="font-size:12px;color:var(--gray);margin-top:4px">Pareto Anywhere publishes raddecs on <code>raddec/#</code> by default.</p>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:6px">
+            <div class="form-group" style="flex:1;margin-bottom:0">
+                <label>Map Width (px / chimps units)</label>
+                <input type="number" id="newBldgW" value="800" min="100" max="9999">
+            </div>
+            <div class="form-group" style="flex:1;margin-bottom:0">
+                <label>Map Height (px / chimps units)</label>
+                <input type="number" id="newBldgH" value="500" min="100" max="9999">
+            </div>
+        </div>
+        <p style="font-size:12px;color:var(--gray);margin-bottom:16px">Must match the coordinate space you define for gateway positions in Pareto Anywhere chimps.</p>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
             <button class="btn btn-secondary" onclick="closeModal('createBuildingModal')">Cancel</button>
             <button class="btn btn-primary" onclick="saveNewBuilding()">Create Building</button>
         </div>
@@ -916,14 +966,14 @@ function submitBulkTags() {
 // BUILDING — Pareto Anywhere / Leaflet indoor tracker
 // ══════════════════════════════════════════
 const BLDG_KEY = () => `pp_buildings_${_group?.id || 'local'}`;
-let _buildings   = [];   // [{ id, name, floorDataUrl }]
-let _activeBldg  = null; // currently selected building id
+let _buildings   = [];   // [{ id, name, floorDataUrl, mqttUrl, mqttTopic, mapW, mapH }]
+let _activeBldg  = null;
 let _indoorMap   = null;
-let _simRunning  = false;
-let _simInterval = null;
-let _simUpdates  = 0;
-let _tagMarkers  = {};
-let _tagData     = [];
+let _tagMarkers  = {};   // deviceId → L.marker
+let _tagMeta    = {};    // deviceId → { x, y, rssi, lastSeen }
+let _mqttClient  = null;
+let _mqttMsgCount = 0;
+let _mqttRateTimer = null;
 
 function loadBuildings() {
     try { _buildings = JSON.parse(localStorage.getItem(BLDG_KEY()) || '[]'); } catch { _buildings = []; }
@@ -948,46 +998,51 @@ function renderBuildingDropdown() {
 function saveNewBuilding() {
     const name = document.getElementById('newBldgName').value.trim();
     if (!name) { alert('Please enter a building name.'); return; }
+    const mqttUrl   = document.getElementById('newBldgMqttUrl').value.trim();
+    const mqttTopic = document.getElementById('newBldgMqttTopic').value.trim() || 'raddec/#';
+    const mapW = parseInt(document.getElementById('newBldgW').value) || 800;
+    const mapH = parseInt(document.getElementById('newBldgH').value) || 500;
     const file = document.getElementById('newBldgFile').files[0];
     const id = 'bldg_' + Date.now();
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = e => {
-            _buildings.push({ id, name, floorDataUrl: e.target.result });
-            saveBuildings();
-            renderBuildingDropdown();
-            closeModal('createBuildingModal');
-            document.getElementById('newBldgName').value = '';
-            document.getElementById('newBldgFile').value = '';
-            document.getElementById('newBldgFileName').innerHTML = '<strong>Click to browse</strong> or drag & drop';
-            selectBuilding(id);
-        };
-        reader.readAsDataURL(file);
-    } else {
-        _buildings.push({ id, name, floorDataUrl: null });
+    const record = { id, name, floorDataUrl: null, mqttUrl, mqttTopic, mapW, mapH };
+    const finish = () => {
+        _buildings.push(record);
         saveBuildings();
         renderBuildingDropdown();
         closeModal('createBuildingModal');
-        document.getElementById('newBldgName').value = '';
+        ['newBldgName','newBldgMqttUrl'].forEach(i => document.getElementById(i).value = '');
+        document.getElementById('newBldgMqttTopic').value = 'raddec/#';
+        document.getElementById('newBldgW').value = '800';
+        document.getElementById('newBldgH').value = '500';
+        document.getElementById('newBldgFile').value = '';
+        document.getElementById('newBldgFileName').innerHTML = '<strong>Click to browse</strong> or drag & drop';
         selectBuilding(id);
-    }
+    };
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = e => { record.floorDataUrl = e.target.result; finish(); };
+        reader.readAsDataURL(file);
+    } else { finish(); }
 }
 
 function selectBuilding(id) {
+    disconnectMQTT();
     _activeBldg = id || null;
     document.getElementById('buildingSelect').value = id || '';
-    if (!id) {
-        document.getElementById('bldgPlaceholder').style.display = 'flex';
-        document.getElementById('bldgMapWrap').style.display = 'none';
-        stopSimulation();
-        return;
-    }
+    const hidden = !id;
+    document.getElementById('bldgPlaceholder').style.display  = hidden ? 'flex'  : 'none';
+    document.getElementById('bldgMapWrap').style.display      = hidden ? 'none'  : 'block';
+    document.getElementById('bldgStats').style.display        = hidden ? 'none'  : 'grid';
+    document.getElementById('mqttCard').style.display         = hidden ? 'none'  : 'block';
+    document.getElementById('tagListCard').style.display      = hidden ? 'none'  : 'block';
+    if (!id) return;
     const bldg = _buildings.find(b => b.id === id);
     if (!bldg) return;
-    document.getElementById('bldgPlaceholder').style.display = 'none';
-    document.getElementById('bldgMapWrap').style.display = 'block';
-    document.getElementById('bldgMapTitle').textContent = bldg.name;
-    initIndoorMap(bldg.floorDataUrl);
+    document.getElementById('bldgMapTitle').textContent  = bldg.name;
+    document.getElementById('mqttUrlInput').value        = bldg.mqttUrl   || '';
+    document.getElementById('mqttTopicInput').value      = bldg.mqttTopic || 'raddec/#';
+    document.getElementById('bStats_gw').textContent     = (bldg.gateways || []).length || '—';
+    initIndoorMap(bldg);
 }
 
 function handleFloorPlan(file) {
@@ -1003,15 +1058,11 @@ function handleFloorPlan(file) {
         bldg.floorDataUrl = e.target.result;
         saveBuildings();
         closeModal('uploadFloorModal');
-        initIndoorMap(bldg.floorDataUrl);
+        initIndoorMap(bldg);
         showTabAlert('building', 'Floor plan updated.', 'success');
     };
     reader.readAsDataURL(file);
 }
-
-const W = 800, H = 500;
-
-function px(map, x, y) { return map.unproject([x, H - y], 2); }
 
 function makeDot(color, border) {
     return L.divIcon({
@@ -1021,43 +1072,17 @@ function makeDot(color, border) {
 }
 
 const gwSvg = `<svg width="22" height="22" viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" rx="4" fill="#185FA5" stroke="#0C447C" stroke-width="1.5"/><rect x="6" y="6" width="10" height="10" rx="2" fill="#B5D4F4"/></svg>`;
+const greenDot  = () => makeDot('#1D9E75','#085041');
+const staleDot  = () => makeDot('#f59e0b','#b45309');
 
-const defaultRooms = [
-    { name:"Zone A",   pts:[[20,20],[350,20],[350,230],[20,230]],  color:"#E6F1FB" },
-    { name:"Zone B",   pts:[[370,20],[600,20],[600,230],[370,230]],color:"#EAF3DE" },
-    { name:"Meeting",  pts:[[620,20],[780,20],[780,230],[620,230]],color:"#FAEEDA" },
-    { name:"Corridor", pts:[[20,250],[780,250],[780,300],[20,300]],color:"#F1EFE8" },
-    { name:"Lab",      pts:[[20,320],[400,320],[400,480],[20,480]],color:"#FBEAF0" },
-    { name:"Storage",  pts:[[420,320],[780,320],[780,480],[420,480]],color:"#EEEDFE" },
-];
+function bldgPx(map, x, y, H) { return map.unproject([x, H - y], 2); }
 
-const defaultGateways = [
-    { id:"GW-01", x:185, y:125 },
-    { id:"GW-02", x:500, y:125 },
-    { id:"GW-03", x:700, y:125 },
-    { id:"GW-04", x:210, y:400 },
-];
-
-const defaultTagDefs = [
-    { id:"TAG-A1", x:80,  y:80,  vx:0.8,  vy:0.5,  zone:[20,20,350,230]  },
-    { id:"TAG-A2", x:250, y:160, vx:-0.6, vy:0.9,  zone:[20,20,350,230]  },
-    { id:"TAG-B1", x:450, y:100, vx:1.0,  vy:-0.7, zone:[370,20,600,230] },
-    { id:"TAG-B2", x:530, y:190, vx:-0.5, vy:0.6,  zone:[370,20,600,230] },
-    { id:"TAG-M1", x:680, y:120, vx:0.4,  vy:0.8,  zone:[620,20,780,230] },
-    { id:"TAG-L1", x:150, y:380, vx:0.7,  vy:-0.5, zone:[20,320,400,480] },
-    { id:"TAG-L2", x:300, y:420, vx:-0.9, vy:0.4,  zone:[20,320,400,480] },
-];
-
-const alertZone = { x1:620, y1:20, x2:780, y2:230 };
-const greenDot = () => makeDot('#1D9E75','#085041');
-const redDot   = () => makeDot('#E24B4A','#A32D2D');
-
-function initIndoorMap(floorDataUrl) {
-    stopSimulation();
+function initIndoorMap(bldg) {
     _tagMarkers = {};
-    const el = document.getElementById('indoorMap');
-
+    _tagMeta    = {};
     if (_indoorMap) { _indoorMap.remove(); _indoorMap = null; }
+
+    const W = bldg.mapW || 800, H = bldg.mapH || 500;
 
     const map = L.map('indoorMap', {
         crs: L.CRS.Simple, minZoom: -1, maxZoom: 3,
@@ -1065,89 +1090,168 @@ function initIndoorMap(floorDataUrl) {
     });
     _indoorMap = map;
 
-    const sw = map.unproject([0, H], 2);
-    const ne = map.unproject([W, 0], 2);
+    const sw     = map.unproject([0, H], 2);
+    const ne     = map.unproject([W, 0], 2);
     const bounds = new L.LatLngBounds(sw, ne);
 
-    if (floorDataUrl) {
-        L.imageOverlay(floorDataUrl, bounds, { opacity: 0.85 }).addTo(map);
+    if (bldg.floorDataUrl) {
+        L.imageOverlay(bldg.floorDataUrl, bounds, { opacity: 0.9 }).addTo(map);
+    } else {
+        // No floor plan — draw a blank grid so the map is usable
+        L.rectangle(bounds, { color:'#006400', weight:2, fillColor:'#e8f5e9', fillOpacity:0.4 }).addTo(map);
     }
-
-    defaultRooms.forEach(r => {
-        const lls = r.pts.map(p => px(map, p[0], p[1]));
-        L.polygon(lls, { color:'#88888880', weight:1, fillColor:r.color, fillOpacity: floorDataUrl ? 0.0 : 0.7 })
-            .addTo(map)
-            .bindTooltip(r.name, { permanent:!floorDataUrl, direction:'center', className:'', opacity:0.75 });
-    });
 
     map.fitBounds(bounds, { padding:[10,10] });
 
+    // Draw stored gateways
     const gwIcon = L.divIcon({ html:gwSvg, className:'', iconSize:[22,22], iconAnchor:[11,11] });
-    defaultGateways.forEach(gw => {
-        L.marker(px(map, gw.x, gw.y), { icon: gwIcon })
+    (bldg.gateways || []).forEach(gw => {
+        L.marker(bldgPx(map, gw.x, gw.y, H), { icon: gwIcon })
             .addTo(map)
             .bindTooltip(`${gw.id} — ESP32`);
     });
 
-    _tagData = defaultTagDefs.map(t => ({ ...t }));
-    _tagData.forEach(tag => {
-        _tagMarkers[tag.id] = L.marker(px(map, tag.x, tag.y), { icon: greenDot() })
-            .addTo(map)
-            .bindTooltip(tag.id);
+    document.getElementById('bStats_tags').textContent = 0;
+    document.getElementById('bStats_rate').textContent = 0;
+}
+
+// ── MQTT ───────────────────────────────────
+function setMQTTStatus(state) {
+    const dot  = document.getElementById('mqttDot');
+    const txt  = document.getElementById('mqttStatusText');
+    const btn  = document.getElementById('mqttConnBtn');
+    const colors = { connecting:'#f59e0b', connected:'#16a34a', disconnected:'#d1d5db', error:'#ef4444' };
+    dot.style.background   = colors[state] || colors.disconnected;
+    txt.textContent        = state.charAt(0).toUpperCase() + state.slice(1);
+    btn.textContent        = (state === 'connected') ? 'Disconnect' : 'Connect';
+    btn.disabled           = (state === 'connecting');
+}
+
+function toggleMQTT() {
+    if (_mqttClient && _mqttClient.connected) { disconnectMQTT(); return; }
+    const url   = document.getElementById('mqttUrlInput').value.trim();
+    const topic = document.getElementById('mqttTopicInput').value.trim() || 'raddec/#';
+    if (!url) { showTabAlert('building', 'Enter the Pareto Anywhere broker WebSocket URL first.', 'error'); return; }
+
+    // Save URL + topic back to building record
+    const bldg = _buildings.find(b => b.id === _activeBldg);
+    if (bldg) { bldg.mqttUrl = url; bldg.mqttTopic = topic; saveBuildings(); }
+
+    setMQTTStatus('connecting');
+    _mqttClient = mqtt.connect(url, { reconnectPeriod: 5000, connectTimeout: 10000 });
+
+    _mqttClient.on('connect', () => {
+        setMQTTStatus('connected');
+        _mqttClient.subscribe(topic);
+        startMQTTRateTimer();
     });
 
-    document.getElementById('bStats_tags').textContent = _tagData.length;
-    document.getElementById('bStats_gw').textContent   = defaultGateways.length;
+    _mqttClient.on('message', (topic, payload) => {
+        try { handleParetoMessage(JSON.parse(payload.toString())); }
+        catch(e) { /* malformed payload — ignore */ }
+    });
 
-    startSimulation(map);
+    _mqttClient.on('error', err => {
+        setMQTTStatus('error');
+        showTabAlert('building', 'MQTT error: ' + err.message, 'error');
+    });
+
+    _mqttClient.on('close', () => {
+        if (_mqttClient && !_mqttClient.connected) setMQTTStatus('disconnected');
+    });
 }
 
-function startSimulation(map) {
-    _simRunning = true;
-    _simUpdates = 0;
-    const rateEl = document.getElementById('bStats_rate');
-    const rateTimer = setInterval(() => {
-        if (!_simRunning) { clearInterval(rateTimer); return; }
-        rateEl.textContent = _simUpdates;
-        _simUpdates = 0;
+function disconnectMQTT() {
+    if (_mqttClient) { _mqttClient.end(true); _mqttClient = null; }
+    if (_mqttRateTimer) { clearInterval(_mqttRateTimer); _mqttRateTimer = null; }
+    setMQTTStatus('disconnected');
+}
+
+function startMQTTRateTimer() {
+    if (_mqttRateTimer) clearInterval(_mqttRateTimer);
+    _mqttMsgCount = 0;
+    _mqttRateTimer = setInterval(() => {
+        document.getElementById('bStats_rate').textContent = _mqttMsgCount;
+        _mqttMsgCount = 0;
     }, 1000);
-
-    _simInterval = setInterval(() => {
-        if (!_simRunning) return;
-        _tagData.forEach(tag => {
-            tag.x += tag.vx + (Math.random()-.5)*.4;
-            tag.y += tag.vy + (Math.random()-.5)*.4;
-            const [x1,y1,x2,y2] = tag.zone, m = 15;
-            if (tag.x < x1+m) { tag.x=x1+m; tag.vx=Math.abs(tag.vx); }
-            if (tag.x > x2-m) { tag.x=x2-m; tag.vx=-Math.abs(tag.vx); }
-            if (tag.y < y1+m) { tag.y=y1+m; tag.vy=Math.abs(tag.vy); }
-            if (tag.y > y2-m) { tag.y=y2-m; tag.vy=-Math.abs(tag.vy); }
-            const inAlert = tag.x>=alertZone.x1 && tag.x<=alertZone.x2 && tag.y>=alertZone.y1 && tag.y<=alertZone.y2;
-            if (_tagMarkers[tag.id]) {
-                _tagMarkers[tag.id]
-                    .setLatLng(px(map, tag.x, tag.y))
-                    .setIcon(inAlert ? redDot() : greenDot())
-                    .setTooltipContent(`${tag.id}${inAlert?' ⚠ Alert':''}<br>RSSI: -${Math.floor(55+Math.random()*20)} dBm`);
-            }
-            _simUpdates++;
-        });
-    }, 80);
 }
 
-function stopSimulation() {
-    _simRunning = false;
-    if (_simInterval) { clearInterval(_simInterval); _simInterval = null; }
-}
+// Parse Pareto Anywhere raddec/spatem messages and move tag markers
+function handleParetoMessage(data) {
+    _mqttMsgCount++;
+    if (!_indoorMap) return;
 
-function toggleSimulation() {
-    const btn = event.target;
-    if (_simRunning) {
-        stopSimulation();
-        btn.textContent = '▶ Resume';
-    } else {
-        if (_indoorMap) startSimulation(_indoorMap);
-        btn.textContent = '⏸ Pause';
+    const bldg = _buildings.find(b => b.id === _activeBldg);
+    const W = bldg?.mapW || 800, H = bldg?.mapH || 500;
+
+    // Pareto Anywhere raddec format
+    let deviceId, x, y, rssi;
+    if (data.transmitterId) {
+        // raddec: { transmitterId, rssiSignature:[{receiverId,rssi}...], ..., position:{x,y} or no position yet }
+        deviceId = data.transmitterId;
+        rssi     = data.rssiSignature?.[0]?.rssi;
+        x        = data.position?.x;
+        y        = data.position?.y;
+    } else if (data.type === 'spatem' || data.features) {
+        // GeoJSON spatem
+        const feat = (data.features || data.data?.features)?.[0];
+        if (!feat) return;
+        deviceId = data.deviceId || feat.properties?.deviceId;
+        rssi     = feat.properties?.rssi;
+        [x, y]   = feat.geometry?.coordinates || [];
     }
+
+    if (!deviceId) return;
+    if (x == null || y == null) return; // position not yet determined
+
+    const now = Date.now();
+    _tagMeta[deviceId] = { x, y, rssi, lastSeen: now };
+
+    if (_tagMarkers[deviceId]) {
+        _tagMarkers[deviceId].setLatLng(bldgPx(_indoorMap, x, y, H)).setIcon(greenDot());
+    } else {
+        _tagMarkers[deviceId] = L.marker(bldgPx(_indoorMap, x, y, H), { icon: greenDot() })
+            .addTo(_indoorMap)
+            .bindTooltip(deviceId);
+    }
+    _tagMarkers[deviceId].setTooltipContent(
+        `${deviceId}${rssi != null ? '<br>RSSI: '+rssi+' dBm':''}`
+    );
+
+    document.getElementById('bStats_tags').textContent = Object.keys(_tagMeta).length;
+    renderTagTable();
+}
+
+function renderTagTable() {
+    const now  = Date.now();
+    const rows = Object.entries(_tagMeta)
+        .sort((a,b) => b[1].lastSeen - a[1].lastSeen)
+        .map(([id, m]) => {
+            const age = Math.floor((now - m.lastSeen) / 1000);
+            const stale = age > 30;
+            if (stale && _tagMarkers[id]) _tagMarkers[id].setIcon(staleDot());
+            return `<tr>
+                <td><code style="font-size:12px">${esc(id)}</code></td>
+                <td>${m.x != null ? m.x.toFixed(1) : '—'}</td>
+                <td>${m.y != null ? m.y.toFixed(1) : '—'}</td>
+                <td>${m.rssi != null ? m.rssi : '—'}</td>
+                <td style="color:${stale?'#f59e0b':'var(--gray)'}">${age < 60 ? age+'s ago' : Math.floor(age/60)+'m ago'}</td>
+            </tr>`;
+        }).join('');
+    document.getElementById('liveTagTable').innerHTML = rows ||
+        '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray)">Waiting for tag data…</td></tr>';
+}
+
+function clearStaleTags() {
+    const cutoff = Date.now() - 60000;
+    Object.keys(_tagMeta).forEach(id => {
+        if (_tagMeta[id].lastSeen < cutoff) {
+            if (_tagMarkers[id]) { _tagMarkers[id].remove(); delete _tagMarkers[id]; }
+            delete _tagMeta[id];
+        }
+    });
+    document.getElementById('bStats_tags').textContent = Object.keys(_tagMeta).length;
+    renderTagTable();
 }
 
 // ══════════════════════════════════════════
