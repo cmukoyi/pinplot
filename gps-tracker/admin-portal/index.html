@@ -787,6 +787,12 @@
                             <span>Features</span>
                         </button>
                     </li>
+                    <li class="sidebar-item">
+                        <button class="sidebar-link" onclick="switchTab('usergroups')">
+                            <span>🏢</span>
+                            <span>User Groups</span>
+                        </button>
+                    </li>
                 </ul>
 
                 <div style="position: absolute; bottom: 24px; left: 24px; right: 24px;">
@@ -1108,6 +1114,88 @@
                         </div>
                     </div>
 
+                    <!-- ===== USER GROUPS TAB ===== -->
+                    <div id="usergroups" class="tab-content">
+                        <div class="page-header">
+                            <h2 class="page-title">User Groups</h2>
+                            <p class="page-subtitle">Manage customer portal tenants. Each group gets its own portal login.</p>
+                            <button class="btn btn-primary" onclick="openCreateGroupModal()">+ Create Group</button>
+                        </div>
+
+                        <div id="ugAlertBanner" class="alert" style="display:none"><span id="ugAlertText"></span></div>
+
+                        <div class="card">
+                            <div id="ugLoadError" class="alert alert-error" style="display:none"></div>
+                            <div id="ugTableWrap">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Company Name</th>
+                                            <th>Slug</th>
+                                            <th>Portal Users</th>
+                                            <th>Status</th>
+                                            <th>Created</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ugTableBody">
+                                        <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Create Group Modal -->
+                        <div id="createGroupModal" class="modal">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h3 class="modal-title">Create User Group (Tenant)</h3>
+                                    <button class="modal-close" onclick="closeModal('createGroupModal')">×</button>
+                                </div>
+                                <div id="cgAlert" class="alert" style="display:none"><span id="cgAlertText"></span></div>
+                                <form id="createGroupForm" onsubmit="submitCreateGroup(event)">
+                                    <div class="form-group">
+                                        <label class="form-label">Company Name *</label>
+                                        <input type="text" id="cgName" class="form-input" placeholder="e.g. Acme Corp" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Portal Admin Email *</label>
+                                        <input type="email" id="cgEmail" class="form-input" placeholder="admin@acmecorp.com" required>
+                                    </div>
+                                    <div style="display:flex;gap:12px">
+                                        <div class="form-group" style="flex:1">
+                                            <label class="form-label">First Name</label>
+                                            <input type="text" id="cgFirst" class="form-input" placeholder="Jane">
+                                        </div>
+                                        <div class="form-group" style="flex:1">
+                                            <label class="form-label">Last Name</label>
+                                            <input type="text" id="cgLast" class="form-input" placeholder="Smith">
+                                        </div>
+                                    </div>
+                                    <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px">
+                                        <button type="button" class="btn btn-secondary" onclick="closeModal('createGroupModal')">Cancel</button>
+                                        <button type="submit" class="btn btn-primary" id="cgSubmitBtn">Create Group</button>
+                                    </div>
+                                </form>
+
+                                <!-- One-time password display -->
+                                <div id="cgResult" style="display:none;margin-top:20px;padding:16px;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border-color)">
+                                    <p style="margin:0 0 8px;font-weight:600;color:var(--success-color)">✅ Group created successfully!</p>
+                                    <p style="margin:0 0 4px;font-size:13px">Portal admin email: <strong id="cgResultEmail"></strong></p>
+                                    <p style="margin:0 0 12px;font-size:13px">Temporary password (shown <span style="color:red;font-weight:600">once only</span>):</p>
+                                    <div style="display:flex;align-items:center;gap:8px">
+                                        <code id="cgResultPwd" style="flex:1;padding:8px 12px;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:6px;font-size:15px;letter-spacing:1px"></code>
+                                        <button class="btn btn-secondary" style="padding:8px 12px" onclick="copyTempPassword()">Copy</button>
+                                    </div>
+                                    <p style="margin:12px 0 0;font-size:12px;color:var(--text-secondary)">Share this password securely with the group admin. They should change it after first login.</p>
+                                    <div style="text-align:right;margin-top:16px">
+                                        <button class="btn btn-primary" onclick="closeModal('createGroupModal');loadUsergroups();">Done</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div id="audit" class="tab-content">
                         <div class="page-header">
                             <h2 class="page-title">Audit Logs</h2>
@@ -1327,7 +1415,8 @@
                 'billing': 'Billing & Usage',
                 'users': 'Admin Users',
                 'audit': 'Audit Logs',
-                'features': 'App Features'
+                'features': 'App Features',
+                'usergroups': 'User Groups'
             };
             document.getElementById('pageTitle').textContent = titles[tabName];
 
@@ -1337,6 +1426,7 @@
             if (tabName === 'users') loadAdminUsers();
             if (tabName === 'audit') loadAuditLogs();
             if (tabName === 'features') loadFeatures();
+            if (tabName === 'usergroups') loadUsergroups();
         }
 
         // DASHBOARD
@@ -1740,6 +1830,118 @@
             } catch (error) {
                 msgEl.textContent = '❌ ' + error.message;
                 msgEl.style.cssText = 'display:block;color:red;font-weight:500';
+            }
+        }
+
+        // USER GROUPS
+        async function loadUsergroups() {
+            const el = document.getElementById('ugTableBody');
+            el.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
+            document.getElementById('ugLoadError').style.display = 'none';
+            try {
+                const res = await fetch(`${API_URL}/api/admin/usergroups`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (res.status === 401) { handle401(); return; }
+                if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+                const groups = await res.json();
+                if (groups.length === 0) {
+                    el.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">No user groups yet. Click "Create Group" to add one.</td></tr>';
+                    return;
+                }
+                el.innerHTML = groups.map(g => {
+                    const date = g.created_at ? new Date(g.created_at).toLocaleDateString() : '—';
+                    const badge = g.is_active
+                        ? '<span class="badge badge-success">Active</span>'
+                        : '<span class="badge badge-error">Inactive</span>';
+                    const deactivateBtn = g.is_active
+                        ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="deactivateGroup('${g.id}','${escHtml(g.name)}')">Deactivate</button>`
+                        : '';
+                    const portalUsers = g.portal_users || [];
+                    const userList = portalUsers.map(u => u.email).join('<br>') || '<em>none</em>';
+                    return `<tr>
+                        <td><strong>${escHtml(g.name)}</strong></td>
+                        <td><code>${escHtml(g.slug)}</code></td>
+                        <td title="${portalUsers.map(u=>u.email).join(', ')}">${portalUsers.length}</td>
+                        <td>${badge}</td>
+                        <td>${date}</td>
+                        <td>${deactivateBtn}</td>
+                    </tr>`;
+                }).join('');
+            } catch (err) {
+                const errEl = document.getElementById('ugLoadError');
+                errEl.textContent = 'Could not load user groups: ' + err.message;
+                errEl.style.display = 'block';
+                el.innerHTML = '';
+            }
+        }
+
+        function escHtml(str) {
+            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        function openCreateGroupModal() {
+            document.getElementById('createGroupForm').reset();
+            document.getElementById('cgAlert').style.display = 'none';
+            document.getElementById('cgResult').style.display = 'none';
+            document.getElementById('createGroupForm').style.display = 'block';
+            document.getElementById('cgSubmitBtn').disabled = false;
+            document.getElementById('createGroupModal').classList.add('active');
+        }
+
+        async function submitCreateGroup(e) {
+            e.preventDefault();
+            const btn = document.getElementById('cgSubmitBtn');
+            btn.disabled = true;
+            btn.textContent = 'Creating…';
+            document.getElementById('cgAlert').style.display = 'none';
+            const payload = {
+                name: document.getElementById('cgName').value.trim(),
+                admin_email: document.getElementById('cgEmail').value.trim(),
+                admin_first_name: document.getElementById('cgFirst').value.trim(),
+                admin_last_name: document.getElementById('cgLast').value.trim(),
+            };
+            try {
+                const res = await fetch(`${API_URL}/api/admin/usergroups`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                    body: JSON.stringify(payload)
+                });
+                if (res.status === 401) { handle401(); return; }
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Create failed');
+                // Show one-time password
+                document.getElementById('createGroupForm').style.display = 'none';
+                document.getElementById('cgResultEmail').textContent = payload.admin_email;
+                document.getElementById('cgResultPwd').textContent = data.temp_password;
+                document.getElementById('cgResult').style.display = 'block';
+            } catch (err) {
+                const al = document.getElementById('cgAlert');
+                document.getElementById('cgAlertText').textContent = err.message;
+                al.className = 'alert alert-error';
+                al.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Create Group';
+            }
+        }
+
+        function copyTempPassword() {
+            const pwd = document.getElementById('cgResultPwd').textContent;
+            navigator.clipboard.writeText(pwd).catch(() => {});
+        }
+
+        async function deactivateGroup(groupId, groupName) {
+            if (!confirm(`Deactivate "${groupName}"? All portal users in this group will be disabled.`)) return;
+            try {
+                const res = await fetch(`${API_URL}/api/admin/usergroups/${groupId}/deactivate`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (res.status === 401) { handle401(); return; }
+                if (!res.ok) { const d = await res.json().catch(()=>{}); throw new Error(d?.detail||'Failed'); }
+                loadUsergroups();
+            } catch (err) {
+                alert('Error: ' + err.message);
             }
         }
 

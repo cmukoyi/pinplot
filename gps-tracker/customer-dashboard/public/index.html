@@ -3,165 +3,376 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLE Tracker - Customer Portal</title>
+    <title>Pinplot — Customer Portal</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --green:      #006400;
+            --green-mid:  #228B22;
+            --green-light:#e8f5e9;
+            --green-btn:  #006400;
+            --text-primary:   #1a1a1a;
+            --text-secondary: #555;
+            --border:     #d4e8d4;
+            --bg:         #f4f9f4;
+            --card-bg:    #ffffff;
+            --radius:     10px;
+            --shadow:     0 2px 12px rgba(0,100,0,.10);
         }
+
+        * { margin:0; padding:0; box-sizing:border-box; }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text-primary);
             min-height: 100vh;
-            padding: 20px;
         }
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        h1 {
-            color: white;
-            margin-bottom: 30px;
-            text-align: center;
-            font-size: 2.5em;
-        }
-        .content {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-        .tag-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .tag-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .tag-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
-        }
-        .tag-name {
-            font-size: 1.5em;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        .tag-status {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 15px;
-            font-size: 0.9em;
-        }
-        .battery {
-            background: rgba(255,255,255,0.2);
-            padding: 5px 10px;
-            border-radius: 4px;
-        }
-        #map {
-            width: 100%;
-            height: 500px;
-            background: #e0e0e0;
-            border-radius: 8px;
+
+        /* ── LOGIN SCREEN ── */
+        #loginScreen {
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #666;
-            font-size: 1.2em;
+            min-height: 100vh;
+            background: linear-gradient(160deg, var(--green) 0%, #004d00 100%);
         }
-        .loading {
+
+        .login-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 8px 32px rgba(0,0,0,.25);
+        }
+
+        .login-logo {
             text-align: center;
-            padding: 50px;
-            color: #666;
+            margin-bottom: 28px;
         }
-        .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+
+        .login-logo h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--green);
+            letter-spacing: -0.5px;
+        }
+
+        .login-logo p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .form-input {
+            width: 100%;
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color .2s;
+        }
+
+        .form-input:focus { border-color: var(--green); }
+
+        .form-group { margin-bottom: 18px; }
+
+        .btn-login {
+            width: 100%;
+            padding: 12px;
+            background: var(--green-btn);
+            color: #fff;
             border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
             cursor: pointer;
-            font-size: 1em;
-            margin-bottom: 20px;
-            transition: transform 0.2s;
+            margin-top: 4px;
+            transition: background .2s;
         }
-        .btn:hover {
-            transform: translateY(-2px);
+
+        .btn-login:hover { background: var(--green-mid); }
+        .btn-login:disabled { opacity: .6; cursor: default; }
+
+        .login-error {
+            background: #ffeaea;
+            color: #c0392b;
+            border: 1px solid #f5c6cb;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 14px;
+            margin-bottom: 16px;
+            display: none;
         }
+
+        /* ── APP SHELL ── */
+        #appShell { display: none; flex-direction: column; min-height: 100vh; }
+
+        /* Top nav */
+        .topnav {
+            background: var(--green);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            height: 60px;
+            box-shadow: 0 2px 8px rgba(0,100,0,.3);
+        }
+
+        .topnav-brand { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+        .topnav-right  { display: flex; align-items: center; gap: 16px; font-size: 14px; }
+
+        .topnav-user { opacity: .85; }
+
+        .btn-logout {
+            background: rgba(255,255,255,.15);
+            border: 1px solid rgba(255,255,255,.3);
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background .2s;
+        }
+        .btn-logout:hover { background: rgba(255,255,255,.25); }
+
+        /* Main layout */
+        .main { flex: 1; padding: 32px 28px; max-width: 1200px; width: 100%; margin: 0 auto; }
+
+        /* Greeting */
+        .greeting-bar {
+            margin-bottom: 28px;
+        }
+        .greeting-bar h2 { font-size: 22px; font-weight: 700; color: var(--green); }
+        .greeting-bar p  { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }
+
+        /* Cards */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: var(--shadow);
+            margin-bottom: 24px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--green);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Placeholder section */
+        .empty-placeholder {
+            text-align: center;
+            padding: 48px 24px;
+            color: var(--text-secondary);
+        }
+        .empty-placeholder .icon { font-size: 48px; margin-bottom: 12px; }
+        .empty-placeholder h3    { font-size: 17px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+        .empty-placeholder p     { font-size: 14px; }
+
+        /* Stats row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            text-align: center;
+            box-shadow: var(--shadow);
+        }
+        .stat-value { font-size: 28px; font-weight: 700; color: var(--green); }
+        .stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; text-transform: uppercase; letter-spacing: .5px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🏷️ My BLE Tags</h1>
-        <div class="content">
-            <button class="btn" onclick="loadTags()">🔄 Refresh Tags</button>
-            <div class="tag-grid" id="tagGrid">
-                <div class="loading">Loading your tags...</div>
+
+<!-- ── LOGIN SCREEN ── -->
+<div id="loginScreen">
+    <div class="login-card">
+        <div class="login-logo">
+            <h1>🌿 Pinplot</h1>
+            <p>Customer Portal</p>
+        </div>
+        <div class="login-error" id="loginError"></div>
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label class="form-label" for="loginEmail">Email</label>
+                <input type="email" id="loginEmail" class="form-input" placeholder="you@company.com" required autocomplete="email">
             </div>
-            <h2 style="margin-bottom: 15px; color: #333;">📍 Map View</h2>
-            <div id="map">Map integration coming soon - External API will be connected</div>
+            <div class="form-group">
+                <label class="form-label" for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn-login" id="loginBtn">Sign in</button>
+        </form>
+    </div>
+</div>
+
+<!-- ── APP SHELL ── -->
+<div id="appShell">
+    <nav class="topnav">
+        <span class="topnav-brand">🌿 Pinplot</span>
+        <div class="topnav-right">
+            <span class="topnav-user" id="navUserName"></span>
+            <button class="btn-logout" onclick="handleLogout()">Log out</button>
+        </div>
+    </nav>
+
+    <div class="main">
+        <div class="greeting-bar">
+            <h2 id="greetingCompany">Welcome</h2>
+            <p id="greetingSubtitle">Customer Portal Dashboard</p>
+        </div>
+
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-value" id="statDevices">—</div>
+                <div class="stat-label">Devices</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statUsers">—</div>
+                <div class="stat-label">Portal Users</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">📡 Your Devices</div>
+            <div class="empty-placeholder">
+                <div class="icon">🚗</div>
+                <h3>No devices yet</h3>
+                <p>Your tracked devices will appear here once they have been assigned to your account by Pinplot.</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">📍 Live Map</div>
+            <div class="empty-placeholder">
+                <div class="icon">🗺️</div>
+                <h3>Map coming soon</h3>
+                <p>Live device locations will be shown on an interactive map in an upcoming release.</p>
+            </div>
         </div>
     </div>
+</div>
 
-    <script>
-        async function loadTags() {
-            try {
-                const response = await fetch('/api/tags');
-                const tags = await response.json();
-                
-                const grid = document.getElementById('tagGrid');
-                grid.innerHTML = '';
-                
-                tags.forEach(tag => {
-                    const card = document.createElement('div');
-                    card.className = 'tag-card';
-                    card.onclick = () => showTagLocation(tag.id);
-                    
-                    card.innerHTML = `
-                        <div class="tag-name">${tag.name}</div>
-                        <div>ID: ${tag.id}</div>
-                        <div class="tag-status">
-                            <span class="battery">🔋 ${tag.battery}%</span>
-                            <span>${tag.status}</span>
-                        </div>
-                        <div style="margin-top: 10px; font-size: 0.85em;">
-                            Last seen: ${new Date(tag.last_seen).toLocaleString()}
-                        </div>
-                    `;
-                    
-                    grid.appendChild(card);
-                });
-            } catch (error) {
-                console.error('Failed to load tags:', error);
-                document.getElementById('tagGrid').innerHTML = 
-                    '<div class="loading">Failed to load tags. Please try again.</div>';
+<script>
+    const PORTAL_TOKEN_KEY = 'pinplot_portal_token';
+    const PORTAL_USER_KEY  = 'pinplot_portal_user';
+    const PORTAL_GROUP_KEY = 'pinplot_portal_group';
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+    function saveSession(token, user, group) {
+        localStorage.setItem(PORTAL_TOKEN_KEY, token);
+        localStorage.setItem(PORTAL_USER_KEY,  JSON.stringify(user));
+        localStorage.setItem(PORTAL_GROUP_KEY, JSON.stringify(group));
+    }
+
+    function clearSession() {
+        localStorage.removeItem(PORTAL_TOKEN_KEY);
+        localStorage.removeItem(PORTAL_USER_KEY);
+        localStorage.removeItem(PORTAL_GROUP_KEY);
+    }
+
+    function loadSession() {
+        const token = localStorage.getItem(PORTAL_TOKEN_KEY);
+        const user  = JSON.parse(localStorage.getItem(PORTAL_USER_KEY)  || 'null');
+        const group = JSON.parse(localStorage.getItem(PORTAL_GROUP_KEY) || 'null');
+        return { token, user, group };
+    }
+
+    function authHeaders(token) {
+        return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    }
+
+    // ── Switch screens ────────────────────────────────────────────────────
+    function showLogin() {
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('appShell').style.display = 'none';
+    }
+
+    function showApp(user, group) {
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('appShell').style.display = 'flex';
+
+        const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ') || user.email;
+        document.getElementById('navUserName').textContent = fullName;
+        document.getElementById('greetingCompany').textContent = group.name;
+        document.getElementById('greetingSubtitle').textContent = `Welcome back, ${fullName}`;
+
+        // Placeholder stats
+        document.getElementById('statDevices').textContent = '0';
+        document.getElementById('statUsers').textContent = '—';
+    }
+
+    // ── Login ─────────────────────────────────────────────────────────────
+    async function handleLogin(e) {
+        e.preventDefault();
+        const errEl  = document.getElementById('loginError');
+        const btn    = document.getElementById('loginBtn');
+        errEl.style.display = 'none';
+        btn.disabled = true;
+        btn.textContent = 'Signing in…';
+
+        const email    = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+
+        try {
+            const res = await fetch('/api/portal/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.detail || 'Login failed');
             }
+            saveSession(data.access_token, data.portal_user, data.usergroup);
+            showApp(data.portal_user, data.usergroup);
+        } catch (err) {
+            errEl.textContent = err.message;
+            errEl.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Sign in';
         }
-        
-        async function showTagLocation(tagId) {
-            try {
-                const response = await fetch(`/api/tags/${tagId}/location`);
-                const location = await response.json();
-                
-                alert(`Tag Location:\n\nLatitude: ${location.latitude}\nLongitude: ${location.longitude}\nAddress: ${location.address}\nAccuracy: ${location.accuracy}m`);
-                
-                // In production, this would update the map with the tag's location
-            } catch (error) {
-                console.error('Failed to load location:', error);
-                alert('Failed to load tag location. Please try again.');
-            }
+    }
+
+    // ── Logout ────────────────────────────────────────────────────────────
+    function handleLogout() {
+        clearSession();
+        showLogin();
+    }
+
+    // ── Boot ─────────────────────────────────────────────────────────────
+    (function init() {
+        const { token, user, group } = loadSession();
+        if (token && user && group) {
+            showApp(user, group);
+        } else {
+            showLogin();
         }
-        
-        // Load tags on page load
-        loadTags();
-    </script>
+    })();
+</script>
 </body>
 </html>

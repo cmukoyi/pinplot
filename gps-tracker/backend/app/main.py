@@ -174,6 +174,10 @@ app = FastAPI(
 # Include admin router
 app.include_router(admin_router)
 
+# Include portal router (customer portal auth)
+from app.routes_portal import router as portal_router  # noqa: E402
+app.include_router(portal_router)
+
 # Include beacon-scan router
 from app.routes_beacons import router as beacons_router  # noqa: E402
 app.include_router(beacons_router)

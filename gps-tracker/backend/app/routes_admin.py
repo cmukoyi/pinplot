@@ -11,7 +11,7 @@ import logging
 
 from app.database import get_db
 from app.models_admin import AdminUser, AppLog, AuditLog, BillingData, BillingTransaction
-from app.models import AppFeatures
+from app.models import AppFeatures, UserGroup, PortalUser
 from app.admin_auth import (
     hash_password, verify_password, create_admin_access_token,
     decode_admin_token, check_role_permission
@@ -749,3 +749,149 @@ def update_app_features(
     db.commit()
     db.refresh(row)
     return row
+
+
+# ---------------------------------------------------------------------------
+# User Groups (customer portal tenants)
+# ---------------------------------------------------------------------------
+
+import re as _re
+import secrets as _secrets
+
+
+class UserGroupCreate(BaseModel):
+    name: str                    # e.g. "Acme Corp"
+    admin_email: str             # portal admin email
+    admin_first_name: str = ""
+    admin_last_name: str = ""
+
+
+class PortalUserOut(BaseModel):
+    id: str
+    email: str
+    first_name: Optional[str]
+    last_name: Optional[str]
+    is_group_admin: bool
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class UserGroupOut(BaseModel):
+    id: str
+    name: str
+    slug: str
+    is_active: bool
+    created_at: datetime
+    portal_users: List[PortalUserOut] = []
+
+    class Config:
+        from_attributes = True
+
+
+class UserGroupCreateResponse(BaseModel):
+    usergroup: UserGroupOut
+    temp_password: str   # shown once — admin should change it
+
+
+def _slugify(text: str) -> str:
+    s = text.lower().strip()
+    s = _re.sub(r'[^a-z0-9]+', '-', s)
+    return s.strip('-')[:80]
+
+
+@router.post("/usergroups", response_model=UserGroupCreateResponse)
+def create_usergroup(
+    data: UserGroupCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Create a new UserGroup and its initial portal admin user (manager+)."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires manager role")
+
+    # Ensure name is unique
+    if db.query(UserGroup).filter(UserGroup.name == data.name).first():
+        raise HTTPException(status_code=400, detail="A user group with that name already exists")
+
+    # Ensure portal admin email is unique
+    from app.models import PortalUser as PU
+    if db.query(PU).filter(PU.email == data.admin_email.lower().strip()).first():
+        raise HTTPException(status_code=400, detail="A portal user with that email already exists")
+
+    # Build a unique slug
+    base_slug = _slugify(data.name)
+    slug = base_slug
+    counter = 1
+    while db.query(UserGroup).filter(UserGroup.slug == slug).first():
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    # Create group
+    import uuid as _uuid
+    group = UserGroup(
+        id=str(_uuid.uuid4()),
+        name=data.name,
+        slug=slug,
+        is_active=True,
+    )
+    db.add(group)
+    db.flush()   # get group.id without committing
+
+    # Generate a random temporary password
+    temp_password = _secrets.token_urlsafe(12)
+
+    # Create portal admin user
+    portal_admin = PU(
+        id=str(_uuid.uuid4()),
+        usergroup_id=group.id,
+        email=data.admin_email.lower().strip(),
+        hashed_password=hash_password(temp_password),
+        first_name=data.admin_first_name or None,
+        last_name=data.admin_last_name or None,
+        is_active=True,
+        is_group_admin=True,
+    )
+    db.add(portal_admin)
+    db.commit()
+    db.refresh(group)
+
+    return UserGroupCreateResponse(
+        usergroup=UserGroupOut.model_validate(group),
+        temp_password=temp_password,
+    )
+
+
+@router.get("/usergroups", response_model=List[UserGroupOut])
+def list_usergroups(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """List all UserGroups with their portal users (viewer+)."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "viewer"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires viewer role")
+    groups = db.query(UserGroup).order_by(UserGroup.created_at.desc()).all()
+    return [UserGroupOut.model_validate(g) for g in groups]
+
+
+@router.put("/usergroups/{group_id}/deactivate")
+def deactivate_usergroup(
+    group_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Deactivate a UserGroup and all its portal users (manager+)."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires manager role")
+    group = db.query(UserGroup).filter(UserGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="User group not found")
+    group.is_active = False
+    for pu in group.portal_users:
+        pu.is_active = False
+    db.commit()
+    return {"detail": "User group deactivated"}

@@ -218,6 +218,48 @@ class AppFeatures(Base):
     updated_at     = Column(DateTime(timezone=True), onupdate=func.now())
 
 
+class UserGroup(Base):
+    """A tenant / company on the customer portal.
+
+    Each UserGroup has one or more PortalUsers who can log in to the customer
+    portal and see data scoped to that group. Created via the admin portal.
+    """
+    __tablename__ = "user_groups"
+
+    id         = get_uuid_column()
+    name       = Column(String(200), nullable=False, unique=True)
+    slug       = Column(String(100), nullable=False, unique=True)  # URL-safe identifier
+    is_active  = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    portal_users = relationship("PortalUser", back_populates="usergroup",
+                                cascade="all, delete-orphan")
+
+
+class PortalUser(Base):
+    """A user who can log in to the customer portal.
+
+    Every UserGroup gets at least one PortalUser (the group admin) created
+    automatically when the group is provisioned from the admin portal. More
+    portal users can be added to the same group later.
+    """
+    __tablename__ = "portal_users"
+
+    id              = get_uuid_column()
+    usergroup_id    = get_uuid_fk("user_groups.id")
+    email           = Column(String(255), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    first_name      = Column(String(100))
+    last_name       = Column(String(100))
+    is_active       = Column(Boolean, nullable=False, default=True)
+    is_group_admin  = Column(Boolean, nullable=False, default=False)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
+
+    usergroup = relationship("UserGroup", back_populates="portal_users")
+
+
 class BeaconSighting(Base):
     """Crowdsourced BLE tag sighting reported by a user's phone.
 
