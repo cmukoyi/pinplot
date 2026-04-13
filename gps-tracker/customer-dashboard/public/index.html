@@ -440,29 +440,54 @@
 
             <!-- ═══ BUILDING TAB ═══ -->
             <div id="tab-building" class="tab-content">
+
+                <!-- Building selector row -->
+                <div class="card" style="padding:16px 24px">
+                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                        <label style="font-weight:600;font-size:14px;white-space:nowrap">Building / Floor:</label>
+                        <select id="buildingSelect" onchange="selectBuilding(this.value)"
+                            style="flex:1;min-width:200px;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:14px">
+                            <option value="">— Select a building —</option>
+                        </select>
+                        <button class="btn btn-primary btn-small" onclick="openModal('createBuildingModal')">+ New Building</button>
+                    </div>
+                </div>
+
+                <!-- Stats row -->
+                <div class="stats-grid" style="margin-bottom:0" id="bldgStats" style="display:none">
+                    <div class="stat-card"><div class="stat-value" id="bStats_tags">0</div><div class="stat-label">Active Tags</div></div>
+                    <div class="stat-card"><div class="stat-value" id="bStats_gw">0</div><div class="stat-label">Gateways</div></div>
+                    <div class="stat-card"><div class="stat-value" id="bStats_rate">0</div><div class="stat-label">Updates/sec</div></div>
+                </div>
+
+                <!-- Map card -->
                 <div class="card">
-                    <div class="card-header">
-                        <span class="card-title">Floor Plan</span>
-                        <button class="btn btn-primary btn-small" onclick="openModal('uploadFloorModal')">⬆ Upload Floor Plan</button>
+                    <div id="buildingAlert" class="alert" style="display:none;margin-bottom:16px"><span id="buildingAlertText"></span></div>
+
+                    <!-- Placeholder (no building selected) -->
+                    <div id="bldgPlaceholder" class="floor-plan-area">
+                        <span class="fp-icon">🏗️</span>
+                        <p style="font-weight:600;color:var(--dark)">No building selected</p>
+                        <p style="font-size:13px">Create a building and upload a floor plan to start tracking BLE tags indoors.</p>
                     </div>
 
-                    <div id="buildingAlert" class="alert" style="display:none"><span id="buildingAlertText"></span></div>
-
-                    <div id="floorPlanContainer">
-                        <div class="floor-plan-area" id="floorPlanPlaceholder">
-                            <span class="fp-icon">🏗️</span>
-                            <p style="font-weight:600;color:var(--dark)">No floor plan uploaded</p>
-                            <p style="font-size:13px">Upload a floor plan image to track tags inside your building.</p>
+                    <!-- Map container (hidden until building selected) -->
+                    <div id="bldgMapWrap" style="display:none">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+                            <span style="font-weight:700;font-size:15px" id="bldgMapTitle">Floor Plan</span>
+                            <div style="display:flex;gap:8px">
+                                <button class="btn btn-secondary btn-small" onclick="openModal('uploadFloorModal')">⬆ Update Floor Plan</button>
+                                <button class="btn btn-small" style="background:#f3f4f6;color:var(--dark)" onclick="toggleSimulation()">⏸ Pause</button>
+                            </div>
                         </div>
-                        <div id="floorPlanViewer" style="display:none;position:relative">
-                            <img id="floorPlanImg" style="width:100%;border-radius:10px;display:block" alt="Floor plan">
-                            <canvas id="floorPlanCanvas" style="position:absolute;top:0;left:0;pointer-events:none"></canvas>
-                        </div>
-                    </div>
 
-                    <div id="floorTagList" style="margin-top:20px;display:none">
-                        <p style="font-weight:600;margin-bottom:10px;font-size:14px">Tags in building:</p>
-                        <div id="floorTagItems"></div>
+                        <div id="indoorMap" style="width:100%;height:440px;border-radius:10px;border:1px solid var(--border);overflow:hidden"></div>
+
+                        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:13px;color:var(--gray)">
+                            <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:50%;background:#378ADD;border:2px solid #185FA5;display:inline-block"></span>ESP32 Gateway</span>
+                            <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:50%;background:#1D9E75;display:inline-block"></span>BLE Tag</span>
+                            <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:50%;background:#E24B4A;border:2px solid #A32D2D;display:inline-block"></span>Tag in Alert Zone</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -583,7 +608,7 @@
             <span class="modal-title">Upload Floor Plan</span>
             <button class="modal-close" onclick="closeModal('uploadFloorModal')">×</button>
         </div>
-        <p style="font-size:13px;color:var(--gray);margin-bottom:16px">Upload a PNG or JPEG image of your building floor plan.</p>
+        <p style="font-size:13px;color:var(--gray);margin-bottom:16px">Upload a PNG or JPEG image of the floor plan. It will be stored in the browser for this building.</p>
         <div class="drop-zone" onclick="document.getElementById('floorFileInput').click()">
             <div class="dz-icon">🏗️</div>
             <p><strong>Click to browse</strong> or drag & drop an image</p>
@@ -591,6 +616,33 @@
         <input type="file" id="floorFileInput" accept="image/*" style="display:none" onchange="handleFloorPlan(this.files[0])">
         <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
             <button class="btn btn-secondary" onclick="closeModal('uploadFloorModal')">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Create Building -->
+<div id="createBuildingModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span class="modal-title">New Building / Floor</span>
+            <button class="modal-close" onclick="closeModal('createBuildingModal')">×</button>
+        </div>
+        <div class="form-group">
+            <label>Building Name</label>
+            <input type="text" id="newBldgName" placeholder="e.g. Head Office — Floor 2" maxlength="80">
+        </div>
+        <div class="form-group">
+            <label>Floor Plan Image (optional — can upload later)</label>
+            <div class="drop-zone" onclick="document.getElementById('newBldgFile').click()" style="padding:20px">
+                <div class="dz-icon" style="font-size:28px">🖼️</div>
+                <p id="newBldgFileName"><strong>Click to browse</strong> or drag & drop</p>
+            </div>
+            <input type="file" id="newBldgFile" accept="image/*" style="display:none"
+                onchange="document.getElementById('newBldgFileName').innerHTML='<strong>'+this.files[0].name+'</strong>'">
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+            <button class="btn btn-secondary" onclick="closeModal('createBuildingModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="saveNewBuilding()">Create Building</button>
         </div>
     </div>
 </div>
@@ -717,6 +769,7 @@ function showDashboard(user, group) {
     document.getElementById('topBarCompany').textContent   = group.name;
 
     switchTab('tags');
+    loadBuildings();
 }
 
 // ══════════════════════════════════════════
@@ -734,6 +787,7 @@ function switchTab(name) {
     document.getElementById('topBarTitle').textContent = TAB_TITLES[name] || name;
 
     if (name === 'tags')     loadTags();
+    if (name === 'building')  loadBuildings();
     if (name === 'gps')      initGPSMap();
     if (name === 'users')    loadUsers();
 }
@@ -859,20 +913,241 @@ function submitBulkTags() {
 }
 
 // ══════════════════════════════════════════
-// BUILDING — Floor plan upload (local)
+// BUILDING — Pareto Anywhere / Leaflet indoor tracker
 // ══════════════════════════════════════════
+const BLDG_KEY = () => `pp_buildings_${_group?.id || 'local'}`;
+let _buildings   = [];   // [{ id, name, floorDataUrl }]
+let _activeBldg  = null; // currently selected building id
+let _indoorMap   = null;
+let _simRunning  = false;
+let _simInterval = null;
+let _simUpdates  = 0;
+let _tagMarkers  = {};
+let _tagData     = [];
+
+function loadBuildings() {
+    try { _buildings = JSON.parse(localStorage.getItem(BLDG_KEY()) || '[]'); } catch { _buildings = []; }
+    renderBuildingDropdown();
+}
+
+function saveBuildings() {
+    localStorage.setItem(BLDG_KEY(), JSON.stringify(_buildings));
+}
+
+function renderBuildingDropdown() {
+    const sel = document.getElementById('buildingSelect');
+    sel.innerHTML = '<option value="">— Select a building —</option>';
+    _buildings.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.id; opt.textContent = b.name;
+        if (b.id === _activeBldg) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+function saveNewBuilding() {
+    const name = document.getElementById('newBldgName').value.trim();
+    if (!name) { alert('Please enter a building name.'); return; }
+    const file = document.getElementById('newBldgFile').files[0];
+    const id = 'bldg_' + Date.now();
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = e => {
+            _buildings.push({ id, name, floorDataUrl: e.target.result });
+            saveBuildings();
+            renderBuildingDropdown();
+            closeModal('createBuildingModal');
+            document.getElementById('newBldgName').value = '';
+            document.getElementById('newBldgFile').value = '';
+            document.getElementById('newBldgFileName').innerHTML = '<strong>Click to browse</strong> or drag & drop';
+            selectBuilding(id);
+        };
+        reader.readAsDataURL(file);
+    } else {
+        _buildings.push({ id, name, floorDataUrl: null });
+        saveBuildings();
+        renderBuildingDropdown();
+        closeModal('createBuildingModal');
+        document.getElementById('newBldgName').value = '';
+        selectBuilding(id);
+    }
+}
+
+function selectBuilding(id) {
+    _activeBldg = id || null;
+    document.getElementById('buildingSelect').value = id || '';
+    if (!id) {
+        document.getElementById('bldgPlaceholder').style.display = 'flex';
+        document.getElementById('bldgMapWrap').style.display = 'none';
+        stopSimulation();
+        return;
+    }
+    const bldg = _buildings.find(b => b.id === id);
+    if (!bldg) return;
+    document.getElementById('bldgPlaceholder').style.display = 'none';
+    document.getElementById('bldgMapWrap').style.display = 'block';
+    document.getElementById('bldgMapTitle').textContent = bldg.name;
+    initIndoorMap(bldg.floorDataUrl);
+}
+
 function handleFloorPlan(file) {
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    document.getElementById('floorPlanImg').src = url;
-    document.getElementById('floorPlanPlaceholder').style.display = 'none';
-    document.getElementById('floorPlanViewer').style.display = 'block';
-    document.getElementById('floorTagList').style.display = 'block';
-    document.getElementById('floorTagItems').innerHTML = _tags.length
-        ? _tags.map(t => `<span class="badge badge-info" style="margin:4px">${esc(t.label || t.imei)}</span>`).join('')
-        : '<span style="color:var(--gray);font-size:13px">No tags added yet.</span>';
-    closeModal('uploadFloorModal');
-    showTabAlert('building', 'Floor plan loaded. Tag positions coming in a future update.', 'info');
+    const reader = new FileReader();
+    reader.onload = e => {
+        if (!_activeBldg) {
+            showTabAlert('building', 'Select or create a building first.', 'error');
+            return;
+        }
+        const bldg = _buildings.find(b => b.id === _activeBldg);
+        if (!bldg) return;
+        bldg.floorDataUrl = e.target.result;
+        saveBuildings();
+        closeModal('uploadFloorModal');
+        initIndoorMap(bldg.floorDataUrl);
+        showTabAlert('building', 'Floor plan updated.', 'success');
+    };
+    reader.readAsDataURL(file);
+}
+
+const W = 800, H = 500;
+
+function px(map, x, y) { return map.unproject([x, H - y], 2); }
+
+function makeDot(color, border) {
+    return L.divIcon({
+        html: `<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="${color}" stroke="${border}" stroke-width="1.5"/></svg>`,
+        className: '', iconSize: [16,16], iconAnchor: [8,8]
+    });
+}
+
+const gwSvg = `<svg width="22" height="22" viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" rx="4" fill="#185FA5" stroke="#0C447C" stroke-width="1.5"/><rect x="6" y="6" width="10" height="10" rx="2" fill="#B5D4F4"/></svg>`;
+
+const defaultRooms = [
+    { name:"Zone A",   pts:[[20,20],[350,20],[350,230],[20,230]],  color:"#E6F1FB" },
+    { name:"Zone B",   pts:[[370,20],[600,20],[600,230],[370,230]],color:"#EAF3DE" },
+    { name:"Meeting",  pts:[[620,20],[780,20],[780,230],[620,230]],color:"#FAEEDA" },
+    { name:"Corridor", pts:[[20,250],[780,250],[780,300],[20,300]],color:"#F1EFE8" },
+    { name:"Lab",      pts:[[20,320],[400,320],[400,480],[20,480]],color:"#FBEAF0" },
+    { name:"Storage",  pts:[[420,320],[780,320],[780,480],[420,480]],color:"#EEEDFE" },
+];
+
+const defaultGateways = [
+    { id:"GW-01", x:185, y:125 },
+    { id:"GW-02", x:500, y:125 },
+    { id:"GW-03", x:700, y:125 },
+    { id:"GW-04", x:210, y:400 },
+];
+
+const defaultTagDefs = [
+    { id:"TAG-A1", x:80,  y:80,  vx:0.8,  vy:0.5,  zone:[20,20,350,230]  },
+    { id:"TAG-A2", x:250, y:160, vx:-0.6, vy:0.9,  zone:[20,20,350,230]  },
+    { id:"TAG-B1", x:450, y:100, vx:1.0,  vy:-0.7, zone:[370,20,600,230] },
+    { id:"TAG-B2", x:530, y:190, vx:-0.5, vy:0.6,  zone:[370,20,600,230] },
+    { id:"TAG-M1", x:680, y:120, vx:0.4,  vy:0.8,  zone:[620,20,780,230] },
+    { id:"TAG-L1", x:150, y:380, vx:0.7,  vy:-0.5, zone:[20,320,400,480] },
+    { id:"TAG-L2", x:300, y:420, vx:-0.9, vy:0.4,  zone:[20,320,400,480] },
+];
+
+const alertZone = { x1:620, y1:20, x2:780, y2:230 };
+const greenDot = () => makeDot('#1D9E75','#085041');
+const redDot   = () => makeDot('#E24B4A','#A32D2D');
+
+function initIndoorMap(floorDataUrl) {
+    stopSimulation();
+    _tagMarkers = {};
+    const el = document.getElementById('indoorMap');
+
+    if (_indoorMap) { _indoorMap.remove(); _indoorMap = null; }
+
+    const map = L.map('indoorMap', {
+        crs: L.CRS.Simple, minZoom: -1, maxZoom: 3,
+        zoomControl: true, attributionControl: false
+    });
+    _indoorMap = map;
+
+    const sw = map.unproject([0, H], 2);
+    const ne = map.unproject([W, 0], 2);
+    const bounds = new L.LatLngBounds(sw, ne);
+
+    if (floorDataUrl) {
+        L.imageOverlay(floorDataUrl, bounds, { opacity: 0.85 }).addTo(map);
+    }
+
+    defaultRooms.forEach(r => {
+        const lls = r.pts.map(p => px(map, p[0], p[1]));
+        L.polygon(lls, { color:'#88888880', weight:1, fillColor:r.color, fillOpacity: floorDataUrl ? 0.0 : 0.7 })
+            .addTo(map)
+            .bindTooltip(r.name, { permanent:!floorDataUrl, direction:'center', className:'', opacity:0.75 });
+    });
+
+    map.fitBounds(bounds, { padding:[10,10] });
+
+    const gwIcon = L.divIcon({ html:gwSvg, className:'', iconSize:[22,22], iconAnchor:[11,11] });
+    defaultGateways.forEach(gw => {
+        L.marker(px(map, gw.x, gw.y), { icon: gwIcon })
+            .addTo(map)
+            .bindTooltip(`${gw.id} — ESP32`);
+    });
+
+    _tagData = defaultTagDefs.map(t => ({ ...t }));
+    _tagData.forEach(tag => {
+        _tagMarkers[tag.id] = L.marker(px(map, tag.x, tag.y), { icon: greenDot() })
+            .addTo(map)
+            .bindTooltip(tag.id);
+    });
+
+    document.getElementById('bStats_tags').textContent = _tagData.length;
+    document.getElementById('bStats_gw').textContent   = defaultGateways.length;
+
+    startSimulation(map);
+}
+
+function startSimulation(map) {
+    _simRunning = true;
+    _simUpdates = 0;
+    const rateEl = document.getElementById('bStats_rate');
+    const rateTimer = setInterval(() => {
+        if (!_simRunning) { clearInterval(rateTimer); return; }
+        rateEl.textContent = _simUpdates;
+        _simUpdates = 0;
+    }, 1000);
+
+    _simInterval = setInterval(() => {
+        if (!_simRunning) return;
+        _tagData.forEach(tag => {
+            tag.x += tag.vx + (Math.random()-.5)*.4;
+            tag.y += tag.vy + (Math.random()-.5)*.4;
+            const [x1,y1,x2,y2] = tag.zone, m = 15;
+            if (tag.x < x1+m) { tag.x=x1+m; tag.vx=Math.abs(tag.vx); }
+            if (tag.x > x2-m) { tag.x=x2-m; tag.vx=-Math.abs(tag.vx); }
+            if (tag.y < y1+m) { tag.y=y1+m; tag.vy=Math.abs(tag.vy); }
+            if (tag.y > y2-m) { tag.y=y2-m; tag.vy=-Math.abs(tag.vy); }
+            const inAlert = tag.x>=alertZone.x1 && tag.x<=alertZone.x2 && tag.y>=alertZone.y1 && tag.y<=alertZone.y2;
+            if (_tagMarkers[tag.id]) {
+                _tagMarkers[tag.id]
+                    .setLatLng(px(map, tag.x, tag.y))
+                    .setIcon(inAlert ? redDot() : greenDot())
+                    .setTooltipContent(`${tag.id}${inAlert?' ⚠ Alert':''}<br>RSSI: -${Math.floor(55+Math.random()*20)} dBm`);
+            }
+            _simUpdates++;
+        });
+    }, 80);
+}
+
+function stopSimulation() {
+    _simRunning = false;
+    if (_simInterval) { clearInterval(_simInterval); _simInterval = null; }
+}
+
+function toggleSimulation() {
+    const btn = event.target;
+    if (_simRunning) {
+        stopSimulation();
+        btn.textContent = '▶ Resume';
+    } else {
+        if (_indoorMap) startSimulation(_indoorMap);
+        btn.textContent = '⏸ Pause';
+    }
 }
 
 // ══════════════════════════════════════════
