@@ -154,3 +154,71 @@ def portal_me(
         "portal_user": PortalUserOut.model_validate(user),
         "usergroup":   UserGroupOut.model_validate(group) if group else None,
     }
+
+
+# ---------------------------------------------------------------------------
+# Portal user management (group admin only)
+# ---------------------------------------------------------------------------
+
+class PortalUserCreate(BaseModel):
+    email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+
+class PortalUserCreateResponse(BaseModel):
+    portal_user: PortalUserOut
+    temp_password: str
+
+
+@router.get("/users", response_model=List[PortalUserOut])
+def list_portal_users(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """List all portal users in the caller's UserGroup."""
+    me = get_portal_user_from_request(request, db)
+    users = db.query(PortalUser).filter(
+        PortalUser.usergroup_id == me.usergroup_id,
+    ).order_by(PortalUser.created_at).all()
+    return [PortalUserOut.model_validate(u) for u in users]
+
+
+@router.post("/users", response_model=PortalUserCreateResponse)
+def create_portal_user(
+    data: PortalUserCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Create a new portal user in the same UserGroup (group admin only)."""
+    me = get_portal_user_from_request(request, db)
+    if not me.is_group_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Only group admins can create users")
+
+    email = data.email.lower().strip()
+    if db.query(PortalUser).filter(PortalUser.email == email).first():
+        raise HTTPException(status_code=400, detail="A portal user with that email already exists")
+
+    import secrets as _secrets
+    import uuid as _uuid
+    temp_password = _secrets.token_urlsafe(12)
+
+    new_user = PortalUser(
+        id=str(_uuid.uuid4()),
+        usergroup_id=me.usergroup_id,
+        email=email,
+        hashed_password=hash_password(temp_password),
+        first_name=data.first_name or None,
+        last_name=data.last_name or None,
+        is_active=True,
+        is_group_admin=False,
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return PortalUserCreateResponse(
+        portal_user=PortalUserOut.model_validate(new_user),
+        temp_password=temp_password,
+    )

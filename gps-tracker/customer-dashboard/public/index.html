@@ -4,6 +4,997 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pinplot — Customer Portal</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --primary:      #3b82f6;
+            --primary-dark: #2563eb;
+            --secondary:    #10b981;
+            --danger:       #ef4444;
+            --warning:      #f59e0b;
+            --dark:         #1f2937;
+            --light:        #f9fafb;
+            --gray:         #6b7280;
+            --border:       #e5e7eb;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--light);
+            color: var(--dark);
+        }
+
+        /* ── LOGIN ── */
+        .login-container {
+            display: flex;
+            min-height: 100vh;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #006400 0%, #004d00 100%);
+            padding: 20px;
+        }
+
+        .login-box {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,.3);
+            max-width: 420px;
+            width: 100%;
+            padding: 48px 40px;
+        }
+
+        .login-header { text-align: center; margin-bottom: 36px; }
+
+        .login-logo { margin-bottom: 16px; display: flex; justify-content: center; }
+
+        .logo-image { height: 72px; width: auto; max-width: 180px; object-fit: contain; }
+
+        .login-title   { font-size: 22px; font-weight: 700; color: var(--dark); margin-bottom: 6px; }
+        .login-subtitle{ color: var(--gray); font-size: 13px; }
+
+        .form-group { margin-bottom: 18px; }
+
+        label {
+            display: block; font-size: 13px; font-weight: 600;
+            color: var(--dark); margin-bottom: 6px;
+        }
+
+        input[type="text"], input[type="password"], input[type="email"],
+        input[type="number"], select, textarea {
+            width: 100%;
+            padding: 11px 14px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color .2s;
+            background: white;
+            font-family: inherit;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59,130,246,.1);
+        }
+
+        .btn {
+            padding: 11px 22px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all .2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn-primary   { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-primary:disabled { opacity: .6; cursor: default; }
+        .btn-secondary { background: white; color: var(--primary); border: 2px solid var(--primary); }
+        .btn-secondary:hover { background: var(--primary); color: white; }
+        .btn-danger    { background: var(--danger); color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-small     { padding: 6px 14px; font-size: 12px; }
+        .btn-full      { width: 100%; }
+
+        .login-error {
+            background: rgba(239,68,68,.1); color: #991b1b;
+            border-left: 4px solid var(--danger);
+            border-radius: 6px;
+            padding: 10px 14px; font-size: 13px; margin-bottom: 16px; display: none;
+        }
+
+        /* ── LAYOUT ── */
+        #dashboardPage { display: none; }
+        .dashboard-container { display: flex; min-height: 100vh; }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: var(--dark);
+            color: white;
+            padding: 24px;
+            position: fixed;
+            height: 100vh;
+            left: 0; top: 0;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-logo {
+            font-size: 20px; font-weight: 700;
+            margin-bottom: 32px;
+            display: flex; align-items: center; gap: 10px;
+        }
+
+        .sidebar-logo img { height: 40px; width: auto; }
+
+        .sidebar-menu { list-style: none; flex: 1; }
+
+        .sidebar-item { margin-bottom: 6px; }
+
+        .sidebar-link {
+            display: flex; align-items: center; gap: 12px;
+            padding: 11px 14px;
+            border-radius: 8px;
+            color: rgba(255,255,255,.75);
+            cursor: pointer;
+            transition: all .2s;
+            font-size: 14px; font-weight: 500;
+            border: none; background: none; width: 100%; text-align: left;
+        }
+
+        .sidebar-link:hover { background: rgba(255,255,255,.1); color: white; }
+        .sidebar-link.active { background: var(--primary); color: white; }
+
+        .sidebar-bottom { padding-top: 16px; border-top: 1px solid rgba(255,255,255,.1); }
+
+        .sidebar-user { font-size: 12px; color: rgba(255,255,255,.5); margin-bottom: 12px; }
+        .sidebar-user strong { display: block; color: rgba(255,255,255,.85); font-size: 13px; }
+
+        /* Main content */
+        .main-content { margin-left: 260px; flex: 1; background: var(--light); }
+
+        .top-bar {
+            background: white; border-bottom: 1px solid var(--border);
+            padding: 18px 36px;
+            display: flex; justify-content: space-between; align-items: center;
+            position: sticky; top: 0; z-index: 10;
+        }
+
+        .top-bar-title { font-size: 20px; font-weight: 700; color: var(--dark); }
+        .top-bar-company { font-size: 13px; color: var(--gray); margin-top: 2px; }
+
+        .content { padding: 32px 36px; }
+
+        /* Tab panes */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Cards */
+        .card {
+            background: white; border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.08);
+            padding: 24px; margin-bottom: 24px;
+        }
+
+        .card-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 20px; padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .card-title { font-size: 16px; font-weight: 700; color: var(--dark); }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px; margin-bottom: 28px;
+        }
+
+        .stat-card {
+            background: white; border-radius: 10px;
+            padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+        }
+
+        .stat-label { font-size: 12px; color: var(--gray); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+        .stat-value { font-size: 28px; font-weight: 700; color: var(--primary); }
+
+        /* Tables */
+        .table-wrapper { overflow-x: auto; }
+
+        table { width: 100%; border-collapse: collapse; }
+
+        thead { background: var(--light); border-bottom: 2px solid var(--border); }
+
+        th { padding: 13px 16px; text-align: left; font-size: 12px; font-weight: 700; color: var(--dark); text-transform: uppercase; letter-spacing: .5px; }
+
+        td { padding: 13px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+
+        tr:hover { background: #fafafa; }
+
+        .badge {
+            display: inline-block; padding: 3px 10px; border-radius: 20px;
+            font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+        }
+
+        .badge-success { background: rgba(16,185,129,.15); color: #059669; }
+        .badge-warning { background: rgba(245,158,11,.15); color: #b45309; }
+        .badge-danger  { background: rgba(239,68,68,.15);  color: #991b1b; }
+        .badge-info    { background: rgba(59,130,246,.15);  color: #1e40af; }
+
+        /* Alerts */
+        .alert {
+            padding: 14px 18px; border-radius: 8px; margin-bottom: 18px;
+            font-size: 14px; display: flex; align-items: center; gap: 10px;
+        }
+
+        .alert-success { background: rgba(16,185,129,.1); color: #059669; border-left: 4px solid #10b981; }
+        .alert-error   { background: rgba(239,68,68,.1);  color: #991b1b; border-left: 4px solid #ef4444; }
+        .alert-info    { background: rgba(59,130,246,.1);  color: #1e40af; border-left: 4px solid #3b82f6; }
+        .alert-warning { background: rgba(245,158,11,.1);  color: #b45309; border-left: 4px solid #f59e0b; }
+
+        /* Modals */
+        .modal {
+            display: none; position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,.5); z-index: 1000;
+            align-items: center; justify-content: center;
+        }
+        .modal.active { display: flex; }
+
+        .modal-content {
+            background: white; border-radius: 12px;
+            max-width: 520px; width: 90%; max-height: 90vh;
+            overflow-y: auto; padding: 32px;
+        }
+
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .modal-title { font-size: 18px; font-weight: 700; color: var(--dark); }
+
+        .modal-close {
+            background: none; border: none; font-size: 22px;
+            cursor: pointer; color: var(--gray); line-height: 1;
+        }
+        .modal-close:hover { color: var(--dark); }
+
+        /* Map */
+        #gpsMap { height: 520px; border-radius: 10px; }
+
+        /* Drop zone */
+        .drop-zone {
+            border: 2px dashed var(--border); border-radius: 10px;
+            padding: 40px; text-align: center; cursor: pointer;
+            transition: border-color .2s, background .2s;
+            color: var(--gray);
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: var(--primary); background: rgba(59,130,246,.04);
+        }
+        .drop-zone .dz-icon { font-size: 36px; margin-bottom: 10px; }
+        .drop-zone p { font-size: 14px; }
+
+        /* Floor plan placeholder */
+        .floor-plan-area {
+            min-height: 400px; background: #f3f4f6;
+            border-radius: 10px; display: flex;
+            align-items: center; justify-content: center;
+            flex-direction: column; gap: 12px; color: var(--gray);
+        }
+        .floor-plan-area .fp-icon { font-size: 56px; }
+
+        /* Empty state */
+        .empty-state { text-align: center; padding: 60px 40px; color: var(--gray); }
+        .empty-state-icon { font-size: 48px; margin-bottom: 14px; }
+        .empty-state-title { font-size: 15px; font-weight: 700; color: var(--dark); margin-bottom: 6px; }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .sidebar { width: 72px; padding: 16px 8px; }
+            .sidebar-logo span:last-child,
+            .sidebar-link span:last-child,
+            .sidebar-user, .sidebar-bottom .btn-full span { display: none; }
+            .sidebar-logo { justify-content: center; }
+            .sidebar-link { justify-content: center; padding: 12px; }
+            .main-content { margin-left: 72px; }
+        }
+
+        @media (max-width: 640px) {
+            .content { padding: 20px 16px; }
+            .top-bar { padding: 14px 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ══════════════════ LOGIN ══════════════════ -->
+<div id="loginPage" class="login-container">
+    <div class="login-box">
+        <div class="login-header">
+            <div class="login-logo">
+                <img src="/admin/assets/logo.png" alt="Pinplot" class="logo-image"
+                     onerror="this.style.display='none';document.getElementById('logoFallback').style.display='block'">
+                <span id="logoFallback" style="display:none;font-size:32px;font-weight:800;color:#006400">🌿 Pinplot</span>
+            </div>
+            <h1 class="login-title">Customer Portal</h1>
+            <p class="login-subtitle">Sign in to manage your assets</p>
+        </div>
+
+        <div class="login-error" id="loginError"></div>
+
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label for="loginEmail">Email</label>
+                <input type="email" id="loginEmail" placeholder="you@company.com" required autocomplete="email">
+            </div>
+            <div class="form-group">
+                <label for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn btn-primary btn-full" id="loginBtn">Sign In</button>
+        </form>
+    </div>
+</div>
+
+<!-- ══════════════════ DASHBOARD ══════════════════ -->
+<div id="dashboardPage">
+<div class="dashboard-container">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <div class="sidebar-logo">
+            <img src="/admin/assets/logo.png" alt="Pinplot"
+                 onerror="this.outerHTML='<span style=\'font-size:22px\'>🌿</span>'">
+            <span>Pinplot</span>
+        </div>
+
+        <ul class="sidebar-menu">
+            <li class="sidebar-item">
+                <button class="sidebar-link active" onclick="switchTab('tags')">
+                    <span>🏷️</span><span>Tags</span>
+                </button>
+            </li>
+            <li class="sidebar-item">
+                <button class="sidebar-link" onclick="switchTab('building')">
+                    <span>🏗️</span><span>Building</span>
+                </button>
+            </li>
+            <li class="sidebar-item">
+                <button class="sidebar-link" onclick="switchTab('gps')">
+                    <span>🗺️</span><span>GPS</span>
+                </button>
+            </li>
+            <li class="sidebar-item">
+                <button class="sidebar-link" onclick="switchTab('users')">
+                    <span>👥</span><span>Users</span>
+                </button>
+            </li>
+        </ul>
+
+        <div class="sidebar-bottom">
+            <div class="sidebar-user">
+                <strong id="sidebarUserName">—</strong>
+                <span id="sidebarCompany">—</span>
+            </div>
+            <button class="btn btn-secondary btn-full btn-small" onclick="handleLogout()">
+                <span>🚪</span><span>Logout</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main-content">
+        <div class="top-bar">
+            <div>
+                <div class="top-bar-title" id="topBarTitle">Tags</div>
+                <div class="top-bar-company" id="topBarCompany"></div>
+            </div>
+        </div>
+
+        <div class="content">
+
+            <!-- ═══ TAGS TAB ═══ -->
+            <div id="tab-tags" class="tab-content active">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Add Tags</span>
+                        <div style="display:flex;gap:10px">
+                            <button class="btn btn-secondary btn-small" onclick="openModal('singleTagModal')">+ Single Tag</button>
+                            <button class="btn btn-primary btn-small" onclick="openModal('bulkTagModal')">⬆ Bulk CSV</button>
+                        </div>
+                    </div>
+
+                    <div id="tagsAlert" class="alert" style="display:none"><span id="tagsAlertText"></span></div>
+
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>IMEI / Tag ID</th>
+                                    <th>Label</th>
+                                    <th>Assigned To</th>
+                                    <th>Status</th>
+                                    <th>Added</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tagsTableBody">
+                                <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--gray)">No tags yet — add one above.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ BUILDING TAB ═══ -->
+            <div id="tab-building" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Floor Plan</span>
+                        <button class="btn btn-primary btn-small" onclick="openModal('uploadFloorModal')">⬆ Upload Floor Plan</button>
+                    </div>
+
+                    <div id="buildingAlert" class="alert" style="display:none"><span id="buildingAlertText"></span></div>
+
+                    <div id="floorPlanContainer">
+                        <div class="floor-plan-area" id="floorPlanPlaceholder">
+                            <span class="fp-icon">🏗️</span>
+                            <p style="font-weight:600;color:var(--dark)">No floor plan uploaded</p>
+                            <p style="font-size:13px">Upload a floor plan image to track tags inside your building.</p>
+                        </div>
+                        <div id="floorPlanViewer" style="display:none;position:relative">
+                            <img id="floorPlanImg" style="width:100%;border-radius:10px;display:block" alt="Floor plan">
+                            <canvas id="floorPlanCanvas" style="position:absolute;top:0;left:0;pointer-events:none"></canvas>
+                        </div>
+                    </div>
+
+                    <div id="floorTagList" style="margin-top:20px;display:none">
+                        <p style="font-weight:600;margin-bottom:10px;font-size:14px">Tags in building:</p>
+                        <div id="floorTagItems"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ GPS TAB ═══ -->
+            <div id="tab-gps" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Live GPS Map</span>
+                        <button class="btn btn-secondary btn-small" onclick="refreshGPSMap()">↻ Refresh</button>
+                    </div>
+                    <div id="gpsAlert" class="alert alert-info" style="display:none"><span id="gpsAlertText"></span></div>
+                    <div id="gpsMap"></div>
+                    <div id="gpsTagList" style="margin-top:20px"></div>
+                </div>
+            </div>
+
+            <!-- ═══ USERS TAB ═══ -->
+            <div id="tab-users" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Portal Users</span>
+                        <button class="btn btn-primary btn-small" onclick="openModal('addUserModal')">+ Add User</button>
+                    </div>
+
+                    <div id="usersAlert" class="alert" style="display:none"><span id="usersAlertText"></span></div>
+
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody">
+                                <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--gray)">Loading…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /content -->
+    </div><!-- /main-content -->
+</div><!-- /dashboard-container -->
+</div><!-- /dashboardPage -->
+
+
+<!-- ══════════════════ MODALS ══════════════════ -->
+
+<!-- Single Tag -->
+<div id="singleTagModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span class="modal-title">Add Single Tag</span>
+            <button class="modal-close" onclick="closeModal('singleTagModal')">×</button>
+        </div>
+        <div id="singleTagAlert" class="alert" style="display:none"><span id="singleTagAlertText"></span></div>
+        <form onsubmit="submitSingleTag(event)">
+            <div class="form-group">
+                <label>IMEI / Tag ID *</label>
+                <input type="text" id="stImei" placeholder="e.g. 867747079036032" required>
+            </div>
+            <div class="form-group">
+                <label>Label / Name</label>
+                <input type="text" id="stLabel" placeholder="e.g. Company Van">
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('singleTagModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Tag</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Bulk CSV -->
+<div id="bulkTagModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span class="modal-title">Bulk Import Tags (CSV)</span>
+            <button class="modal-close" onclick="closeModal('bulkTagModal')">×</button>
+        </div>
+        <div id="bulkTagAlert" class="alert" style="display:none"><span id="bulkTagAlertText"></span></div>
+        <p style="font-size:13px;color:var(--gray);margin-bottom:16px">
+            CSV must have headers: <code>imei,label</code><br>
+            Example: <code>867747079036032,Company Van</code>
+        </p>
+        <div class="drop-zone" id="csvDropZone" onclick="document.getElementById('csvFileInput').click()"
+             ondragover="event.preventDefault();this.classList.add('dragover')"
+             ondragleave="this.classList.remove('dragover')"
+             ondrop="handleCSVDrop(event)">
+            <div class="dz-icon">📄</div>
+            <p><strong>Click to browse</strong> or drag & drop a CSV file</p>
+        </div>
+        <input type="file" id="csvFileInput" accept=".csv,text/csv" style="display:none" onchange="handleCSVFile(this.files[0])">
+        <div id="csvPreview" style="display:none;margin-top:16px">
+            <p style="font-size:13px;font-weight:600;margin-bottom:8px" id="csvPreviewLabel"></p>
+            <div class="table-wrapper" style="max-height:200px;overflow-y:auto">
+                <table><thead><tr><th>IMEI</th><th>Label</th></tr></thead>
+                <tbody id="csvPreviewBody"></tbody></table>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+                <button class="btn btn-secondary" onclick="closeModal('bulkTagModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitBulkTags()">Import Tags</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Floor Plan -->
+<div id="uploadFloorModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span class="modal-title">Upload Floor Plan</span>
+            <button class="modal-close" onclick="closeModal('uploadFloorModal')">×</button>
+        </div>
+        <p style="font-size:13px;color:var(--gray);margin-bottom:16px">Upload a PNG or JPEG image of your building floor plan.</p>
+        <div class="drop-zone" onclick="document.getElementById('floorFileInput').click()">
+            <div class="dz-icon">🏗️</div>
+            <p><strong>Click to browse</strong> or drag & drop an image</p>
+        </div>
+        <input type="file" id="floorFileInput" accept="image/*" style="display:none" onchange="handleFloorPlan(this.files[0])">
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+            <button class="btn btn-secondary" onclick="closeModal('uploadFloorModal')">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Portal User -->
+<div id="addUserModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span class="modal-title">Add Portal User</span>
+            <button class="modal-close" onclick="closeModal('addUserModal')">×</button>
+        </div>
+        <div id="addUserAlert" class="alert" style="display:none"><span id="addUserAlertText"></span></div>
+        <div id="addUserResult" style="display:none">
+            <div class="alert alert-success">✅ User created! Share this temporary password — it won't be shown again.</div>
+            <p style="margin:12px 0 6px;font-size:13px">Email: <strong id="newUserEmail"></strong></p>
+            <div style="display:flex;align-items:center;gap:8px">
+                <code id="newUserPwd" style="flex:1;padding:8px 12px;background:#f3f4f6;border-radius:6px;font-size:14px;letter-spacing:1px"></code>
+                <button class="btn btn-secondary btn-small" onclick="navigator.clipboard.writeText(document.getElementById('newUserPwd').textContent)">Copy</button>
+            </div>
+            <div style="text-align:right;margin-top:16px">
+                <button class="btn btn-primary" onclick="closeModal('addUserModal');loadUsers()">Done</button>
+            </div>
+        </div>
+        <form id="addUserForm" onsubmit="submitAddUser(event)">
+            <div style="display:flex;gap:12px">
+                <div class="form-group" style="flex:1">
+                    <label>First Name</label>
+                    <input type="text" id="auFirst" placeholder="Jane">
+                </div>
+                <div class="form-group" style="flex:1">
+                    <label>Last Name</label>
+                    <input type="text" id="auLast" placeholder="Smith">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Email *</label>
+                <input type="email" id="auEmail" placeholder="jane@company.com" required>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('addUserModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="addUserBtn">Create User</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// Session
+// ══════════════════════════════════════════
+const TOKEN_KEY  = 'pp_portal_token';
+const USER_KEY   = 'pp_portal_user';
+const GROUP_KEY  = 'pp_portal_group';
+
+function saveSession(t, u, g) {
+    localStorage.setItem(TOKEN_KEY,  t);
+    localStorage.setItem(USER_KEY,   JSON.stringify(u));
+    localStorage.setItem(GROUP_KEY,  JSON.stringify(g));
+}
+
+function clearSession() {
+    [TOKEN_KEY, USER_KEY, GROUP_KEY].forEach(k => localStorage.removeItem(k));
+}
+
+function getSession() {
+    return {
+        token: localStorage.getItem(TOKEN_KEY),
+        user:  JSON.parse(localStorage.getItem(USER_KEY)  || 'null'),
+        group: JSON.parse(localStorage.getItem(GROUP_KEY) || 'null'),
+    };
+}
+
+function authHeaders() {
+    return { 'Authorization': `Bearer ${getSession().token}`, 'Content-Type': 'application/json' };
+}
+
+// ══════════════════════════════════════════
+// Login / Logout
+// ══════════════════════════════════════════
+async function handleLogin(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('loginError');
+    const btn   = document.getElementById('loginBtn');
+    errEl.style.display = 'none';
+    btn.disabled = true; btn.textContent = 'Signing in…';
+
+    try {
+        const res  = await fetch('/api/portal/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email:    document.getElementById('loginEmail').value.trim(),
+                password: document.getElementById('loginPassword').value,
+            }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Login failed');
+        saveSession(data.access_token, data.portal_user, data.usergroup);
+        showDashboard(data.portal_user, data.usergroup);
+    } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = 'block';
+    } finally {
+        btn.disabled = false; btn.textContent = 'Sign In';
+    }
+}
+
+function handleLogout() {
+    clearSession();
+    document.getElementById('dashboardPage').style.display = 'none';
+    document.getElementById('loginPage').style.display     = 'flex';
+}
+
+// ══════════════════════════════════════════
+// Show dashboard
+// ══════════════════════════════════════════
+function showDashboard(user, group) {
+    document.getElementById('loginPage').style.display     = 'none';
+    document.getElementById('dashboardPage').style.display = 'block';
+
+    const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || user.email;
+    document.getElementById('sidebarUserName').textContent = name;
+    document.getElementById('sidebarCompany').textContent  = group.name;
+    document.getElementById('topBarCompany').textContent   = group.name;
+
+    switchTab('tags');
+}
+
+// ══════════════════════════════════════════
+// Tab switching
+// ══════════════════════════════════════════
+const TAB_TITLES = { tags: 'Tags', building: 'Building', gps: 'GPS Map', users: 'Users' };
+let _mapInitialized = false;
+
+function switchTab(name) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.sidebar-link').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    const btn = [...document.querySelectorAll('.sidebar-link')].find(b => b.getAttribute('onclick') === `switchTab('${name}')`);
+    if (btn) btn.classList.add('active');
+    document.getElementById('topBarTitle').textContent = TAB_TITLES[name] || name;
+
+    if (name === 'tags')     loadTags();
+    if (name === 'gps')      initGPSMap();
+    if (name === 'users')    loadUsers();
+}
+
+// ══════════════════════════════════════════
+// Modals
+// ══════════════════════════════════════════
+function openModal(id)  { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+document.querySelectorAll('.modal').forEach(m => {
+    m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); });
+});
+
+// ══════════════════════════════════════════
+// Helpers
+// ══════════════════════════════════════════
+function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showTabAlert(prefix, msg, type) {
+    const el = document.getElementById(prefix + 'Alert');
+    document.getElementById(prefix + 'AlertText').textContent = msg;
+    el.className = `alert alert-${type}`;
+    el.style.display = 'flex';
+    setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+
+// ══════════════════════════════════════════
+// TAGS — local store (no backend endpoint yet)
+// ══════════════════════════════════════════
+let _tags = JSON.parse(localStorage.getItem('pp_tags_' + (getSession().group?.id || '')) || '[]');
+
+function saveTags() {
+    localStorage.setItem('pp_tags_' + (getSession().group?.id || ''), JSON.stringify(_tags));
+}
+
+function loadTags() {
+    _tags = JSON.parse(localStorage.getItem('pp_tags_' + (getSession().group?.id || '')) || '[]');
+    renderTagsTable();
+}
+
+function renderTagsTable() {
+    const tb = document.getElementById('tagsTableBody');
+    if (!_tags.length) {
+        tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--gray)">No tags yet — add one above.</td></tr>';
+        return;
+    }
+    tb.innerHTML = _tags.map((t, i) => `
+        <tr>
+            <td><code>${esc(t.imei)}</code></td>
+            <td>${esc(t.label || '—')}</td>
+            <td>${esc(t.assignedTo || '—')}</td>
+            <td><span class="badge badge-success">Active</span></td>
+            <td>${t.added ? new Date(t.added).toLocaleDateString() : '—'}</td>
+        </tr>
+    `).join('');
+}
+
+function submitSingleTag(e) {
+    e.preventDefault();
+    const imei  = document.getElementById('stImei').value.trim();
+    const label = document.getElementById('stLabel').value.trim();
+    if (_tags.find(t => t.imei === imei)) {
+        showTabAlert('singleTag', 'This IMEI is already added.', 'error'); return;
+    }
+    _tags.push({ imei, label, added: new Date().toISOString() });
+    saveTags(); renderTagsTable();
+    closeModal('singleTagModal');
+    document.getElementById('stImei').value = '';
+    document.getElementById('stLabel').value = '';
+    showTabAlert('tags', `Tag ${imei} added.`, 'success');
+}
+
+// ── CSV bulk ──
+let _csvRows = [];
+
+function handleCSVDrop(e) {
+    e.preventDefault();
+    document.getElementById('csvDropZone').classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) handleCSVFile(file);
+}
+
+function handleCSVFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+        const lines = ev.target.result.split(/\r?\n/).filter(l => l.trim());
+        _csvRows = [];
+        let start = 0;
+        if (lines[0].toLowerCase().includes('imei')) start = 1;
+        for (let i = start; i < lines.length; i++) {
+            const parts = lines[i].split(',');
+            if (parts[0]?.trim()) _csvRows.push({ imei: parts[0].trim(), label: (parts[1] || '').trim() });
+        }
+        if (!_csvRows.length) {
+            showTabAlert('bulkTag', 'No valid rows found in CSV.', 'error'); return;
+        }
+        document.getElementById('csvPreviewLabel').textContent = `${_csvRows.length} tags to import:`;
+        document.getElementById('csvPreviewBody').innerHTML = _csvRows.map(r =>
+            `<tr><td><code>${esc(r.imei)}</code></td><td>${esc(r.label)}</td></tr>`
+        ).join('');
+        document.getElementById('csvPreview').style.display = 'block';
+    };
+    reader.readAsText(file);
+}
+
+function submitBulkTags() {
+    let added = 0;
+    _csvRows.forEach(r => {
+        if (!_tags.find(t => t.imei === r.imei)) {
+            _tags.push({ imei: r.imei, label: r.label, added: new Date().toISOString() });
+            added++;
+        }
+    });
+    saveTags(); renderTagsTable();
+    closeModal('bulkTagModal');
+    document.getElementById('csvPreview').style.display = 'none';
+    _csvRows = [];
+    showTabAlert('tags', `${added} tag(s) imported.`, 'success');
+}
+
+// ══════════════════════════════════════════
+// BUILDING — Floor plan upload (local)
+// ══════════════════════════════════════════
+function handleFloorPlan(file) {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    document.getElementById('floorPlanImg').src = url;
+    document.getElementById('floorPlanPlaceholder').style.display = 'none';
+    document.getElementById('floorPlanViewer').style.display = 'block';
+    document.getElementById('floorTagList').style.display = 'block';
+    document.getElementById('floorTagItems').innerHTML = _tags.length
+        ? _tags.map(t => `<span class="badge badge-info" style="margin:4px">${esc(t.label || t.imei)}</span>`).join('')
+        : '<span style="color:var(--gray);font-size:13px">No tags added yet.</span>';
+    closeModal('uploadFloorModal');
+    showTabAlert('building', 'Floor plan loaded. Tag positions coming in a future update.', 'info');
+}
+
+// ══════════════════════════════════════════
+// GPS MAP — Leaflet
+// ══════════════════════════════════════════
+let _map = null;
+
+function initGPSMap() {
+    if (_mapInitialized) { refreshGPSMap(); return; }
+    _map = L.map('gpsMap').setView([-25.7479, 28.2293], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+        maxZoom: 19,
+    }).addTo(_map);
+    _mapInitialized = true;
+    renderGPSTags();
+}
+
+function refreshGPSMap() { renderGPSTags(); }
+
+function renderGPSTags() {
+    if (!_map) return;
+    // Placeholder markers — replace with real API data when GPS endpoint is ready
+    const listEl = document.getElementById('gpsTagList');
+    if (!_tags.length) {
+        listEl.innerHTML = '<div class="alert alert-info">No tags added yet. Add tags in the Tags section first.</div>';
+        return;
+    }
+    listEl.innerHTML = `
+        <p style="font-size:13px;color:var(--gray);margin-bottom:10px">
+            ${_tags.length} tag(s) registered. Live GPS positions will appear on the map once devices are transmitting.
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+            ${_tags.map(t => `<span class="badge badge-warning">${esc(t.label || t.imei)}</span>`).join('')}
+        </div>`;
+}
+
+// ══════════════════════════════════════════
+// USERS
+// ══════════════════════════════════════════
+async function loadUsers() {
+    const tb = document.getElementById('usersTableBody');
+    tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--gray)">Loading…</td></tr>';
+    try {
+        const res = await fetch('/api/portal/users', { headers: authHeaders() });
+        if (res.status === 401) { handleLogout(); return; }
+        if (!res.ok) throw new Error('Failed to load users');
+        const users = await res.json();
+        if (!users.length) {
+            tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--gray)">No users yet.</td></tr>';
+            return;
+        }
+        tb.innerHTML = users.map(u => {
+            const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || '—';
+            const role = u.is_group_admin ? '<span class="badge badge-info">Admin</span>' : '<span class="badge badge-success">User</span>';
+            const status = u.is_active ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Inactive</span>';
+            return `<tr>
+                <td>${esc(name)}</td>
+                <td>${esc(u.email)}</td>
+                <td>${role}</td>
+                <td>${status}</td>
+                <td>—</td>
+            </tr>`;
+        }).join('');
+    } catch (err) {
+        tb.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--gray)">${esc(err.message)}</td></tr>`;
+    }
+}
+
+async function submitAddUser(e) {
+    e.preventDefault();
+    const btn = document.getElementById('addUserBtn');
+    btn.disabled = true; btn.textContent = 'Creating…';
+    document.getElementById('addUserAlert').style.display = 'none';
+    try {
+        const res = await fetch('/api/portal/users', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({
+                email:      document.getElementById('auEmail').value.trim(),
+                first_name: document.getElementById('auFirst').value.trim(),
+                last_name:  document.getElementById('auLast').value.trim(),
+            }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to create user');
+        document.getElementById('addUserForm').style.display   = 'none';
+        document.getElementById('newUserEmail').textContent    = document.getElementById('auEmail').value.trim();
+        document.getElementById('newUserPwd').textContent      = data.temp_password;
+        document.getElementById('addUserResult').style.display = 'block';
+        document.getElementById('auFirst').value = '';
+        document.getElementById('auLast').value  = '';
+        document.getElementById('auEmail').value = '';
+    } catch (err) {
+        const al = document.getElementById('addUserAlert');
+        document.getElementById('addUserAlertText').textContent = err.message;
+        al.className = 'alert alert-error';
+        al.style.display = 'flex';
+    } finally {
+        btn.disabled = false; btn.textContent = 'Create User';
+    }
+}
+
+// ══════════════════════════════════════════
+// Boot
+// ══════════════════════════════════════════
+(function init() {
+    document.getElementById('addUserModal').addEventListener('show', () => {
+        document.getElementById('addUserForm').style.display   = 'block';
+        document.getElementById('addUserResult').style.display = 'none';
+    });
+
+    const { token, user, group } = getSession();
+    if (token && user && group) {
+        showDashboard(user, group);
+    } else {
+        document.getElementById('loginPage').style.display = 'flex';
+    }
+})();
+</script>
+</body>
+</html>
     <style>
         :root {
             --green:      #006400;
