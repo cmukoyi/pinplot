@@ -155,4 +155,5 @@ volumes:
 
 networks:
   pinplot_network:
+    name: pinplot_network   # explicit name prevents docker-compose project prefix
     driver: bridge
