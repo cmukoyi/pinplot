@@ -336,6 +336,9 @@ class Room(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     floor = relationship("Floor", back_populates="rooms")
+
+
+class BeaconSighting(Base):
     """Crowdsourced BLE tag sighting reported by a user's phone.
 
     Each row is one sighting: phone detected [tag_id] at [latitude, longitude]
