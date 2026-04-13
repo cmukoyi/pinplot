@@ -11,7 +11,7 @@ import logging
 
 from app.database import get_db
 from app.models_admin import AdminUser, AppLog, AuditLog, BillingData, BillingTransaction
-from app.models import AppFeatures, UserGroup, PortalUser
+from app.models import AppFeatures, UserGroup, PortalUser, Building, Floor, IndoorGateway, Room
 from app.admin_auth import (
     hash_password, verify_password, create_admin_access_token,
     decode_admin_token, check_role_permission
@@ -910,3 +910,328 @@ def deactivate_usergroup(
         pu.is_active = False
     db.commit()
     return {"detail": "User group deactivated"}
+
+
+# ── Buildings ────────────────────────────────────────────────────────────────
+
+class BuildingCreate(BaseModel):
+    usergroup_id: str
+    name: str
+    mqtt_url: Optional[str] = None
+    mqtt_topic: str = "position/#"
+
+class BuildingUpdate(BaseModel):
+    name: Optional[str] = None
+    mqtt_url: Optional[str] = None
+    mqtt_topic: Optional[str] = None
+
+class RoomOut(BaseModel):
+    id: str
+    floor_id: str
+    name: str
+    x: float
+    y: float
+    w: float
+    h: float
+    class Config: from_attributes = True
+
+class GatewayOut(BaseModel):
+    id: str
+    floor_id: str
+    receiver_id: str
+    label: Optional[str]
+    x: float
+    y: float
+    class Config: from_attributes = True
+
+class FloorOut(BaseModel):
+    id: str
+    building_id: str
+    label: str
+    floor_order: int
+    floor_plan: Optional[str]   # base64 data-URL (omit from list views for perf)
+    map_w: int
+    map_h: int
+    gateways: List[GatewayOut] = []
+    rooms: List[RoomOut] = []
+    class Config: from_attributes = True
+
+class FloorOutNoImage(BaseModel):
+    id: str
+    building_id: str
+    label: str
+    floor_order: int
+    map_w: int
+    map_h: int
+    gateways: List[GatewayOut] = []
+    rooms: List[RoomOut] = []
+    class Config: from_attributes = True
+
+class BuildingOut(BaseModel):
+    id: str
+    usergroup_id: str
+    name: str
+    mqtt_url: Optional[str]
+    mqtt_topic: str
+    floors: List[FloorOutNoImage] = []
+    class Config: from_attributes = True
+
+
+def _str_id(obj_id) -> str:
+    return str(obj_id)
+
+
+@router.post("/buildings", response_model=BuildingOut)
+def create_building(data: BuildingCreate, request: Request, db: Session = Depends(get_db)):
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=403, detail="Requires manager role")
+    group = db.query(UserGroup).filter(UserGroup.id == data.usergroup_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="UserGroup not found")
+    bldg = Building(
+        usergroup_id=data.usergroup_id,
+        name=data.name,
+        mqtt_url=data.mqtt_url,
+        mqtt_topic=data.mqtt_topic,
+    )
+    db.add(bldg)
+    db.commit()
+    db.refresh(bldg)
+    return BuildingOut.model_validate(bldg)
+
+
+@router.get("/buildings", response_model=List[BuildingOut])
+def list_buildings(request: Request, db: Session = Depends(get_db)):
+    admin = get_admin_from_request(request, db)
+    buildings = db.query(Building).order_by(Building.created_at.desc()).all()
+    return [BuildingOut.model_validate(b) for b in buildings]
+
+
+@router.get("/buildings/{building_id}", response_model=BuildingOut)
+def get_building(building_id: str, request: Request, db: Session = Depends(get_db)):
+    admin = get_admin_from_request(request, db)
+    bldg = db.query(Building).filter(Building.id == building_id).first()
+    if not bldg:
+        raise HTTPException(status_code=404, detail="Building not found")
+    return BuildingOut.model_validate(bldg)
+
+
+@router.put("/buildings/{building_id}", response_model=BuildingOut)
+def update_building(building_id: str, data: BuildingUpdate,
+                    request: Request, db: Session = Depends(get_db)):
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=403, detail="Requires manager role")
+    bldg = db.query(Building).filter(Building.id == building_id).first()
+    if not bldg:
+        raise HTTPException(status_code=404, detail="Building not found")
+    if data.name is not None:       bldg.name       = data.name
+    if data.mqtt_url is not None:   bldg.mqtt_url   = data.mqtt_url
+    if data.mqtt_topic is not None: bldg.mqtt_topic = data.mqtt_topic
+    db.commit()
+    db.refresh(bldg)
+    return BuildingOut.model_validate(bldg)
+
+
+@router.delete("/buildings/{building_id}")
+def delete_building(building_id: str, request: Request, db: Session = Depends(get_db)):
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=403, detail="Requires manager role")
+    bldg = db.query(Building).filter(Building.id == building_id).first()
+    if not bldg:
+        raise HTTPException(status_code=404, detail="Building not found")
+    db.delete(bldg)
+    db.commit()
+    return {"detail": "Building deleted"}
+
+
+# ── Floors ───────────────────────────────────────────────────────────────────
+
+class FloorCreate(BaseModel):
+    label: str = "Ground Floor"
+    floor_order: int = 0
+    map_w: int = 800
+    map_h: int = 500
+
+class FloorUpdate(BaseModel):
+    label: Optional[str] = None
+    floor_order: Optional[int] = None
+    floor_plan: Optional[str] = None   # base64 data-URL
+    map_w: Optional[int] = None
+    map_h: Optional[int] = None
+
+
+@router.post("/buildings/{building_id}/floors", response_model=FloorOut)
+def create_floor(building_id: str, data: FloorCreate,
+                 request: Request, db: Session = Depends(get_db)):
+    admin = get_admin_from_request(request, db)
+    bldg = db.query(Building).filter(Building.id == building_id).first()
+    if not bldg:
+        raise HTTPException(status_code=404, detail="Building not found")
+    floor = Floor(building_id=building_id, label=data.label,
+                  floor_order=data.floor_order, map_w=data.map_w, map_h=data.map_h)
+    db.add(floor)
+    db.commit()
+    db.refresh(floor)
+    return FloorOut.model_validate(floor)
+
+
+@router.get("/floors/{floor_id}", response_model=FloorOut)
+def get_floor(floor_id: str, request: Request, db: Session = Depends(get_db)):
+    admin = get_admin_from_request(request, db)
+    floor = db.query(Floor).filter(Floor.id == floor_id).first()
+    if not floor:
+        raise HTTPException(status_code=404, detail="Floor not found")
+    return FloorOut.model_validate(floor)
+
+
+@router.put("/floors/{floor_id}", response_model=FloorOut)
+def update_floor(floor_id: str, data: FloorUpdate,
+                 request: Request, db: Session = Depends(get_db)):
+    admin = get_admin_from_request(request, db)
+    floor = db.query(Floor).filter(Floor.id == floor_id).first()
+    if not floor:
+        raise HTTPException(status_code=404, detail="Floor not found")
+    if data.label       is not None: floor.label       = data.label
+    if data.floor_order is not None: floor.floor_order = data.floor_order
+    if data.floor_plan  is not None: floor.floor_plan  = data.floor_plan
+    if data.map_w       is not None: floor.map_w       = data.map_w
+    if data.map_h       is not None: floor.map_h       = data.map_h
+    db.commit()
+    db.refresh(floor)
+    return FloorOut.model_validate(floor)
+
+
+@router.delete("/floors/{floor_id}")
+def delete_floor(floor_id: str, request: Request, db: Session = Depends(get_db)):
+    admin = get_admin_from_request(request, db)
+    floor = db.query(Floor).filter(Floor.id == floor_id).first()
+    if not floor:
+        raise HTTPException(status_code=404, detail="Floor not found")
+    db.delete(floor)
+    db.commit()
+    return {"detail": "Floor deleted"}
+
+
+# ── Gateways ─────────────────────────────────────────────────────────────────
+
+class GatewayCreate(BaseModel):
+    receiver_id: str
+    label: Optional[str] = None
+    x: float
+    y: float
+
+class GatewayUpdate(BaseModel):
+    receiver_id: Optional[str] = None
+    label: Optional[str] = None
+    x: Optional[float] = None
+    y: Optional[float] = None
+
+
+@router.post("/floors/{floor_id}/gateways", response_model=GatewayOut)
+def create_gateway(floor_id: str, data: GatewayCreate,
+                   request: Request, db: Session = Depends(get_db)):
+    admin = get_admin_from_request(request, db)
+    floor = db.query(Floor).filter(Floor.id == floor_id).first()
+    if not floor:
+        raise HTTPException(status_code=404, detail="Floor not found")
+    gw = IndoorGateway(
+        floor_id=floor_id,
+        receiver_id=data.receiver_id.lower().replace(":", ""),
+        label=data.label,
+        x=data.x,
+        y=data.y,
+    )
+    db.add(gw)
+    db.commit()
+    db.refresh(gw)
+    return GatewayOut.model_validate(gw)
+
+
+@router.put("/gateways/{gateway_id}", response_model=GatewayOut)
+def update_gateway(gateway_id: str, data: GatewayUpdate,
+                   request: Request, db: Session = Depends(get_db)):
+    admin = get_admin_from_request(request, db)
+    gw = db.query(IndoorGateway).filter(IndoorGateway.id == gateway_id).first()
+    if not gw:
+        raise HTTPException(status_code=404, detail="Gateway not found")
+    if data.receiver_id is not None: gw.receiver_id = data.receiver_id.lower().replace(":", "")
+    if data.label       is not None: gw.label       = data.label
+    if data.x           is not None: gw.x           = data.x
+    if data.y           is not None: gw.y           = data.y
+    db.commit()
+    db.refresh(gw)
+    return GatewayOut.model_validate(gw)
+
+
+@router.delete("/gateways/{gateway_id}")
+def delete_gateway(gateway_id: str, request: Request, db: Session = Depends(get_db)):
+    admin = get_admin_from_request(request, db)
+    gw = db.query(IndoorGateway).filter(IndoorGateway.id == gateway_id).first()
+    if not gw:
+        raise HTTPException(status_code=404, detail="Gateway not found")
+    db.delete(gw)
+    db.commit()
+    return {"detail": "Gateway deleted"}
+
+
+# ── Rooms ────────────────────────────────────────────────────────────────────
+
+class RoomCreate(BaseModel):
+    name: str
+    x: float
+    y: float
+    w: float
+    h: float
+
+class RoomUpdate(BaseModel):
+    name: Optional[str] = None
+    x: Optional[float] = None
+    y: Optional[float] = None
+    w: Optional[float] = None
+    h: Optional[float] = None
+
+
+@router.post("/floors/{floor_id}/rooms", response_model=RoomOut)
+def create_room(floor_id: str, data: RoomCreate,
+                request: Request, db: Session = Depends(get_db)):
+    admin = get_admin_from_request(request, db)
+    floor = db.query(Floor).filter(Floor.id == floor_id).first()
+    if not floor:
+        raise HTTPException(status_code=404, detail="Floor not found")
+    room = Room(floor_id=floor_id, name=data.name,
+                x=data.x, y=data.y, w=data.w, h=data.h)
+    db.add(room)
+    db.commit()
+    db.refresh(room)
+    return RoomOut.model_validate(room)
+
+
+@router.put("/rooms/{room_id}", response_model=RoomOut)
+def update_room(room_id: str, data: RoomUpdate,
+                request: Request, db: Session = Depends(get_db)):
+    admin = get_admin_from_request(request, db)
+    room = db.query(Room).filter(Room.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if data.name is not None: room.name = data.name
+    if data.x    is not None: room.x    = data.x
+    if data.y    is not None: room.y    = data.y
+    if data.w    is not None: room.w    = data.w
+    if data.h    is not None: room.h    = data.h
+    db.commit()
+    db.refresh(room)
+    return RoomOut.model_validate(room)
+
+
+@router.delete("/rooms/{room_id}")
+def delete_room(room_id: str, request: Request, db: Session = Depends(get_db)):
+    admin = get_admin_from_request(request, db)
+    room = db.query(Room).filter(Room.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    db.delete(room)
+    db.commit()
+    return {"detail": "Room deleted"}

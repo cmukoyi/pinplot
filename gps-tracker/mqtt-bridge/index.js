@@ -11,24 +11,50 @@
  * ENV VARS:
  *   PARETO_URL          — Socket.IO URL of Pareto Anywhere  (default: http://pareto-anywhere:3001)
  *   MQTT_URL            — MQTT broker URL                  (default: mqtt://mosquitto:1883)
- *   GATEWAY_POSITIONS   — JSON map of receiverId → {x,y}   (default: {})
+ *   BACKEND_URL         — Backend API URL                  (default: http://backend:8000)
+ *   BRIDGE_API_KEY      — Shared secret for /api/portal/gateways (default: bridge-key-change-me)
+ *   GATEWAY_POSITIONS   — JSON fallback if API unavailable  (default: {})
  *                         Example: '{"aabbccddeeff":{"x":185,"y":125}}'
  */
 
 const { io }  = require('socket.io-client');
 const mqtt    = require('mqtt');
 
-const PARETO_URL = process.env.PARETO_URL || 'http://pareto-anywhere:3001';
-const MQTT_URL   = process.env.MQTT_URL   || 'mqtt://mosquitto:1883';
+const PARETO_URL    = process.env.PARETO_URL    || 'http://pareto-anywhere:3001';
+const MQTT_URL      = process.env.MQTT_URL      || 'mqtt://mosquitto:1883';
+const BACKEND_URL   = process.env.BACKEND_URL   || 'http://backend:8000';
+const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY || 'bridge-key-change-me';
 
-// Gateway positions: receiverId (lowercase hex, no colons) → { x, y }
+// Gateway positions: receiverId → { x, y, floor_id, floor_label, building_id }
+// Seeded from env var fallback, refreshed from API every 60 s
 let gatewayPositions = {};
 try {
-    gatewayPositions = JSON.parse(process.env.GATEWAY_POSITIONS || '{}');
-    console.log(`[config] ${Object.keys(gatewayPositions).length} gateway position(s) loaded`);
+    const envPositions = JSON.parse(process.env.GATEWAY_POSITIONS || '{}');
+    if (Object.keys(envPositions).length) {
+        gatewayPositions = envPositions;
+        console.log(`[config] ${Object.keys(gatewayPositions).length} gateway position(s) loaded from env fallback`);
+    }
 } catch (e) {
-    console.warn('[config] GATEWAY_POSITIONS is not valid JSON — no positions loaded');
+    console.warn('[config] GATEWAY_POSITIONS is not valid JSON — skipping env fallback');
 }
+
+async function fetchGatewayPositions() {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/portal/gateways`, {
+            headers: { 'X-Bridge-Key': BRIDGE_API_KEY }
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        gatewayPositions = data;
+        console.log(`[api]   ${Object.keys(gatewayPositions).length} gateway position(s) loaded from API`);
+    } catch (e) {
+        console.warn('[api]   Could not fetch gateway positions:', e.message, '— using last known / env fallback');
+    }
+}
+
+// Fetch on startup and refresh every 60 seconds
+fetchGatewayPositions();
+const _gwRefreshTimer = setInterval(fetchGatewayPositions, 60_000);
 
 // ── MQTT client ──────────────────────────────────────────────────────────────
 const mqttClient = mqtt.connect(MQTT_URL, {
@@ -84,6 +110,9 @@ socket.on('raddec', raddec => {
         timestamp:      raddec.timestamp || Date.now(),
         x:              pos?.x ?? null,
         y:              pos?.y ?? null,
+        floor_id:       pos?.floor_id    ?? null,
+        floor_label:    pos?.floor_label ?? null,
+        building_id:    pos?.building_id ?? null,
     };
 
     publish(`position/${devId}`, posPayload);

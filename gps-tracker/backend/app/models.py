@@ -235,6 +235,8 @@ class UserGroup(Base):
 
     portal_users = relationship("PortalUser", back_populates="usergroup",
                                 cascade="all, delete-orphan")
+    buildings    = relationship("Building", back_populates="usergroup",
+                                cascade="all, delete-orphan")
 
 
 class PortalUser(Base):
@@ -260,7 +262,80 @@ class PortalUser(Base):
     usergroup = relationship("UserGroup", back_populates="portal_users")
 
 
-class BeaconSighting(Base):
+class Building(Base):
+    """A physical building associated with a UserGroup (tenant).
+
+    Holds one or more Floors, each with a floor-plan image, gateways
+    (ESP32 BLE readers positioned on the plan) and named Rooms.
+    """
+    __tablename__ = "buildings"
+
+    id           = get_uuid_column()
+    usergroup_id = get_uuid_fk("user_groups.id")
+    name         = Column(String(200), nullable=False)
+    mqtt_url     = Column(String(500), nullable=True)     # e.g. wss://pinplot.me/mqtt
+    mqtt_topic   = Column(String(200), default="position/#")
+    created_at   = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at   = Column(DateTime(timezone=True), onupdate=func.now())
+
+    usergroup = relationship("UserGroup", back_populates="buildings")
+    floors    = relationship("Floor", back_populates="building",
+                             cascade="all, delete-orphan",
+                             order_by="Floor.floor_order")
+
+
+class Floor(Base):
+    """One floor / level of a building."""
+    __tablename__ = "floors"
+
+    id          = get_uuid_column()
+    building_id = get_uuid_fk("buildings.id")
+    label       = Column(String(100), nullable=False, default="Ground Floor")
+    floor_order = Column(Integer, nullable=False, default=0)
+    floor_plan  = Column(Text, nullable=True)   # base64 data-URL PNG
+    map_w       = Column(Integer, nullable=False, default=800)
+    map_h       = Column(Integer, nullable=False, default=500)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at  = Column(DateTime(timezone=True), onupdate=func.now())
+
+    building = relationship("Building", back_populates="floors")
+    gateways = relationship("IndoorGateway", back_populates="floor",
+                            cascade="all, delete-orphan")
+    rooms    = relationship("Room", back_populates="floor",
+                            cascade="all, delete-orphan")
+
+
+class IndoorGateway(Base):
+    """A BLE gateway (ESP32) physically placed on a floor plan."""
+    __tablename__ = "indoor_gateways"
+
+    id          = get_uuid_column()
+    floor_id    = get_uuid_fk("floors.id")
+    receiver_id = Column(String(50), nullable=False, index=True)  # lowercase hex, no colons
+    label       = Column(String(100), nullable=True)
+    x           = Column(Float, nullable=False, default=0.0)
+    y           = Column(Float, nullable=False, default=0.0)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at  = Column(DateTime(timezone=True), onupdate=func.now())
+
+    floor = relationship("Floor", back_populates="gateways")
+
+
+class Room(Base):
+    """A named rectangular zone drawn on a floor plan."""
+    __tablename__ = "rooms"
+
+    id         = get_uuid_column()
+    floor_id   = get_uuid_fk("floors.id")
+    name       = Column(String(100), nullable=False)
+    x          = Column(Float, nullable=False, default=0.0)
+    y          = Column(Float, nullable=False, default=0.0)
+    w          = Column(Float, nullable=False, default=100.0)
+    h          = Column(Float, nullable=False, default=80.0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    floor = relationship("Floor", back_populates="rooms")
     """Crowdsourced BLE tag sighting reported by a user's phone.
 
     Each row is one sighting: phone detected [tag_id] at [latitude, longitude]

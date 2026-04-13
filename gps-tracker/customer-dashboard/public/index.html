@@ -232,6 +232,7 @@
 
         .badge-success { background: rgba(16,185,129,.15); color: #059669; }
         .badge-warning { background: rgba(245,158,11,.15); color: #b45309; }
+        .room-label { background: rgba(59,130,246,0.12); border: 1px solid #3b82f6; color: #1d4ed8; font-size: 11px; padding: 2px 6px; white-space: nowrap; border-radius: 3px; }
         .badge-danger  { background: rgba(239,68,68,.15);  color: #991b1b; }
         .badge-info    { background: rgba(59,130,246,.15);  color: #1e40af; }
 
@@ -445,12 +446,20 @@
                 <!-- Building selector row -->
                 <div class="card" style="padding:16px 24px">
                     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-                        <label style="font-weight:600;font-size:14px;white-space:nowrap">Building / Floor:</label>
+                        <label style="font-weight:600;font-size:14px;white-space:nowrap">Building:</label>
                         <select id="buildingSelect" onchange="selectBuilding(this.value)"
                             style="flex:1;min-width:200px;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:14px">
                             <option value="">— Select a building —</option>
                         </select>
-                        <button class="btn btn-primary btn-small" onclick="openModal('createBuildingModal')">+ New Building</button>
+                        <button class="btn btn-secondary btn-small" onclick="loadBuildings()">↻ Refresh</button>
+                    </div>
+                </div>
+
+                <!-- Floor tabs (shown when building has floors) -->
+                <div id="floorTabsCard" class="card" style="display:none;padding:12px 24px">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <span style="font-size:13px;font-weight:600;color:var(--gray);margin-right:4px">Floor:</span>
+                        <div id="floorTabsRow" style="display:flex;gap:8px;flex-wrap:wrap"></div>
                     </div>
                 </div>
 
@@ -492,7 +501,6 @@
                     <div id="bldgMapWrap" style="display:none">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
                             <span style="font-weight:700;font-size:15px" id="bldgMapTitle">Floor Plan</span>
-                            <button class="btn btn-secondary btn-small" onclick="openModal('uploadFloorModal')">⬆ Update Floor Plan</button>
                         </div>
 
                         <div id="indoorMap" style="width:100%;height:420px;border-radius:10px;border:1px solid var(--border);overflow:hidden"></div>
@@ -963,105 +971,107 @@ function submitBulkTags() {
 }
 
 // ══════════════════════════════════════════
-// BUILDING — Pareto Anywhere / Leaflet indoor tracker
+// BUILDING — API-driven multi-floor Pareto Anywhere / Leaflet indoor tracker
 // ══════════════════════════════════════════
-const BLDG_KEY = () => `pp_buildings_${_group?.id || 'local'}`;
-let _buildings   = [];   // [{ id, name, floorDataUrl, mqttUrl, mqttTopic, mapW, mapH }]
-let _activeBldg  = null;
-let _indoorMap   = null;
-let _tagMarkers  = {};   // deviceId → L.marker
-let _tagMeta    = {};    // deviceId → { x, y, rssi, lastSeen }
-let _mqttClient  = null;
-let _mqttMsgCount = 0;
-let _mqttRateTimer = null;
 
-function loadBuildings() {
-    try { _buildings = JSON.parse(localStorage.getItem(BLDG_KEY()) || '[]'); } catch { _buildings = []; }
-    renderBuildingDropdown();
-}
+let _buildings      = [];   // fetched from /api/portal/buildings
+let _activeBldg     = null; // building ID
+let _activeFloor    = null; // floor ID
+let _activeFloorObj = null; // floor object {id, label, map_w, map_h, floor_plan, gateways, rooms}
+let _gwFloorMap     = {};   // receiverId → {floor_id, x, y, label}
+let _indoorMap      = null;
+let _tagMarkers     = {};   // deviceId → L.marker
+let _tagMeta        = {};   // deviceId → { x, y, rssi, floor_id, lastSeen }
+let _roomLayers     = [];   // array of L.rectangle
+let _mqttClient     = null;
+let _mqttMsgCount   = 0;
+let _mqttRateTimer  = null;
 
-function saveBuildings() {
-    localStorage.setItem(BLDG_KEY(), JSON.stringify(_buildings));
-}
-
-function renderBuildingDropdown() {
+async function loadBuildings() {
     const sel = document.getElementById('buildingSelect');
-    sel.innerHTML = '<option value="">— Select a building —</option>';
-    _buildings.forEach(b => {
-        const opt = document.createElement('option');
-        opt.value = b.id; opt.textContent = b.name;
-        if (b.id === _activeBldg) opt.selected = true;
-        sel.appendChild(opt);
-    });
+    sel.innerHTML = '<option value="">— Loading… —</option>';
+    try {
+        const res = await apiFetch('/api/portal/buildings');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        _buildings = await res.json();
+        sel.innerHTML = '<option value="">— Select a building —</option>';
+        _buildings.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.id; opt.textContent = b.name;
+            sel.appendChild(opt);
+        });
+        // Rebuild gateway→floor lookup
+        _gwFloorMap = {};
+        _buildings.forEach(b => (b.floors || []).forEach(f =>
+            (f.gateways || []).forEach(gw => {
+                _gwFloorMap[gw.receiver_id] = { floor_id: f.id, x: gw.x, y: gw.y, label: gw.label };
+            })
+        ));
+    } catch (e) {
+        sel.innerHTML = '<option value="">— Error loading buildings —</option>';
+        showTabAlert('building', 'Could not load buildings: ' + e.message, 'error');
+    }
 }
 
-function saveNewBuilding() {
-    const name = document.getElementById('newBldgName').value.trim();
-    if (!name) { alert('Please enter a building name.'); return; }
-    const mqttUrl   = document.getElementById('newBldgMqttUrl').value.trim();
-    const mqttTopic = document.getElementById('newBldgMqttTopic').value.trim() || 'position/#';
-    const mapW = parseInt(document.getElementById('newBldgW').value) || 800;
-    const mapH = parseInt(document.getElementById('newBldgH').value) || 500;
-    const file = document.getElementById('newBldgFile').files[0];
-    const id = 'bldg_' + Date.now();
-    const record = { id, name, floorDataUrl: null, mqttUrl, mqttTopic, mapW, mapH };
-    const finish = () => {
-        _buildings.push(record);
-        saveBuildings();
-        renderBuildingDropdown();
-        closeModal('createBuildingModal');
-        ['newBldgName','newBldgMqttUrl'].forEach(i => document.getElementById(i).value = '');
-        document.getElementById('newBldgMqttTopic').value = 'position/#';
-        document.getElementById('newBldgW').value = '800';
-        document.getElementById('newBldgH').value = '500';
-        document.getElementById('newBldgFile').value = '';
-        document.getElementById('newBldgFileName').innerHTML = '<strong>Click to browse</strong> or drag & drop';
-        selectBuilding(id);
-    };
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = e => { record.floorDataUrl = e.target.result; finish(); };
-        reader.readAsDataURL(file);
-    } else { finish(); }
-}
+function renderBuildingDropdown() {} // kept for compat — loadBuildings() does the work
 
 function selectBuilding(id) {
     disconnectMQTT();
     _activeBldg = id || null;
-    document.getElementById('buildingSelect').value = id || '';
+    _activeFloor = null;
+    _activeFloorObj = null;
+    _tagMarkers = {};
+    _tagMeta = {};
+
     const hidden = !id;
     document.getElementById('bldgPlaceholder').style.display  = hidden ? 'flex'  : 'none';
     document.getElementById('bldgMapWrap').style.display      = hidden ? 'none'  : 'block';
     document.getElementById('bldgStats').style.display        = hidden ? 'none'  : 'grid';
     document.getElementById('mqttCard').style.display         = hidden ? 'none'  : 'block';
     document.getElementById('tagListCard').style.display      = hidden ? 'none'  : 'block';
+    document.getElementById('floorTabsCard').style.display    = hidden ? 'none'  : 'block';
     if (!id) return;
+
     const bldg = _buildings.find(b => b.id === id);
     if (!bldg) return;
-    document.getElementById('bldgMapTitle').textContent  = bldg.name;
-    document.getElementById('mqttUrlInput').value        = bldg.mqttUrl   || '';
-    document.getElementById('mqttTopicInput').value      = bldg.mqttTopic || 'position/#';
-    document.getElementById('bStats_gw').textContent     = (bldg.gateways || []).length || '—';
-    initIndoorMap(bldg);
+
+    document.getElementById('mqttUrlInput').value   = bldg.mqtt_url   || 'wss://pinplot.me/mqtt';
+    document.getElementById('mqttTopicInput').value = bldg.mqtt_topic || 'position/#';
+
+    // Render floor tabs
+    const floors = (bldg.floors || []).slice().sort((a,b) => a.floor_order - b.floor_order);
+    const row = document.getElementById('floorTabsRow');
+    row.innerHTML = '';
+    if (floors.length === 0) {
+        row.innerHTML = '<span style="color:var(--gray);font-size:13px">No floors configured — set them up in the Admin Portal.</span>';
+    } else {
+        floors.forEach((f, i) => {
+            const btn = document.createElement('button');
+            btn.textContent = f.label;
+            btn.className = 'btn btn-small' + (i === 0 ? ' btn-primary' : ' btn-secondary');
+            btn.dataset.floorId = f.id;
+            btn.onclick = () => {
+                row.querySelectorAll('button').forEach(b => b.className = 'btn btn-small btn-secondary');
+                btn.className = 'btn btn-small btn-primary';
+                selectFloor(f.id);
+            };
+            row.appendChild(btn);
+        });
+        // Auto-select first floor
+        selectFloor(floors[0].id);
+    }
+    document.getElementById('bStats_gw').textContent = floors.reduce((n, f) => n + (f.gateways||[]).length, 0) || '—';
 }
 
-function handleFloorPlan(file) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => {
-        if (!_activeBldg) {
-            showTabAlert('building', 'Select or create a building first.', 'error');
-            return;
-        }
-        const bldg = _buildings.find(b => b.id === _activeBldg);
-        if (!bldg) return;
-        bldg.floorDataUrl = e.target.result;
-        saveBuildings();
-        closeModal('uploadFloorModal');
-        initIndoorMap(bldg);
-        showTabAlert('building', 'Floor plan updated.', 'success');
-    };
-    reader.readAsDataURL(file);
+function selectFloor(floorId) {
+    const bldg = _buildings.find(b => b.id === _activeBldg);
+    if (!bldg) return;
+    const floor = (bldg.floors || []).find(f => f.id === floorId);
+    if (!floor) return;
+    _activeFloor    = floorId;
+    _activeFloorObj = floor;
+    document.getElementById('bldgMapTitle').textContent = `${bldg.name} — ${floor.label}`;
+    initIndoorMap(floor);
 }
 
 function makeDot(color, border) {
@@ -1070,19 +1080,19 @@ function makeDot(color, border) {
         className: '', iconSize: [16,16], iconAnchor: [8,8]
     });
 }
-
 const gwSvg = `<svg width="22" height="22" viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" rx="4" fill="#185FA5" stroke="#0C447C" stroke-width="1.5"/><rect x="6" y="6" width="10" height="10" rx="2" fill="#B5D4F4"/></svg>`;
 const greenDot  = () => makeDot('#1D9E75','#085041');
 const staleDot  = () => makeDot('#f59e0b','#b45309');
 
 function bldgPx(map, x, y, H) { return map.unproject([x, H - y], 2); }
 
-function initIndoorMap(bldg) {
+function initIndoorMap(floor) {
     _tagMarkers = {};
     _tagMeta    = {};
+    _roomLayers = [];
     if (_indoorMap) { _indoorMap.remove(); _indoorMap = null; }
 
-    const W = bldg.mapW || 800, H = bldg.mapH || 500;
+    const W = floor.map_w || 800, H = floor.map_h || 500;
 
     const map = L.map('indoorMap', {
         crs: L.CRS.Simple, minZoom: -1, maxZoom: 3,
@@ -1094,21 +1104,29 @@ function initIndoorMap(bldg) {
     const ne     = map.unproject([W, 0], 2);
     const bounds = new L.LatLngBounds(sw, ne);
 
-    if (bldg.floorDataUrl) {
-        L.imageOverlay(bldg.floorDataUrl, bounds, { opacity: 0.9 }).addTo(map);
+    if (floor.floor_plan) {
+        L.imageOverlay(floor.floor_plan, bounds, { opacity: 0.9 }).addTo(map);
     } else {
-        // No floor plan — draw a blank grid so the map is usable
         L.rectangle(bounds, { color:'#006400', weight:2, fillColor:'#e8f5e9', fillOpacity:0.4 }).addTo(map);
     }
-
     map.fitBounds(bounds, { padding:[10,10] });
 
-    // Draw stored gateways
-    const gwIcon = L.divIcon({ html:gwSvg, className:'', iconSize:[22,22], iconAnchor:[11,11] });
-    (bldg.gateways || []).forEach(gw => {
+    // Room overlays
+    (floor.rooms || []).forEach(rm => {
+        const sw2 = bldgPx(map, rm.x, rm.y, H);
+        const ne2 = bldgPx(map, rm.x + rm.w, rm.y + rm.h, H);
+        const rect = L.rectangle([sw2, ne2], {
+            color: '#3b82f6', weight: 1.5, fillOpacity: 0.08
+        }).addTo(map).bindTooltip(rm.name, { permanent: true, className: 'room-label', direction: 'center' });
+        _roomLayers.push(rect);
+    });
+
+    // Gateway markers
+    const gwIcon = L.divIcon({ html: gwSvg, className:'', iconSize:[22,22], iconAnchor:[11,11] });
+    (floor.gateways || []).forEach(gw => {
         L.marker(bldgPx(map, gw.x, gw.y, H), { icon: gwIcon })
             .addTo(map)
-            .bindTooltip(`${gw.id} — ESP32`);
+            .bindTooltip(gw.label ? `${gw.label}<br><code>${gw.receiver_id}</code>` : gw.receiver_id);
     });
 
     document.getElementById('bStats_tags').textContent = 0;
@@ -1132,10 +1150,6 @@ function toggleMQTT() {
     const url   = document.getElementById('mqttUrlInput').value.trim();
     const topic = document.getElementById('mqttTopicInput').value.trim() || 'position/#';
     if (!url) { showTabAlert('building', 'Enter the Pareto Anywhere broker WebSocket URL first.', 'error'); return; }
-
-    // Save URL + topic back to building record
-    const bldg = _buildings.find(b => b.id === _activeBldg);
-    if (bldg) { bldg.mqttUrl = url; bldg.mqttTopic = topic; saveBuildings(); }
 
     setMQTTStatus('connecting');
     _mqttClient = mqtt.connect(url, { reconnectPeriod: 5000, connectTimeout: 10000 });
@@ -1178,30 +1192,31 @@ function startMQTTRateTimer() {
 
 // Parse incoming MQTT messages and move tag markers on the indoor map.
 // Handles three payload formats:
-//   1. Bridge position:  { deviceId, x, y, rssi, nearestGateway, timestamp }
+//   1. Bridge position:  { deviceId, x, y, rssi, nearestGateway, floor_id, timestamp }
 //   2. Pareto raddec:    { transmitterId, rssiSignature, position:{x,y}|null, ... }
 //   3. Pareto spatem:    GeoJSON FeatureCollection with { type:'spatem', features:[...] }
 function handleParetoMessage(data) {
     _mqttMsgCount++;
     if (!_indoorMap) return;
 
-    const bldg = _buildings.find(b => b.id === _activeBldg);
-    const H = bldg?.mapH || 500;
-
-    let deviceId, x, y, rssi;
+    let deviceId, x, y, rssi, floorId;
 
     if (data.deviceId != null && (data.x != null || data.y != null)) {
-        // Format 1: pinplot mqtt-bridge position payload
+        // Format 1: pinplot mqtt-bridge position payload — floor_id supplied directly
         deviceId = data.deviceId;
         x        = data.x;
         y        = data.y;
         rssi     = data.rssi;
+        floorId  = data.floor_id || null;
     } else if (data.transmitterId) {
-        // Format 2: raw Pareto Anywhere raddec
+        // Format 2: raw Pareto Anywhere raddec — derive floor from gateway lookup
         deviceId = data.transmitterId;
         rssi     = data.rssiSignature?.[0]?.rssi;
-        x        = data.position?.x;
-        y        = data.position?.y;
+        const gwId = data.rssiSignature?.[0]?.receiverId?.toLowerCase().replace(/:/g, '');
+        const gwInfo = gwId ? _gwFloorMap[gwId] : null;
+        x       = gwInfo?.x ?? data.position?.x;
+        y       = gwInfo?.y ?? data.position?.y;
+        floorId = gwInfo?.floor_id ?? null;
     } else if (data.type === 'spatem' || data.features) {
         // Format 3: GeoJSON spatem from chimps
         const feat = (data.features || data.data?.features)?.[0];
@@ -1209,13 +1224,37 @@ function handleParetoMessage(data) {
         deviceId = data.deviceId || feat.properties?.deviceId;
         rssi     = feat.properties?.rssi;
         [x, y]   = feat.geometry?.coordinates || [];
+        floorId  = null;
     }
 
     if (!deviceId) return;
     if (x == null || y == null) return; // position not yet determined
 
+    // Auto-switch to the tag's floor if different from current floor
+    if (floorId && floorId !== _activeFloor) {
+        const bldg = _buildings.find(b => b.id === _activeBldg);
+        if (bldg) {
+            const targetFloor = (bldg.floors || []).find(f => f.id === floorId);
+            if (targetFloor) {
+                document.querySelectorAll('#floorTabsRow button').forEach(btn => {
+                    btn.className = 'btn btn-small ' +
+                        (btn.dataset.floorId === floorId ? 'btn-primary' : 'btn-secondary');
+                });
+                selectFloor(floorId);
+            }
+        }
+    }
+
     const now = Date.now();
-    _tagMeta[deviceId] = { x, y, rssi, lastSeen: now };
+    const H   = _activeFloorObj?.map_h || 500;
+    _tagMeta[deviceId] = { x, y, rssi, floor_id: floorId, lastSeen: now };
+
+    // Only render marker if tag is on the currently displayed floor (or floor unknown)
+    if (floorId && floorId !== _activeFloor) {
+        document.getElementById('bStats_tags').textContent = Object.keys(_tagMeta).length;
+        renderTagTable();
+        return;
+    }
 
     if (_tagMarkers[deviceId]) {
         _tagMarkers[deviceId].setLatLng(bldgPx(_indoorMap, x, y, H)).setIcon(greenDot());

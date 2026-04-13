@@ -15,7 +15,7 @@ import os
 import logging
 
 from app.database import get_db
-from app.models import UserGroup, PortalUser
+from app.models import UserGroup, PortalUser, Building, Floor, IndoorGateway
 from app.admin_auth import hash_password, verify_password
 
 router = APIRouter(prefix="/api/portal", tags=["portal"])
@@ -222,3 +222,110 @@ def create_portal_user(
         portal_user=PortalUserOut.model_validate(new_user),
         temp_password=temp_password,
     )
+
+
+# ---------------------------------------------------------------------------
+# Buildings — read-only for portal users
+# ---------------------------------------------------------------------------
+
+class RoomOut(BaseModel):
+    id: str
+    floor_id: str
+    name: str
+    x: float
+    y: float
+    w: float
+    h: float
+    class Config: from_attributes = True
+
+class GatewayOut(BaseModel):
+    id: str
+    floor_id: str
+    receiver_id: str
+    label: Optional[str]
+    x: float
+    y: float
+    class Config: from_attributes = True
+
+class FloorOut(BaseModel):
+    id: str
+    building_id: str
+    label: str
+    floor_order: int
+    floor_plan: Optional[str]
+    map_w: int
+    map_h: int
+    gateways: List[GatewayOut] = []
+    rooms: List[RoomOut] = []
+    class Config: from_attributes = True
+
+class BuildingOut(BaseModel):
+    id: str
+    usergroup_id: str
+    name: str
+    mqtt_url: Optional[str]
+    mqtt_topic: str
+    floors: List[FloorOut] = []
+    class Config: from_attributes = True
+
+
+@router.get("/buildings", response_model=List[BuildingOut])
+def list_buildings(request: Request, db: Session = Depends(get_db)):
+    """Return all buildings for the calling user's UserGroup."""
+    me = get_portal_user_from_request(request, db)
+    buildings = (
+        db.query(Building)
+        .filter(Building.usergroup_id == me.usergroup_id)
+        .order_by(Building.created_at)
+        .all()
+    )
+    return [BuildingOut.model_validate(b) for b in buildings]
+
+
+@router.get("/buildings/{building_id}", response_model=BuildingOut)
+def get_building(building_id: str, request: Request, db: Session = Depends(get_db)):
+    """Return a single building with all floors, gateways, and rooms."""
+    me = get_portal_user_from_request(request, db)
+    bldg = db.query(Building).filter(
+        Building.id == building_id,
+        Building.usergroup_id == me.usergroup_id,
+    ).first()
+    if not bldg:
+        raise HTTPException(status_code=404, detail="Building not found")
+    return BuildingOut.model_validate(bldg)
+
+
+# ---------------------------------------------------------------------------
+# Gateway lookup — used by the mqtt-bridge to fetch positions without a user token
+# ---------------------------------------------------------------------------
+
+BRIDGE_API_KEY = os.getenv("BRIDGE_API_KEY", "bridge-key-change-me")
+
+
+@router.get("/gateways")
+def list_all_gateways(request: Request, db: Session = Depends(get_db)):
+    """Return a flat map of receiverId → {x, y, floor_id, floor_label, building_id}.
+
+    Authenticated with the BRIDGE_API_KEY header (X-Bridge-Key) so the
+    mqtt-bridge container can call it without a portal JWT.
+    """
+    key = request.headers.get("X-Bridge-Key", "")
+    if key != BRIDGE_API_KEY:
+        raise HTTPException(status_code=403, detail="Invalid bridge API key")
+
+    gateways = (
+        db.query(IndoorGateway)
+        .join(Floor, Floor.id == IndoorGateway.floor_id)
+        .all()
+    )
+    result = {}
+    for gw in gateways:
+        result[gw.receiver_id] = {
+            "x":           gw.x,
+            "y":           gw.y,
+            "label":       gw.label,
+            "floor_id":    str(gw.floor_id),
+            "floor_label": gw.floor.label,
+            "building_id": str(gw.floor.building_id),
+        }
+    return result

@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BeaconTelematics Admin Portal</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         * {
             margin: 0;
@@ -793,6 +795,12 @@
                             <span>User Groups</span>
                         </button>
                     </li>
+                    <li class="sidebar-item">
+                        <button class="sidebar-link" onclick="switchTab('buildings')">
+                            <span>🏗️</span>
+                            <span>Buildings</span>
+                        </button>
+                    </li>
                 </ul>
 
                 <div style="position: absolute; bottom: 24px; left: 24px; right: 24px;">
@@ -1192,9 +1200,192 @@
                                         <button class="btn btn-primary" onclick="closeModal('createGroupModal');loadUsergroups();">Done</button>
                                     </div>
                                 </div>
+                    </div>
+                    </div>
+                    </div>
+
+                    <!-- ═══════════════════════════════════════════════════ -->
+                    <!-- BUILDINGS TAB                                       -->
+                    <!-- ═══════════════════════════════════════════════════ -->
+                    <div id="buildings" class="tab-content">
+                        <div class="page-header">
+                            <h2 class="page-title">Buildings</h2>
+                            <p class="page-subtitle">Manage buildings, floors, gateways (ESP32) and room zones per tenant.</p>
+                            <button class="btn btn-primary" onclick="openCreateBuildingModal()">+ Add Building</button>
+                        </div>
+
+                        <div id="bldgAlert" class="alert" style="display:none"><span id="bldgAlertText"></span></div>
+
+                        <!-- Building list -->
+                        <div id="bldgListPane">
+                            <div class="card" id="bldgListCard">
+                                <div id="bldgTableWrap">
+                                    <table class="data-table">
+                                        <thead><tr>
+                                            <th>Building</th><th>Tenant</th><th>MQTT Topic</th><th>Floors</th><th>Actions</th>
+                                        </tr></thead>
+                                        <tbody id="bldgTableBody">
+                                            <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Floor manager (shown when building selected) -->
+                        <div id="bldgFloorPane" style="display:none">
+                            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+                                <button class="btn btn-secondary" onclick="closeBldgFloorPane()">← Back</button>
+                                <h3 id="bldgFloorTitle" style="margin:0;font-size:18px"></h3>
+                                <button class="btn btn-primary btn-small" onclick="openAddFloorModal()">+ Add Floor</button>
+                            </div>
+                            <div class="card">
+                                <div id="floorListWrap">
+                                    <table class="data-table">
+                                        <thead><tr><th>Order</th><th>Label</th><th>Gateways</th><th>Rooms</th><th>Actions</th></tr></thead>
+                                        <tbody id="floorTableBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Floor editor (shown when editing a floor) -->
+                        <div id="bldgEditorPane" style="display:none">
+                            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+                                <button class="btn btn-secondary" onclick="closeFloorEditor()">← Back to Floors</button>
+                                <h3 id="editorFloorTitle" style="margin:0;font-size:18px;flex:1"></h3>
+                                <span style="font-size:13px;color:var(--text-secondary)">Mode:</span>
+                                <select id="editorMode" onchange="updateEditorMode()" style="padding:6px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px">
+                                    <option value="pan">Pan / View</option>
+                                    <option value="gateway">Place Gateway</option>
+                                    <option value="room">Draw Room</option>
+                                </select>
+                                <button class="btn btn-secondary btn-small" onclick="openUploadFloorPlan()">📁 Upload Plan</button>
+                                <input type="file" id="floorPlanFileInput" accept="image/*" onchange="handleFloorPlanUpload(event)" style="display:none">
+                            </div>
+                            <div style="display:flex;gap:16px;flex-wrap:wrap">
+                                <!-- Map area -->
+                                <div style="flex:1;min-width:300px">
+                                    <div id="editorMap" style="height:520px;background:#1a1a2e;border-radius:10px;border:1px solid var(--border-color);cursor:crosshair"></div>
+                                    <p style="margin:8px 0 0;font-size:12px;color:var(--text-secondary)" id="editorHint">Select a mode above. Upload a floor plan image to get started.</p>
+                                </div>
+                                <!-- Side panel -->
+                                <div style="width:280px;flex-shrink:0">
+                                    <div class="card" style="margin-bottom:12px;padding:14px">
+                                        <div style="font-weight:600;font-size:13px;margin-bottom:10px">Gateways (ESP32)</div>
+                                        <div id="gwList" style="font-size:13px;max-height:200px;overflow-y:auto"></div>
+                                        <p style="font-size:12px;color:var(--text-secondary);margin:8px 0 0">Switch to <em>Place Gateway</em> mode then click on the map.</p>
+                                    </div>
+                                    <div class="card" style="padding:14px">
+                                        <div style="font-weight:600;font-size:13px;margin-bottom:10px">Rooms</div>
+                                        <div id="roomList" style="font-size:13px;max-height:200px;overflow-y:auto"></div>
+                                        <p style="font-size:12px;color:var(--text-secondary);margin:8px 0 0">Switch to <em>Draw Room</em> mode then click-drag on the map.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal: Create Building -->
+                        <div id="createBuildingModal" class="modal">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h3 class="modal-title">Add Building</h3>
+                                    <button class="modal-close" onclick="closeModal('createBuildingModal')">×</button>
+                                </div>
+                                <div id="cbAlert" class="alert" style="display:none"><span id="cbAlertText"></span></div>
+                                <div class="form-group">
+                                    <label class="form-label">Building Name *</label>
+                                    <input type="text" id="cbName" class="form-input" placeholder="e.g. Head Office">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Assign to Tenant *</label>
+                                    <select id="cbGroupSel" class="form-input"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">MQTT Broker URL</label>
+                                    <input type="text" id="cbMqttUrl" class="form-input" placeholder="wss://pinplot.me/mqtt">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">MQTT Topic</label>
+                                    <input type="text" id="cbMqttTopic" class="form-input" value="position/#">
+                                </div>
+                                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+                                    <button class="btn btn-secondary" onclick="closeModal('createBuildingModal')">Cancel</button>
+                                    <button class="btn btn-primary" onclick="submitCreateBuilding()">Create</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal: Add Floor -->
+                        <div id="addFloorModal" class="modal">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h3 class="modal-title">Add Floor</h3>
+                                    <button class="modal-close" onclick="closeModal('addFloorModal')">×</button>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Floor Label *</label>
+                                    <input type="text" id="afLabel" class="form-input" placeholder="e.g. Ground Floor">
+                                </div>
+                                <div style="display:flex;gap:12px">
+                                    <div class="form-group" style="flex:1">
+                                        <label class="form-label">Map Width (px)</label>
+                                        <input type="number" id="afW" class="form-input" value="800">
+                                    </div>
+                                    <div class="form-group" style="flex:1">
+                                        <label class="form-label">Map Height (px)</label>
+                                        <input type="number" id="afH" class="form-input" value="500">
+                                    </div>
+                                </div>
+                                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+                                    <button class="btn btn-secondary" onclick="closeModal('addFloorModal')">Cancel</button>
+                                    <button class="btn btn-primary" onclick="submitAddFloor()">Add Floor</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal: Place Gateway -->
+                        <div id="placeGatewayModal" class="modal">
+                            <div class="modal-content" style="max-width:400px">
+                                <div class="modal-header">
+                                    <h3 class="modal-title">Place Gateway</h3>
+                                    <button class="modal-close" onclick="closeModal('placeGatewayModal')">×</button>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Receiver ID (MAC, no colons) *</label>
+                                    <input type="text" id="pgReceiverId" class="form-input" placeholder="aabbccddeeff">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Label</label>
+                                    <input type="text" id="pgLabel" class="form-input" placeholder="e.g. GW-North">
+                                </div>
+                                <input type="hidden" id="pgX"><input type="hidden" id="pgY">
+                                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+                                    <button class="btn btn-secondary" onclick="closeModal('placeGatewayModal')">Cancel</button>
+                                    <button class="btn btn-primary" onclick="submitPlaceGateway()">Save</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal: Name Room -->
+                        <div id="nameRoomModal" class="modal">
+                            <div class="modal-content" style="max-width:380px">
+                                <div class="modal-header">
+                                    <h3 class="modal-title">Name Room</h3>
+                                    <button class="modal-close" onclick="closeModal('nameRoomModal')">×</button>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Room Name *</label>
+                                    <input type="text" id="nrName" class="form-input" placeholder="e.g. Server Room">
+                                </div>
+                                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+                                    <button class="btn btn-secondary" onclick="cancelRoomDraw()">Cancel</button>
+                                    <button class="btn btn-primary" onclick="submitRoom()">Save</button>
+                                </div>
                             </div>
                         </div>
                     </div>
+                    <!-- END BUILDINGS TAB -->
 
                     <div id="audit" class="tab-content">
                         <div class="page-header">
@@ -1416,7 +1607,8 @@
                 'users': 'Admin Users',
                 'audit': 'Audit Logs',
                 'features': 'App Features',
-                'usergroups': 'User Groups'
+                'usergroups': 'User Groups',
+                'buildings': 'Buildings & Floor Plans'
             };
             document.getElementById('pageTitle').textContent = titles[tabName];
 
@@ -1427,6 +1619,7 @@
             if (tabName === 'audit') loadAuditLogs();
             if (tabName === 'features') loadFeatures();
             if (tabName === 'usergroups') loadUsergroups();
+            if (tabName === 'buildings') { loadBuildings(); }
         }
 
         // DASHBOARD
@@ -1973,6 +2166,457 @@
                 }
             });
         });
+
+        // ════════════════════════════════════════════════════════════════
+        // BUILDINGS — list, floor manager, floor editor
+        // ════════════════════════════════════════════════════════════════
+
+        let _activeBuildingId  = null;  // currently open building
+        let _activeFloorId     = null;  // currently editing floor
+        let _activeFloorData   = null;  // {id, map_w, map_h, gateways[], rooms[]}
+        let _editorMap         = null;  // Leaflet map instance
+        let _editorImageLayer  = null;
+        let _gwMarkers         = {};    // receiverId → Leaflet marker
+        let _roomLayers        = {};    // room.id    → Leaflet rectangle
+        let _drawingRect       = null;  // in-progress draw rect
+        let _drawStart         = null;  // {x,y} pixel coord
+        let _allGroups         = [];    // cached usergroups for dropdown
+        let _pendingRoomBounds = null;  // bounds to save once user names room
+
+        async function loadBuildings() {
+            const tb = document.getElementById('bldgTableBody');
+            tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
+            try {
+                const res = await fetch(`${API_URL}/api/admin/buildings`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (res.status === 401) { handle401(); return; }
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const buildings = await res.json();
+                _allGroups = await (await fetch(`${API_URL}/api/admin/usergroups`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                })).json();
+                if (buildings.length === 0) {
+                    tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary)">No buildings yet.</td></tr>';
+                    return;
+                }
+                tb.innerHTML = buildings.map(b => {
+                    const grp = _allGroups.find(g => g.id === b.usergroup_id);
+                    return `<tr>
+                        <td><strong>${escHtml(b.name)}</strong></td>
+                        <td>${escHtml(grp?.name || b.usergroup_id)}</td>
+                        <td><code>${escHtml(b.mqtt_topic)}</code></td>
+                        <td>${b.floors.length}</td>
+                        <td>
+                            <button class="btn btn-primary btn-small" onclick="openBldgFloorPane('${b.id}','${escHtml(b.name)}')">Manage Floors</button>
+                            <button class="btn btn-danger btn-small" onclick="deleteBuilding('${b.id}','${escHtml(b.name)}')">Delete</button>
+                        </td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                tb.innerHTML = `<tr><td colspan="5" style="color:red;padding:20px">Error: ${escHtml(e.message)}</td></tr>`;
+            }
+        }
+
+        function openCreateBuildingModal() {
+            document.getElementById('cbName').value = '';
+            document.getElementById('cbMqttUrl').value = 'wss://pinplot.me/mqtt';
+            document.getElementById('cbMqttTopic').value = 'position/#';
+            document.getElementById('cbAlert').style.display = 'none';
+            // populate tenant dropdown
+            const sel = document.getElementById('cbGroupSel');
+            sel.innerHTML = _allGroups.map(g => `<option value="${g.id}">${escHtml(g.name)}</option>`).join('');
+            if (!sel.innerHTML) sel.innerHTML = '<option value="">— no tenants —</option>';
+            document.getElementById('createBuildingModal').classList.add('active');
+        }
+
+        async function submitCreateBuilding() {
+            const name = document.getElementById('cbName').value.trim();
+            const ug   = document.getElementById('cbGroupSel').value;
+            if (!name || !ug) {
+                document.getElementById('cbAlertText').textContent = 'Building name and tenant are required.';
+                document.getElementById('cbAlert').className = 'alert alert-error';
+                document.getElementById('cbAlert').style.display = 'flex';
+                return;
+            }
+            const payload = {
+                usergroup_id: ug,
+                name,
+                mqtt_url:   document.getElementById('cbMqttUrl').value.trim() || null,
+                mqtt_topic: document.getElementById('cbMqttTopic').value.trim() || 'position/#',
+            };
+            try {
+                const res = await fetch(`${API_URL}/api/admin/buildings`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) throw new Error((await res.json()).detail || 'HTTP ' + res.status);
+                closeModal('createBuildingModal');
+                loadBuildings();
+            } catch (e) {
+                document.getElementById('cbAlertText').textContent = e.message;
+                document.getElementById('cbAlert').className = 'alert alert-error';
+                document.getElementById('cbAlert').style.display = 'flex';
+            }
+        }
+
+        async function deleteBuilding(id, name) {
+            if (!confirm(`Delete building "${name}" and ALL its floors, gateways and rooms?`)) return;
+            await fetch(`${API_URL}/api/admin/buildings/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            loadBuildings();
+        }
+
+        // ── Floor manager ────────────────────────────────────────────────
+
+        async function openBldgFloorPane(buildingId, name) {
+            _activeBuildingId = buildingId;
+            document.getElementById('bldgFloorTitle').textContent = `${name} — Floors`;
+            document.getElementById('bldgListPane').style.display = 'none';
+            document.getElementById('bldgFloorPane').style.display = 'block';
+            await refreshFloorList();
+        }
+
+        function closeBldgFloorPane() {
+            document.getElementById('bldgFloorPane').style.display = 'none';
+            document.getElementById('bldgListPane').style.display = 'block';
+        }
+
+        async function refreshFloorList() {
+            const tb = document.getElementById('floorTableBody');
+            tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px">Loading…</td></tr>';
+            const res = await fetch(`${API_URL}/api/admin/buildings/${_activeBuildingId}`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const bldg = await res.json();
+            const floors = (bldg.floors || []).slice().sort((a,b) => a.floor_order - b.floor_order);
+            if (!floors.length) {
+                tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-secondary)">No floors yet.</td></tr>';
+                return;
+            }
+            tb.innerHTML = floors.map(f => `<tr>
+                <td>${f.floor_order}</td>
+                <td>${escHtml(f.label)}</td>
+                <td>${f.gateways.length}</td>
+                <td>${f.rooms.length}</td>
+                <td>
+                    <button class="btn btn-primary btn-small" onclick="openFloorEditor('${f.id}')">Edit Plan</button>
+                    <button class="btn btn-danger btn-small" onclick="deleteFloor('${f.id}','${escHtml(f.label)}')">Delete</button>
+                </td>
+            </tr>`).join('');
+        }
+
+        function openAddFloorModal() {
+            document.getElementById('afLabel').value = '';
+            document.getElementById('afW').value = '800';
+            document.getElementById('afH').value = '500';
+            document.getElementById('addFloorModal').classList.add('active');
+        }
+
+        async function submitAddFloor() {
+            const label = document.getElementById('afLabel').value.trim();
+            if (!label) return;
+            await fetch(`${API_URL}/api/admin/buildings/${_activeBuildingId}/floors`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    label,
+                    map_w: parseInt(document.getElementById('afW').value) || 800,
+                    map_h: parseInt(document.getElementById('afH').value) || 500,
+                })
+            });
+            closeModal('addFloorModal');
+            refreshFloorList();
+        }
+
+        async function deleteFloor(floorId, label) {
+            if (!confirm(`Delete floor "${label}" and all its gateways and rooms?`)) return;
+            await fetch(`${API_URL}/api/admin/floors/${floorId}`, {
+                method: 'DELETE', headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            refreshFloorList();
+        }
+
+        // ── Floor editor ─────────────────────────────────────────────────
+
+        async function openFloorEditor(floorId) {
+            _activeFloorId = floorId;
+            document.getElementById('bldgFloorPane').style.display = 'none';
+            document.getElementById('bldgEditorPane').style.display = 'block';
+
+            // Fetch full floor data (with floor_plan image)
+            const res = await fetch(`${API_URL}/api/admin/floors/${floorId}`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            _activeFloorData = await res.json();
+            document.getElementById('editorFloorTitle').textContent = `Editing: ${_activeFloorData.label}`;
+            document.getElementById('editorMode').value = 'pan';
+
+            initEditorMap();
+            renderEditorOverlays();
+        }
+
+        function closeFloorEditor() {
+            if (_editorMap) { _editorMap.remove(); _editorMap = null; }
+            _gwMarkers = {}; _roomLayers = {}; _drawingRect = null; _drawStart = null;
+            document.getElementById('bldgEditorPane').style.display = 'none';
+            document.getElementById('bldgFloorPane').style.display = 'block';
+            refreshFloorList();
+        }
+
+        function initEditorMap() {
+            if (_editorMap) { _editorMap.remove(); _editorMap = null; }
+            const W = _activeFloorData.map_w || 800;
+            const H = _activeFloorData.map_h || 500;
+            _editorMap = L.map('editorMap', {
+                crs: L.CRS.Simple,
+                minZoom: -2,
+                maxZoom: 3,
+                zoomSnap: 0.5,
+            });
+            const bounds = [[0, 0], [H, W]];
+            if (_activeFloorData.floor_plan) {
+                _editorImageLayer = L.imageOverlay(_activeFloorData.floor_plan, bounds).addTo(_editorMap);
+            } else {
+                // Grey placeholder
+                _editorImageLayer = null;
+            }
+            _editorMap.fitBounds(bounds, { padding: [20, 20] });
+
+            // Click handler for gateway placement and room drawing
+            _editorMap.on('click',     onMapClick);
+            _editorMap.on('mousemove', onMapMouseMove);
+            _editorMap.on('mouseup',   onMapMouseUp);
+        }
+
+        function updateEditorMode() {
+            const mode = document.getElementById('editorMode').value;
+            const hints = {
+                pan:     'Pan and zoom the map freely.',
+                gateway: 'Click anywhere on the floor plan to place a gateway.',
+                room:    'Click and drag to draw a room rectangle.',
+            };
+            document.getElementById('editorHint').textContent = hints[mode] || '';
+            if (_editorMap) {
+                if (mode === 'pan') { _editorMap.dragging.enable(); }
+                else { _editorMap.dragging.disable(); }
+            }
+        }
+
+        function onMapClick(e) {
+            const mode = document.getElementById('editorMode').value;
+            if (mode !== 'gateway') return;
+            const { lat, lng } = e.latlng;
+            // In L.CRS.Simple lat=y, lng=x
+            document.getElementById('pgX').value = lng;
+            document.getElementById('pgY').value = lat;
+            document.getElementById('pgReceiverId').value = '';
+            document.getElementById('pgLabel').value = '';
+            document.getElementById('placeGatewayModal').classList.add('active');
+        }
+
+        function onMapMouseMove(e) {
+            const mode = document.getElementById('editorMode').value;
+            if (mode !== 'room' || !_drawStart) return;
+            const { lat, lng } = e.latlng;
+            if (_drawingRect) _editorMap.removeLayer(_drawingRect);
+            _drawingRect = L.rectangle([
+                [_drawStart.y, _drawStart.x],
+                [lat, lng]
+            ], { color: '#3b82f6', weight: 2, fillOpacity: 0.15 }).addTo(_editorMap);
+        }
+
+        function onMapMouseUp(e) {
+            const mode = document.getElementById('editorMode').value;
+            if (mode !== 'room') return;
+            if (!_drawStart) {
+                _drawStart = { x: e.latlng.lng, y: e.latlng.lat };
+                return;
+            }
+            const x1 = Math.min(_drawStart.x, e.latlng.lng);
+            const y1 = Math.min(_drawStart.y, e.latlng.lat);
+            const x2 = Math.max(_drawStart.x, e.latlng.lng);
+            const y2 = Math.max(_drawStart.y, e.latlng.lat);
+            _drawStart = null;
+            if (Math.abs(x2-x1) < 5 || Math.abs(y2-y1) < 5) {
+                if (_drawingRect) { _editorMap.removeLayer(_drawingRect); _drawingRect = null; }
+                return;
+            }
+            _pendingRoomBounds = { x: x1, y: y1, w: x2-x1, h: y2-y1 };
+            document.getElementById('nrName').value = '';
+            document.getElementById('nameRoomModal').classList.add('active');
+        }
+
+        function cancelRoomDraw() {
+            if (_drawingRect) { _editorMap.removeLayer(_drawingRect); _drawingRect = null; }
+            _drawStart = null; _pendingRoomBounds = null;
+            closeModal('nameRoomModal');
+        }
+
+        function renderEditorOverlays() {
+            _gwMarkers  = {};
+            _roomLayers = {};
+            const W = _activeFloorData.map_w || 800;
+            const H = _activeFloorData.map_h || 500;
+
+            (_activeFloorData.gateways || []).forEach(gw => addGwMarker(gw));
+            (_activeFloorData.rooms    || []).forEach(rm => addRoomRect(rm));
+            renderGwList();
+            renderRoomList();
+        }
+
+        const gwIcon = L.divIcon({
+            html: '<div style="background:#ef4444;border:2px solid white;border-radius:50%;width:18px;height:18px;box-shadow:0 1px 4px rgba(0,0,0,.5)"></div>',
+            className: '', iconSize: [18,18], iconAnchor: [9,9]
+        });
+
+        function addGwMarker(gw) {
+            const marker = L.marker([gw.y, gw.x], { icon: gwIcon, draggable: true })
+                .addTo(_editorMap)
+                .bindTooltip(gw.label ? `${gw.label}<br><code>${gw.receiver_id}</code>` : `<code>${gw.receiver_id}</code>`, { permanent: false });
+            marker.on('dragend', async () => {
+                const pos = marker.getLatLng();
+                await fetch(`${API_URL}/api/admin/gateways/${gw.id}`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ x: pos.lng, y: pos.lat }),
+                });
+                gw.x = pos.lng; gw.y = pos.lat;
+            });
+            marker.on('click', () => {
+                if (document.getElementById('editorMode').value !== 'pan') return;
+                if (confirm(`Delete gateway "${gw.label || gw.receiver_id}"?`)) {
+                    deleteGateway(gw.id, marker);
+                }
+            });
+            _gwMarkers[gw.id] = marker;
+        }
+
+        function addRoomRect(rm) {
+            const rect = L.rectangle(
+                [[rm.y, rm.x], [rm.y + rm.h, rm.x + rm.w]],
+                { color: '#3b82f6', weight: 2, fillOpacity: 0.12 }
+            ).addTo(_editorMap).bindTooltip(rm.name, { permanent: true, className: 'room-label' });
+            rect.on('click', () => {
+                if (document.getElementById('editorMode').value !== 'pan') return;
+                if (confirm(`Delete room "${rm.name}"?`)) {
+                    deleteRoom(rm.id, rect);
+                }
+            });
+            _roomLayers[rm.id] = rect;
+        }
+
+        function renderGwList() {
+            const gws = _activeFloorData.gateways || [];
+            document.getElementById('gwList').innerHTML = gws.length
+                ? gws.map(g => `<div style="padding:4px 0;border-bottom:1px solid var(--border-color)">
+                    <strong>${escHtml(g.label || '—')}</strong><br>
+                    <code style="font-size:11px">${escHtml(g.receiver_id)}</code>
+                    &nbsp;<span style="color:var(--text-secondary);font-size:11px">(${Math.round(g.x)}, ${Math.round(g.y)})</span>
+                  </div>`).join('')
+                : '<p style="color:var(--text-secondary);font-size:12px;margin:0">No gateways yet.</p>';
+        }
+
+        function renderRoomList() {
+            const rooms = _activeFloorData.rooms || [];
+            document.getElementById('roomList').innerHTML = rooms.length
+                ? rooms.map(r => `<div style="padding:4px 0;border-bottom:1px solid var(--border-color)">
+                    <strong>${escHtml(r.name)}</strong>
+                    <span style="color:var(--text-secondary);font-size:11px"> ${Math.round(r.w)}×${Math.round(r.h)}</span>
+                  </div>`).join('')
+                : '<p style="color:var(--text-secondary);font-size:12px;margin:0">No rooms yet.</p>';
+        }
+
+        async function submitPlaceGateway() {
+            const receiverId = document.getElementById('pgReceiverId').value.trim().toLowerCase().replace(/:/g,'');
+            if (!receiverId) return;
+            const payload = {
+                receiver_id: receiverId,
+                label: document.getElementById('pgLabel').value.trim() || null,
+                x: parseFloat(document.getElementById('pgX').value),
+                y: parseFloat(document.getElementById('pgY').value),
+            };
+            const res = await fetch(`${API_URL}/api/admin/floors/${_activeFloorId}/gateways`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const gw = await res.json();
+            _activeFloorData.gateways.push(gw);
+            addGwMarker(gw);
+            renderGwList();
+            closeModal('placeGatewayModal');
+        }
+
+        async function deleteGateway(gwId, marker) {
+            await fetch(`${API_URL}/api/admin/gateways/${gwId}`, {
+                method: 'DELETE', headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            _editorMap.removeLayer(marker);
+            _activeFloorData.gateways = _activeFloorData.gateways.filter(g => g.id !== gwId);
+            delete _gwMarkers[gwId];
+            renderGwList();
+        }
+
+        async function submitRoom() {
+            const name = document.getElementById('nrName').value.trim();
+            if (!name || !_pendingRoomBounds) return;
+            const payload = { name, ..._pendingRoomBounds };
+            const res = await fetch(`${API_URL}/api/admin/floors/${_activeFloorId}/rooms`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const rm = await res.json();
+            _activeFloorData.rooms.push(rm);
+            if (_drawingRect) { _editorMap.removeLayer(_drawingRect); _drawingRect = null; }
+            addRoomRect(rm);
+            renderRoomList();
+            _pendingRoomBounds = null;
+            closeModal('nameRoomModal');
+        }
+
+        async function deleteRoom(roomId, rectLayer) {
+            await fetch(`${API_URL}/api/admin/rooms/${roomId}`, {
+                method: 'DELETE', headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            _editorMap.removeLayer(rectLayer);
+            _activeFloorData.rooms = _activeFloorData.rooms.filter(r => r.id !== roomId);
+            delete _roomLayers[roomId];
+            renderRoomList();
+        }
+
+        function openUploadFloorPlan() {
+            document.getElementById('floorPlanFileInput').click();
+        }
+
+        function handleFloorPlanUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async ev => {
+                const dataUrl = ev.target.result;
+                // Save to backend
+                await fetch(`${API_URL}/api/admin/floors/${_activeFloorId}`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ floor_plan: dataUrl }),
+                });
+                _activeFloorData.floor_plan = dataUrl;
+                // Update map image layer
+                const W = _activeFloorData.map_w || 800;
+                const H = _activeFloorData.map_h || 500;
+                const bounds = [[0,0],[H,W]];
+                if (_editorImageLayer) _editorMap.removeLayer(_editorImageLayer);
+                _editorImageLayer = L.imageOverlay(dataUrl, bounds).addTo(_editorMap);
+                _editorMap.fitBounds(bounds, { padding: [20,20] });
+            };
+            reader.readAsDataURL(file);
+        }
+
     </script>
 </body>
 </html>

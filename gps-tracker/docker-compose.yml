@@ -116,8 +116,11 @@ services:
       - PARETO_URL=http://pareto-anywhere:3001
       # Internal MQTT broker
       - MQTT_URL=mqtt://mosquitto:1883
-      # Gateway positions: JSON map of receiverId (lowercase hex, no colons) → {x, y}
-      # Example: '{"aabbccddeeff":{"x":100,"y":200},"112233445566":{"x":400,"y":350}}'
+      # Backend API — gateway positions fetched from here every 60 s
+      - BACKEND_URL=http://backend:8000
+      # Shared secret for /api/portal/gateways (must match BRIDGE_API_KEY in backend .env)
+      - BRIDGE_API_KEY=${BRIDGE_API_KEY:-bridge-key-change-me}
+      # JSON fallback positions used if API is unreachable (optional)
       - GATEWAY_POSITIONS={}
     depends_on:
       - mosquitto
