@@ -2381,14 +2381,21 @@
             if (_activeFloorData.floor_plan) {
                 _editorImageLayer = L.imageOverlay(_activeFloorData.floor_plan, bounds).addTo(_editorMap);
             } else {
-                // Grey placeholder
+                // Grid placeholder so the canvas is visible
                 _editorImageLayer = null;
+                L.rectangle([[0,0],[H,W]], { color:'#4b5563', weight:2, fillColor:'#1f2937', fillOpacity:0.6 }).addTo(_editorMap);
+                // Draw grid lines every 100px
+                for (let gx = 100; gx < W; gx += 100)
+                    L.polyline([[0,gx],[H,gx]], { color:'#374151', weight:1 }).addTo(_editorMap);
+                for (let gy = 100; gy < H; gy += 100)
+                    L.polyline([[gy,0],[gy,W]], { color:'#374151', weight:1 }).addTo(_editorMap);
             }
             _editorMap.fitBounds(bounds, { padding: [20, 20] });
 
             // Click handler for gateway placement and room drawing
             _editorMap.on('click',     onMapClick);
             _editorMap.on('mousemove', onMapMouseMove);
+            _editorMap.on('mousedown', onMapMouseDown);
             _editorMap.on('mouseup',   onMapMouseUp);
         }
 
@@ -2396,14 +2403,25 @@
             const mode = document.getElementById('editorMode').value;
             const hints = {
                 pan:     'Pan and zoom the map freely.',
-                gateway: 'Click anywhere on the floor plan to place a gateway.',
-                room:    'Click and drag to draw a room rectangle.',
+                gateway: 'Click anywhere on the floor plan to place a gateway. Click an existing gateway to delete it.',
+                room:    'Click and drag to draw a room rectangle. Click an existing room to delete it.',
             };
             document.getElementById('editorHint').textContent = hints[mode] || '';
             if (_editorMap) {
-                if (mode === 'pan') { _editorMap.dragging.enable(); }
-                else { _editorMap.dragging.disable(); }
+                if (mode === 'pan') {
+                    _editorMap.dragging.enable();
+                    _editorMap.getContainer().style.cursor = 'grab';
+                } else if (mode === 'gateway') {
+                    _editorMap.dragging.enable();
+                    _editorMap.getContainer().style.cursor = 'crosshair';
+                } else {
+                    _editorMap.dragging.disable();
+                    _editorMap.getContainer().style.cursor = 'crosshair';
+                }
             }
+            // Clear any in-progress room draw when switching mode
+            _drawStart = null;
+            if (_drawingRect) { _editorMap.removeLayer(_drawingRect); _drawingRect = null; }
         }
 
         function onMapClick(e) {
@@ -2416,6 +2434,12 @@
             document.getElementById('pgReceiverId').value = '';
             document.getElementById('pgLabel').value = '';
             document.getElementById('placeGatewayModal').classList.add('active');
+        }
+
+        function onMapMouseDown(e) {
+            const mode = document.getElementById('editorMode').value;
+            if (mode !== 'room') return;
+            _drawStart = { x: e.latlng.lng, y: e.latlng.lat };
         }
 
         function onMapMouseMove(e) {
@@ -2431,11 +2455,7 @@
 
         function onMapMouseUp(e) {
             const mode = document.getElementById('editorMode').value;
-            if (mode !== 'room') return;
-            if (!_drawStart) {
-                _drawStart = { x: e.latlng.lng, y: e.latlng.lat };
-                return;
-            }
+            if (mode !== 'room' || !_drawStart) return;
             const x1 = Math.min(_drawStart.x, e.latlng.lng);
             const y1 = Math.min(_drawStart.y, e.latlng.lat);
             const x2 = Math.max(_drawStart.x, e.latlng.lng);
