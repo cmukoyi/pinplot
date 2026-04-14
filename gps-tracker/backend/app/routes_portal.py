@@ -229,8 +229,8 @@ def create_portal_user(
 # ---------------------------------------------------------------------------
 
 class RoomOut(BaseModel):
-    id: str
-    floor_id: str
+    id: UUID
+    floor_id: UUID
     name: str
     x: float
     y: float
@@ -239,8 +239,8 @@ class RoomOut(BaseModel):
     class Config: from_attributes = True
 
 class GatewayOut(BaseModel):
-    id: str
-    floor_id: str
+    id: UUID
+    floor_id: UUID
     receiver_id: str
     label: Optional[str]
     x: float
@@ -248,8 +248,8 @@ class GatewayOut(BaseModel):
     class Config: from_attributes = True
 
 class FloorOut(BaseModel):
-    id: str
-    building_id: str
+    id: UUID
+    building_id: UUID
     label: str
     floor_order: int
     floor_plan: Optional[str]
@@ -260,8 +260,8 @@ class FloorOut(BaseModel):
     class Config: from_attributes = True
 
 class BuildingOut(BaseModel):
-    id: str
-    usergroup_id: str
+    id: UUID
+    usergroup_id: UUID
     name: str
     mqtt_url: Optional[str]
     mqtt_topic: str

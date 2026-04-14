@@ -777,6 +777,10 @@ function authHeaders() {
     return { 'Authorization': `Bearer ${getSession().token}`, 'Content-Type': 'application/json' };
 }
 
+function apiFetch(path, options = {}) {
+    return fetch(path, { ...options, headers: { ...authHeaders(), ...(options.headers || {}) } });
+}
+
 // ══════════════════════════════════════════
 // Login / Logout
 // ══════════════════════════════════════════
