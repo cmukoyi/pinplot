@@ -76,7 +76,7 @@ function publish(topic, payload) {
 console.log(`[pareto] Connecting to ${PARETO_URL}`);
 
 const socket = io(PARETO_URL, {
-    transports:       ['websocket'],
+    transports:       ['polling', 'websocket'],
     reconnection:     true,
     reconnectionDelay: 5000,
     timeout:          10000,
