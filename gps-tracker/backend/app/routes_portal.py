@@ -513,6 +513,10 @@ class PortalTagAssign(BaseModel):
     user_id: UUID
 
 
+class PortalTagDelete(BaseModel):
+    tag_ids: List[str]
+
+
 def _build_tag_out(tag: BLETag, owner_email: str) -> PortalTagOut:
     return PortalTagOut(
         id=tag.id,
@@ -596,4 +600,26 @@ def assign_tag(tag_id: str, data: PortalTagAssign, request: Request, db: Session
     db.commit()
     db.refresh(tag)
     return _build_tag_out(tag, target_user.email)
+
+
+@router.delete("/tags", status_code=204)
+def delete_tags(data: PortalTagDelete, request: Request, db: Session = Depends(get_db)):
+    """Permanently delete one or more BLE tags (group admin only).
+    Tags must belong to a user in the group's configured email domain."""
+    me = get_portal_user_from_request(request, db)
+    if not me.is_group_admin:
+        raise HTTPException(status_code=403, detail="Only group admins can delete tags")
+    group = _get_group_and_assert_domain(me, db)
+
+    for tag_id in data.tag_ids:
+        tag = (
+            db.query(BLETag)
+            .join(User, User.id == BLETag.user_id)
+            .filter(BLETag.id == tag_id, User.email.ilike(f"%@{group.email_domain.lower()}"))
+            .first()
+        )
+        if tag:
+            db.delete(tag)
+
+    db.commit()
 

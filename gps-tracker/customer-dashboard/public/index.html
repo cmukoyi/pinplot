@@ -426,8 +426,9 @@
                 <div class="card">
                     <div class="card-header">
                         <span class="card-title">Group Tags</span>
-                        <div style="display:flex;gap:8px">
+                        <div style="display:flex;gap:8px;flex-wrap:wrap">
                             <button class="btn btn-secondary btn-small" onclick="loadGroupTags()">↻ Refresh</button>
+                            <button id="deleteTagsBtn" class="btn btn-small" onclick="deleteSelectedTags()" style="display:none;background:#ef4444;color:#fff;border-color:#ef4444">🗑 Delete Selected</button>
                             <button id="addTagBtn" class="btn btn-primary btn-small" onclick="openAddTagModal()" style="display:none">+ Add Tag</button>
                         </div>
                     </div>
@@ -437,6 +438,7 @@
                         <table>
                             <thead>
                                 <tr id="tagsTableHead">
+                                    <th id="tagsSelectAllTh" style="width:36px;display:none"><input type="checkbox" id="tagsSelectAll" title="Select all" onchange="tagsToggleAll(this.checked)"></th>
                                     <th>IMEI / Tag ID</th>
                                     <th>Label / Description</th>
                                     <th>Owner</th>
@@ -446,7 +448,7 @@
                                 </tr>
                             </thead>
                             <tbody id="tagsTableBody">
-                                <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray)">Loading…</td></tr>
+                                <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray)">Loading…</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -975,13 +977,17 @@ function showTabAlert(prefix, msg, type) {
 // ══════════════════════════════════════════
 
 async function loadGroupTags() {
-    const tb   = document.getElementById('tagsTableBody');
-    const hint = document.getElementById('tagsDomainHint');
+    const tb      = document.getElementById('tagsTableBody');
+    const hint    = document.getElementById('tagsDomainHint');
     const isAdmin = getSession().user?.is_group_admin;
-    const colSpan = isAdmin ? 7 : 6;
+    const colSpan = isAdmin ? 9 : 7;
 
-    // Show/hide Add Tag button and Actions column header
-    document.getElementById('addTagBtn').style.display = isAdmin ? '' : 'none';
+    // Show/hide admin-only controls
+    document.getElementById('addTagBtn').style.display    = isAdmin ? '' : 'none';
+    document.getElementById('deleteTagsBtn').style.display = 'none';
+    document.getElementById('tagsSelectAllTh').style.display = isAdmin ? '' : 'none';
+
+    // Actions column header (added once)
     const head = document.getElementById('tagsTableHead');
     if (isAdmin && !head.querySelector('.actions-th')) {
         const th = document.createElement('th');
@@ -990,9 +996,13 @@ async function loadGroupTags() {
         head.appendChild(th);
     }
 
+    // Reset select-all checkbox
+    const selectAll = document.getElementById('tagsSelectAll');
+    if (selectAll) selectAll.checked = false;
+
     tb.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;padding:40px;color:var(--gray)">Loading…</td></tr>`;
 
-    // Fetch settings to show domain hint
+    // Fetch domain hint
     try {
         const sRes = await apiFetch('/api/portal/settings');
         const settings = await sRes.json();
@@ -1014,10 +1024,14 @@ async function loadGroupTags() {
                 ? '<span class="badge badge-success">Active</span>'
                 : '<span class="badge badge-danger">Inactive</span>';
             const lastSeen = t.last_seen ? new Date(t.last_seen).toLocaleString() : '—';
+            const checkCell = isAdmin
+                ? `<td style="width:36px;text-align:center"><input type="checkbox" class="tag-row-cb" data-tag-id="${esc(String(t.id))}" onchange="updateTagDeleteBtn()" onclick="event.stopPropagation()"></td>`
+                : '';
             const actionsCell = isAdmin
                 ? `<td><button class="btn btn-secondary btn-small" onclick="openAssignTagModal('${esc(String(t.id))}', '${esc(t.owner_email)}')">Reassign</button></td>`
                 : '';
             return `<tr>
+                ${checkCell}
                 <td><code>${esc(t.imei)}</code></td>
                 <td>${esc(t.description || t.device_name || '—')}</td>
                 <td style="font-size:12px;color:var(--gray)">${esc(t.owner_email)}</td>
@@ -1029,6 +1043,58 @@ async function loadGroupTags() {
         }).join('');
     } catch (err) {
         tb.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;padding:40px;color:var(--red)">Failed to load tags: ${esc(err.message)}</td></tr>`;
+    }
+}
+
+// ══════════════════════════════════════════
+// TAG SELECTION & BULK DELETE
+// ══════════════════════════════════════════
+
+function updateTagDeleteBtn() {
+    const checked = document.querySelectorAll('.tag-row-cb:checked').length;
+    const btn = document.getElementById('deleteTagsBtn');
+    if (btn) btn.style.display = checked > 0 ? '' : 'none';
+    if (btn && checked > 0) btn.textContent = `🗑 Delete Selected (${checked})`;
+
+    // Keep select-all in sync
+    const all = document.querySelectorAll('.tag-row-cb');
+    const selectAll = document.getElementById('tagsSelectAll');
+    if (selectAll && all.length) {
+        selectAll.checked = checked === all.length;
+        selectAll.indeterminate = checked > 0 && checked < all.length;
+    }
+}
+
+function tagsToggleAll(checked) {
+    document.querySelectorAll('.tag-row-cb').forEach(cb => { cb.checked = checked; });
+    updateTagDeleteBtn();
+}
+
+async function deleteSelectedTags() {
+    const checked = [...document.querySelectorAll('.tag-row-cb:checked')];
+    if (!checked.length) return;
+    const tagIds = checked.map(cb => cb.dataset.tagId);
+    if (!confirm(`Permanently delete ${tagIds.length} tag(s)? This cannot be undone.`)) return;
+
+    const alertEl  = document.getElementById('tagsAlert');
+    const alertTxt = document.getElementById('tagsAlertText');
+    alertEl.style.display = 'none';
+
+    try {
+        const res = await apiFetch('/api/portal/tags', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tag_ids: tagIds }),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: 'Delete failed' }));
+            throw new Error(err.detail || 'Delete failed');
+        }
+        loadGroupTags();
+    } catch (err) {
+        alertTxt.textContent = `Delete failed: ${esc(err.message)}`;
+        alertEl.className = 'alert alert-error';
+        alertEl.style.display = 'flex';
     }
 }
 
