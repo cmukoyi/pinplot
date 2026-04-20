@@ -444,11 +444,15 @@
                                     <th>Owner</th>
                                     <th>Type</th>
                                     <th>Status</th>
+                                    <th>Date Added</th>
+                                    <th>Package</th>
+                                    <th>Expiry</th>
+                                    <th>Days Left</th>
                                     <th>Last Seen</th>
                                 </tr>
                             </thead>
                             <tbody id="tagsTableBody">
-                                <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray)">Loading…</td></tr>
+                                <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--gray)">Loading…</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -788,6 +792,12 @@
                     <option value="">Loading users…</option>
                 </select>
             </div>
+            <div class="form-group">
+                <label>Package *</label>
+                <select id="tagMgmtPackage" required>
+                    <option value="">Loading packages…</option>
+                </select>
+            </div>
             <input type="hidden" id="tagMgmtTagId">
             <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
                 <button type="button" class="btn btn-secondary" onclick="closeModal('tagMgmtModal')">Cancel</button>
@@ -980,7 +990,7 @@ async function loadGroupTags() {
     const tb      = document.getElementById('tagsTableBody');
     const hint    = document.getElementById('tagsDomainHint');
     const isAdmin = getSession().user?.is_group_admin;
-    const colSpan = isAdmin ? 9 : 7;
+    const colSpan = isAdmin ? 13 : 11;
 
     // Show/hide admin-only controls
     document.getElementById('addTagBtn').style.display    = isAdmin ? '' : 'none';
@@ -1023,7 +1033,19 @@ async function loadGroupTags() {
             const statusBadge = t.is_active
                 ? '<span class="badge badge-success">Active</span>'
                 : '<span class="badge badge-danger">Inactive</span>';
-            const lastSeen = t.last_seen ? new Date(t.last_seen).toLocaleString() : '—';
+            const lastSeen  = t.last_seen   ? new Date(t.last_seen).toLocaleString()   : '—';
+            const addedAt   = t.added_at    ? new Date(t.added_at).toLocaleDateString() : '—';
+            const expiryStr = t.expiry_date ? new Date(t.expiry_date).toLocaleDateString() : '—';
+
+            // Days remaining badge — green >30, yellow 1-30, red ≤0 / no package
+            let daysCell = '—';
+            if (t.days_remaining !== null && t.days_remaining !== undefined) {
+                const d = t.days_remaining;
+                const color = d > 30 ? 'badge-success' : d > 0 ? 'badge-warning' : 'badge-danger';
+                const label = d > 0 ? `${d} days` : (d === 0 ? 'Today' : `Expired ${Math.abs(d)}d ago`);
+                daysCell = `<span class="badge ${color}">${label}</span>`;
+            }
+
             const checkCell = isAdmin
                 ? `<td style="width:36px;text-align:center"><input type="checkbox" class="tag-row-cb" data-tag-id="${esc(String(t.id))}" onchange="updateTagDeleteBtn()" onclick="event.stopPropagation()"></td>`
                 : '';
@@ -1037,6 +1059,10 @@ async function loadGroupTags() {
                 <td style="font-size:12px;color:var(--gray)">${esc(t.owner_email)}</td>
                 <td>${esc(t.tag_type || '—')}</td>
                 <td>${statusBadge}</td>
+                <td style="font-size:12px">${addedAt}</td>
+                <td style="font-size:12px">${esc(t.package_name || '—')}</td>
+                <td style="font-size:12px">${expiryStr}</td>
+                <td style="font-size:12px">${daysCell}</td>
                 <td style="font-size:12px">${esc(lastSeen)}</td>
                 ${actionsCell}
             </tr>`;
@@ -1121,6 +1147,28 @@ async function _loadMobileUsersIntoSelect() {
     }
 }
 
+async function _loadPackagesIntoSelect() {
+    const sel = document.getElementById('tagMgmtPackage');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Loading packages…</option>';
+    try {
+        const res = await apiFetch('/api/portal/packages');
+        if (!res.ok) throw new Error('Failed to load packages');
+        const pkgs = await res.json();
+        if (!pkgs.length) {
+            sel.innerHTML = '<option value="">No packages available — ask your admin</option>';
+            return;
+        }
+        sel.innerHTML = '<option value="">— Select package —</option>' +
+            pkgs.map(p => {
+                const label = `${p.name} (${p.validity_days} days)${p.is_default ? ' ✓ default' : ''}`;
+                return `<option value="${esc(String(p.id))}"${p.is_default ? ' selected' : ''}>${esc(label)}</option>`;
+            }).join('');
+    } catch (err) {
+        sel.innerHTML = `<option value="">Error: ${esc(err.message)}</option>`;
+    }
+}
+
 async function openAddTagModal() {
     document.getElementById('tagMgmtTitle').textContent = 'Add Tag';
     document.getElementById('tagMgmtSubmitBtn').textContent = 'Add Tag';
@@ -1133,7 +1181,7 @@ async function openAddTagModal() {
     document.getElementById('tagMgmtTypeGroup').style.display = '';
     document.getElementById('tagMgmtAlert').style.display = 'none';
     openModal('tagMgmtModal');
-    await _loadMobileUsersIntoSelect();
+    await Promise.all([_loadMobileUsersIntoSelect(), _loadPackagesIntoSelect()]);
 }
 
 async function openAssignTagModal(tagId, currentOwner) {
@@ -1173,6 +1221,10 @@ async function submitTagForm(e) {
             });
         } else {
             // Create new tag
+            const packageId = document.getElementById('tagMgmtPackage')?.value;
+            if (!packageId) {
+                throw new Error('Please select a package');
+            }
             res = await apiFetch('/api/portal/tags', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1181,6 +1233,7 @@ async function submitTagForm(e) {
                     description: document.getElementById('tagMgmtDesc').value.trim() || null,
                     tag_type: document.getElementById('tagMgmtType').value,
                     user_id: userId,
+                    package_id: packageId,
                 }),
             });
         }

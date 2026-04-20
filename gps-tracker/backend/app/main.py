@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db, init_db
 from app.models import User, VerificationPIN, BLETag, POI, POITrackerLink, GeofenceAlert, PasswordResetToken, GeofenceState, AppFeatures
-from app.models_admin import AdminUser, AppLog, AuditLog, BillingData
+from app.models_admin import AdminUser, AppLog, AuditLog, BillingData, TagPackage
 from app.auth import verify_password, get_password_hash, create_access_token, decode_token
 from app.admin_auth import hash_password as admin_hash_password
 from app.services.email_service import EmailService
@@ -230,10 +230,61 @@ async def startup_event():
     asyncio.create_task(location_poller.start())
     print("🚀 Location Poller Service started (60-second interval)")
 
+    # Start GDPR cleanup task (runs daily)
+    asyncio.create_task(_gdpr_cleanup_loop())
+    print("📜 GDPR cleanup task started (runs every 24 h)")
+
 @app.on_event("shutdown")
 def shutdown_event():
     location_poller.stop()
     print("🛑 Location Poller Service stopped")
+
+
+# ---------------------------------------------------------------------------
+# GDPR cleanup — delete beacon data 40 days after package expiry
+# ---------------------------------------------------------------------------
+GDPR_GRACE_DAYS = 40
+
+async def _gdpr_cleanup_loop():
+    """Run every 24 hours. Delete BeaconSighting rows for tags whose
+    package expiry_date + GDPR_GRACE_DAYS has passed, then clear
+    location fields on the tag so expired tags show no position."""
+    from app.database import SessionLocal
+    from app.models import BeaconSighting
+    while True:
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=GDPR_GRACE_DAYS)
+            db: Session = SessionLocal()
+            try:
+                expired_tags = (
+                    db.query(BLETag)
+                    .filter(
+                        BLETag.expiry_date != None,
+                        BLETag.expiry_date <= cutoff,
+                    )
+                    .all()
+                )
+                purged = 0
+                for tag in expired_tags:
+                    # Remove beacon sighting rows
+                    deleted = (
+                        db.query(BeaconSighting)
+                        .filter(BeaconSighting.tag_id == tag.imei)
+                        .delete(synchronize_session=False)
+                    )
+                    purged += deleted
+                    # Clear cached location on the tag
+                    tag.latitude = None
+                    tag.longitude = None
+                    tag.location_description = None
+                if purged > 0 or expired_tags:
+                    db.commit()
+                    print(f"[GDPR] Purged {purged} sighting rows across {len(expired_tags)} expired tags")
+            finally:
+                db.close()
+        except Exception as exc:
+            print(f"[GDPR] Cleanup error: {exc}")
+        await asyncio.sleep(86400)  # 24 h
 
 # Demo data - simulating BLE tags
 DEMO_TAGS = [
@@ -759,6 +810,16 @@ async def add_ble_tag(
         battery_level=battery,
         attributes=initial_attributes,
     )
+
+    # Auto-assign the default package if one is configured
+    default_pkg = db.query(TagPackage).filter(
+        TagPackage.is_default == True,
+        TagPackage.is_active == True,
+    ).first()
+    if default_pkg:
+        ble_tag.package_id = str(default_pkg.id)
+        ble_tag.expiry_date = datetime.utcnow() + timedelta(days=default_pkg.validity_days)
+
     db.add(ble_tag)
     db.commit()
     db.refresh(ble_tag)

@@ -793,6 +793,12 @@
                         </button>
                     </li>
                     <li class="sidebar-item">
+                        <button class="sidebar-link" onclick="switchTab('packages')">
+                            <span>📦</span>
+                            <span>Packages</span>
+                        </button>
+                    </li>
+                    <li class="sidebar-item">
                         <button class="sidebar-link" onclick="switchTab('buildings')">
                             <span>🏗️</span>
                             <span>Buildings</span>
@@ -1202,6 +1208,74 @@
                     </div>
 
                     <!-- ═══════════════════════════════════════════════════ -->
+                    <!-- PACKAGES TAB                                        -->
+                    <!-- ═══════════════════════════════════════════════════ -->
+                    <div id="packages" class="tab-content">
+                        <div class="page-header">
+                            <h2 class="page-title">Tag Packages</h2>
+                            <p class="page-subtitle">Subscription packages that control how long a BLE tag reports location data. Tags expire after the package validity period; beacon data is purged 40 days after expiry (GDPR).</p>
+                            <button class="btn btn-primary" onclick="openCreatePackageModal()">+ Create Package</button>
+                        </div>
+
+                        <div id="pkgAlertBanner" class="alert" style="display:none"><span id="pkgAlertText"></span></div>
+
+                        <div class="card">
+                            <div id="pkgTableWrap">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Description</th>
+                                            <th>Validity (days)</th>
+                                            <th>Default</th>
+                                            <th>Status</th>
+                                            <th>Created</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="pkgTableBody">
+                                        <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Create / Edit Package Modal -->
+                        <div id="createPackageModal" class="modal">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h3 class="modal-title" id="pkgModalTitle">Create Package</h3>
+                                    <button class="modal-close" onclick="closeModal('createPackageModal')">×</button>
+                                </div>
+                                <div id="pkgModalAlert" class="alert" style="display:none"><span id="pkgModalAlertText"></span></div>
+                                <form id="createPackageForm" onsubmit="submitPackageForm(event)">
+                                    <input type="hidden" id="pkgEditId">
+                                    <div class="form-group">
+                                        <label class="form-label">Package Name *</label>
+                                        <input type="text" id="pkgName" class="form-input" placeholder="e.g. Basic 80" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Description</label>
+                                        <input type="text" id="pkgDesc" class="form-input" placeholder="Optional description">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Validity (days) *</label>
+                                        <input type="number" id="pkgDays" class="form-input" placeholder="e.g. 80" min="1" required>
+                                    </div>
+                                    <div class="form-group" style="display:flex;align-items:center;gap:10px">
+                                        <input type="checkbox" id="pkgIsDefault" style="width:18px;height:18px;cursor:pointer">
+                                        <label class="form-label" style="margin:0;cursor:pointer" for="pkgIsDefault">Set as default (auto-applied to self-registered tags)</label>
+                                    </div>
+                                    <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px">
+                                        <button type="button" class="btn btn-secondary" onclick="closeModal('createPackageModal')">Cancel</button>
+                                        <button type="submit" class="btn btn-primary" id="pkgSubmitBtn">Create Package</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ═══════════════════════════════════════════════════ -->
                     <!-- BUILDINGS TAB                                       -->
                     <!-- ═══════════════════════════════════════════════════ -->
                     <div id="buildings" class="tab-content">
@@ -1605,6 +1679,7 @@
                 'audit': 'Audit Logs',
                 'features': 'App Features',
                 'usergroups': 'User Groups',
+                'packages': 'Tag Packages',
                 'buildings': 'Buildings & Floor Plans'
             };
             document.getElementById('pageTitle').textContent = titles[tabName];
@@ -1616,6 +1691,7 @@
             if (tabName === 'audit') loadAuditLogs();
             if (tabName === 'features') loadFeatures();
             if (tabName === 'usergroups') loadUsergroups();
+            if (tabName === 'packages') loadPackages();
             if (tabName === 'buildings') { loadBuildings(); }
         }
 
@@ -2179,6 +2255,136 @@
         let _drawStart         = null;  // {x,y} pixel coord
         let _allGroups         = [];    // cached usergroups for dropdown
         let _pendingRoomBounds = null;  // bounds to save once user names room
+
+        let _drawStart         = null;  // {x,y} pixel coord
+        let _allGroups         = [];    // cached usergroups for dropdown
+        let _pendingRoomBounds = null;  // bounds to save once user names room
+
+        // ─────────────────────────────────────────────────────────────────────
+        // PACKAGES
+        // ─────────────────────────────────────────────────────────────────────
+        async function loadPackages() {
+            const tb = document.getElementById('pkgTableBody');
+            tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
+            try {
+                const res = await fetch(`${API_URL}/api/admin/packages`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (res.status === 401) { handle401(); return; }
+                const pkgs = await res.json();
+                if (!pkgs.length) {
+                    tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-secondary)">No packages yet. Click "Create Package" to add one.</td></tr>';
+                    return;
+                }
+                tb.innerHTML = pkgs.map(p => `
+                    <tr>
+                        <td><strong>${p.name}</strong></td>
+                        <td>${p.description || '<span style="color:var(--text-secondary)">—</span>'}</td>
+                        <td style="text-align:center">${p.validity_days}</td>
+                        <td style="text-align:center">${p.is_default ? '<span class="badge badge-success">Default</span>' : ''}</td>
+                        <td style="text-align:center"><span class="badge ${p.is_active ? 'badge-success' : 'badge-danger'}">${p.is_active ? 'Active' : 'Inactive'}</span></td>
+                        <td>${p.created_at ? new Date(p.created_at).toLocaleDateString() : '—'}</td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" onclick="editPackage('${p.id}')">Edit</button>
+                            ${!p.is_default ? `<button class="btn btn-sm btn-secondary" style="margin-left:4px" onclick="setDefaultPackage('${p.id}')">Set Default</button>` : ''}
+                            <button class="btn btn-sm btn-danger" style="margin-left:4px" onclick="deactivatePackage('${p.id}', '${p.name}', ${p.is_active})">
+                                ${p.is_active ? 'Deactivate' : 'Activate'}
+                            </button>
+                        </td>
+                    </tr>`).join('');
+            } catch (e) {
+                tb.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--danger)">Error: ${e.message}</td></tr>`;
+            }
+        }
+
+        function openCreatePackageModal() {
+            document.getElementById('pkgModalTitle').textContent = 'Create Package';
+            document.getElementById('pkgSubmitBtn').textContent = 'Create Package';
+            document.getElementById('pkgEditId').value = '';
+            document.getElementById('pkgName').value = '';
+            document.getElementById('pkgDesc').value = '';
+            document.getElementById('pkgDays').value = '';
+            document.getElementById('pkgIsDefault').checked = false;
+            document.getElementById('pkgModalAlert').style.display = 'none';
+            openModal('createPackageModal');
+        }
+
+        function editPackage(id) {
+            // Fetch the package list to prefill (it's already in the table DOM — use data from loaded rows instead)
+            const rows = document.querySelectorAll('#pkgTableBody tr');
+            // We'll just re-open the modal and let the admin fill in the values manually — simpler fetch:
+            fetch(`${API_URL}/api/admin/packages`, { headers: { 'Authorization': `Bearer ${authToken}` } })
+                .then(r => r.json())
+                .then(pkgs => {
+                    const p = pkgs.find(x => x.id === id);
+                    if (!p) return;
+                    document.getElementById('pkgModalTitle').textContent = 'Edit Package';
+                    document.getElementById('pkgSubmitBtn').textContent = 'Save Changes';
+                    document.getElementById('pkgEditId').value = id;
+                    document.getElementById('pkgName').value = p.name;
+                    document.getElementById('pkgDesc').value = p.description || '';
+                    document.getElementById('pkgDays').value = p.validity_days;
+                    document.getElementById('pkgIsDefault').checked = p.is_default;
+                    document.getElementById('pkgModalAlert').style.display = 'none';
+                    openModal('createPackageModal');
+                });
+        }
+
+        async function submitPackageForm(e) {
+            e.preventDefault();
+            const editId = document.getElementById('pkgEditId').value;
+            const body = {
+                name: document.getElementById('pkgName').value.trim(),
+                description: document.getElementById('pkgDesc').value.trim() || null,
+                validity_days: parseInt(document.getElementById('pkgDays').value),
+                is_default: document.getElementById('pkgIsDefault').checked,
+            };
+            const url = editId ? `${API_URL}/api/admin/packages/${editId}` : `${API_URL}/api/admin/packages`;
+            const method = editId ? 'PUT' : 'POST';
+            try {
+                const res = await fetch(url, {
+                    method, headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (res.status === 401) { handle401(); return; }
+                if (!res.ok) {
+                    const err = await res.json();
+                    const alertEl = document.getElementById('pkgModalAlert');
+                    document.getElementById('pkgModalAlertText').textContent = err.detail || 'Error saving package';
+                    alertEl.className = 'alert alert-danger';
+                    alertEl.style.display = 'block';
+                    return;
+                }
+                closeModal('createPackageModal');
+                loadPackages();
+            } catch (e2) {
+                const alertEl = document.getElementById('pkgModalAlert');
+                document.getElementById('pkgModalAlertText').textContent = e2.message;
+                alertEl.className = 'alert alert-danger';
+                alertEl.style.display = 'block';
+            }
+        }
+
+        async function setDefaultPackage(id) {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/packages/${id}/set-default`, {
+                    method: 'PUT', headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (res.status === 401) { handle401(); return; }
+                loadPackages();
+            } catch (e) { alert('Error: ' + e.message); }
+        }
+
+        async function deactivatePackage(id, name, isActive) {
+            if (!confirm(`${isActive ? 'Deactivate' : 'Reactivate'} package "${name}"?`)) return;
+            try {
+                const res = await fetch(`${API_URL}/api/admin/packages/${id}`, {
+                    method: 'DELETE', headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (res.status === 401) { handle401(); return; }
+                loadPackages();
+            } catch (e) { alert('Error: ' + e.message); }
+        }
 
         async function loadBuildings() {
             const tb = document.getElementById('bldgTableBody');

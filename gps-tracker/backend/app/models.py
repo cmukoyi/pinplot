@@ -103,7 +103,10 @@ class BLETag(Base):
     attributes = Column(JSON, nullable=True)  # Custom attributes: {field: {value, show_on_map}}
     added_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+    # Package / subscription
+    package_id  = Column(String(36), ForeignKey("tag_packages.id"), nullable=True, index=True)
+    expiry_date = Column(DateTime(timezone=True), nullable=True)  # added_at + package.validity_days
+
     # Relationships
     user = relationship("User", back_populates="ble_tags")
     poi_links = relationship("POITrackerLink", back_populates="tracker")

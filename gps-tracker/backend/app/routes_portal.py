@@ -16,6 +16,7 @@ import logging
 
 from app.database import get_db
 from app.models import UserGroup, PortalUser, Building, Floor, IndoorGateway, BLETag, User
+from app.models_admin import TagPackage
 from app.admin_auth import hash_password, verify_password
 
 router = APIRouter(prefix="/api/portal", tags=["portal"])
@@ -415,6 +416,12 @@ class PortalTagOut(BaseModel):
     location_description: Optional[str]
     battery_level: Optional[int]
     owner_email: str
+    # Package / subscription fields
+    package_id: Optional[str] = None
+    package_name: Optional[str] = None
+    added_at: Optional[datetime] = None
+    expiry_date: Optional[datetime] = None
+    days_remaining: Optional[int] = None  # None = no package; negative = expired
 
     class Config:
         from_attributes = True
@@ -445,8 +452,19 @@ def list_group_tags(request: Request, db: Session = Depends(get_db)):
         .all()
     )
 
+    # Build package lookup cache for this batch
+    pkg_ids = {t.package_id for t, _ in tags if t.package_id}
+    pkg_map: dict = {}
+    if pkg_ids:
+        for p in db.query(TagPackage).filter(TagPackage.id.in_(pkg_ids)).all():
+            pkg_map[str(p.id)] = p
+
     result = []
     for tag, owner_email in tags:
+        pkg = pkg_map.get(str(tag.package_id)) if tag.package_id else None
+        days_remaining = None
+        if tag.expiry_date:
+            days_remaining = (tag.expiry_date.replace(tzinfo=None) - datetime.utcnow()).days
         result.append(PortalTagOut(
             id=tag.id,
             imei=tag.imei,
@@ -461,8 +479,35 @@ def list_group_tags(request: Request, db: Session = Depends(get_db)):
             location_description=tag.location_description,
             battery_level=tag.battery_level,
             owner_email=owner_email,
+            package_id=str(tag.package_id) if tag.package_id else None,
+            package_name=pkg.name if pkg else None,
+            added_at=tag.added_at,
+            expiry_date=tag.expiry_date,
+            days_remaining=days_remaining,
         ))
     return result
+
+
+# ---------------------------------------------------------------------------
+# Packages — list active packages available for portal to assign to tags
+# ---------------------------------------------------------------------------
+
+class PackageOut(BaseModel):
+    id: UUID
+    name: str
+    description: Optional[str]
+    validity_days: int
+    is_default: bool
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/packages", response_model=List[PackageOut])
+def list_active_packages(request: Request, db: Session = Depends(get_db)):
+    """Return all active tag packages for the Add Tag dropdown."""
+    get_portal_user_from_request(request, db)  # auth only
+    return db.query(TagPackage).filter(TagPackage.is_active == True).order_by(TagPackage.validity_days).all()
 
 
 # ---------------------------------------------------------------------------
@@ -507,6 +552,7 @@ class PortalTagCreate(BaseModel):
     description: Optional[str] = None
     tag_type: Optional[str] = "scope"
     user_id: UUID
+    package_id: UUID  # mandatory — must select a package when adding a tag
 
 
 class PortalTagAssign(BaseModel):
@@ -517,7 +563,13 @@ class PortalTagDelete(BaseModel):
     tag_ids: List[str]
 
 
-def _build_tag_out(tag: BLETag, owner_email: str) -> PortalTagOut:
+def _build_tag_out(tag: BLETag, owner_email: str, db: Optional[Session] = None) -> PortalTagOut:
+    pkg = None
+    if tag.package_id and db:
+        pkg = db.query(TagPackage).filter(TagPackage.id == str(tag.package_id)).first()
+    days_remaining = None
+    if tag.expiry_date:
+        days_remaining = (tag.expiry_date.replace(tzinfo=None) - datetime.utcnow()).days
     return PortalTagOut(
         id=tag.id,
         imei=tag.imei,
@@ -532,6 +584,11 @@ def _build_tag_out(tag: BLETag, owner_email: str) -> PortalTagOut:
         location_description=tag.location_description,
         battery_level=tag.battery_level,
         owner_email=owner_email,
+        package_id=str(tag.package_id) if tag.package_id else None,
+        package_name=pkg.name if pkg else None,
+        added_at=tag.added_at,
+        expiry_date=tag.expiry_date,
+        days_remaining=days_remaining,
     )
 
 
@@ -558,21 +615,28 @@ def create_tag(data: PortalTagCreate, request: Request, db: Session = Depends(ge
     target_user = db.query(User).filter(User.id == str(data.user_id)).first()
     _assert_user_in_domain(target_user, group.email_domain)
 
+    pkg = db.query(TagPackage).filter(TagPackage.id == str(data.package_id), TagPackage.is_active == True).first()
+    if not pkg:
+        raise HTTPException(status_code=404, detail="Package not found or inactive")
+
     imei = data.imei.strip()
     if db.query(BLETag).filter(BLETag.imei == imei).first():
         raise HTTPException(status_code=409, detail=f"Tag with IMEI '{imei}' already exists")
 
+    now = datetime.utcnow()
     tag = BLETag(
         user_id=str(data.user_id),
         imei=imei,
         description=data.description,
         tag_type=data.tag_type or "scope",
         is_active=True,
+        package_id=str(data.package_id),
+        expiry_date=now + timedelta(days=pkg.validity_days),
     )
     db.add(tag)
     db.commit()
     db.refresh(tag)
-    return _build_tag_out(tag, target_user.email)
+    return _build_tag_out(tag, target_user.email, db)
 
 
 @router.put("/tags/{tag_id}/assign", response_model=PortalTagOut)
@@ -599,7 +663,7 @@ def assign_tag(tag_id: str, data: PortalTagAssign, request: Request, db: Session
     tag.user_id = str(data.user_id)
     db.commit()
     db.refresh(tag)
-    return _build_tag_out(tag, target_user.email)
+    return _build_tag_out(tag, target_user.email, db)
 
 
 @router.delete("/tags", status_code=204)

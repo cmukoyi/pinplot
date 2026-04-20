@@ -135,3 +135,26 @@ class BillingTransaction(Base):
         Index('ix_billing_transactions_user_date', 'user_id', 'created_at'),
         Index('ix_billing_transactions_type_date', 'transaction_type', 'created_at'),
     )
+
+
+class TagPackage(Base):
+    """Subscription package that gates how long a BLE tag may report location data.
+
+    Admin creates packages (e.g. 'Basic 80', validity_days=80).
+    A package is assigned to a BLETag when the tag is added via the portal.
+    Self-registered mobile-app tags get the package marked is_default=True.
+
+    expiry_date on the tag = added_at + validity_days.
+    After expiry, location updates are blocked.
+    After expiry + GDPR_GRACE_DAYS (40), beacon sighting rows are purged automatically.
+    """
+    __tablename__ = "tag_packages"
+
+    id            = get_uuid_column()
+    name          = Column(String(100), nullable=False, unique=True)
+    description   = Column(Text, nullable=True)
+    validity_days = Column(Integer, nullable=False)   # e.g. 80, 120, 300
+    is_default    = Column(Boolean, nullable=False, default=False)  # applied to self-registered tags
+    is_active     = Column(Boolean, nullable=False, default=True)
+    created_at    = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at    = Column(DateTime(timezone=True), onupdate=func.now())

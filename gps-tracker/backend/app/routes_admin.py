@@ -912,6 +912,138 @@ def deactivate_usergroup(
     return {"detail": "User group deactivated"}
 
 
+# ---------------------------------------------------------------------------
+# Tag Packages — admin-managed subscription packages for BLE tags
+# ---------------------------------------------------------------------------
+
+from app.models_admin import TagPackage as _TagPackage
+
+
+class PackageCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    validity_days: int          # e.g. 80, 120, 300
+    is_default: bool = False
+
+
+class PackageUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    validity_days: Optional[int] = None
+    is_default: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+
+class PackageOut(BaseModel):
+    id: UUID
+    name: str
+    description: Optional[str]
+    validity_days: int
+    is_default: bool
+    is_active: bool
+    created_at: datetime
+
+    @field_validator('id', mode='before')
+    @classmethod
+    def coerce_uuid(cls, v):
+        return str(v) if v is not None else v
+
+    class Config:
+        from_attributes = True
+
+
+@router.post("/packages", response_model=PackageOut, status_code=201)
+def create_package(data: PackageCreate, request: Request, db: Session = Depends(get_db)):
+    """Create a new tag subscription package (manager+)."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=403, detail="Requires manager role")
+
+    if db.query(_TagPackage).filter(_TagPackage.name == data.name).first():
+        raise HTTPException(status_code=409, detail="A package with that name already exists")
+
+    if data.is_default:
+        # Clear any previous default
+        db.query(_TagPackage).filter(_TagPackage.is_default == True).update({"is_default": False})
+
+    pkg = _TagPackage(
+        name=data.name.strip(),
+        description=data.description,
+        validity_days=data.validity_days,
+        is_default=data.is_default,
+        is_active=True,
+    )
+    db.add(pkg)
+    db.commit()
+    db.refresh(pkg)
+    log_audit(db, str(admin.id), "create_package", "TagPackage", str(pkg.id),
+              new_value={"name": pkg.name, "validity_days": pkg.validity_days})
+    return pkg
+
+
+@router.get("/packages", response_model=List[PackageOut])
+def list_packages(request: Request, db: Session = Depends(get_db)):
+    """List all tag packages (viewer+)."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "viewer"):
+        raise HTTPException(status_code=403, detail="Requires viewer role")
+    return db.query(_TagPackage).order_by(_TagPackage.created_at.desc()).all()
+
+
+@router.put("/packages/{pkg_id}", response_model=PackageOut)
+def update_package(pkg_id: str, data: PackageUpdate, request: Request, db: Session = Depends(get_db)):
+    """Update a tag package (manager+)."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=403, detail="Requires manager role")
+
+    pkg = db.query(_TagPackage).filter(_TagPackage.id == pkg_id).first()
+    if not pkg:
+        raise HTTPException(status_code=404, detail="Package not found")
+
+    if data.is_default is True:
+        db.query(_TagPackage).filter(_TagPackage.id != pkg_id, _TagPackage.is_default == True).update({"is_default": False})
+
+    for field, val in data.model_dump(exclude_unset=True).items():
+        setattr(pkg, field, val)
+    db.commit()
+    db.refresh(pkg)
+    return pkg
+
+
+@router.put("/packages/{pkg_id}/set-default", response_model=PackageOut)
+def set_default_package(pkg_id: str, request: Request, db: Session = Depends(get_db)):
+    """Mark one package as the default for self-registered tags (manager+)."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=403, detail="Requires manager role")
+
+    pkg = db.query(_TagPackage).filter(_TagPackage.id == pkg_id, _TagPackage.is_active == True).first()
+    if not pkg:
+        raise HTTPException(status_code=404, detail="Package not found or inactive")
+
+    db.query(_TagPackage).filter(_TagPackage.id != pkg_id).update({"is_default": False})
+    pkg.is_default = True
+    db.commit()
+    db.refresh(pkg)
+    return pkg
+
+
+@router.delete("/packages/{pkg_id}", status_code=204)
+def deactivate_package(pkg_id: str, request: Request, db: Session = Depends(get_db)):
+    """Deactivate a package so it no longer appears in dropdowns (manager+)."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=403, detail="Requires manager role")
+
+    pkg = db.query(_TagPackage).filter(_TagPackage.id == pkg_id).first()
+    if not pkg:
+        raise HTTPException(status_code=404, detail="Package not found")
+    pkg.is_active = False
+    pkg.is_default = False
+    db.commit()
+
+
 # ── Buildings ────────────────────────────────────────────────────────────────
 
 class BuildingCreate(BaseModel):
