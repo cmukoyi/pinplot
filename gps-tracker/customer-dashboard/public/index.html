@@ -918,14 +918,17 @@ async function loadGroupTags() {
 
     // Fetch settings to show domain hint
     try {
-        const settings = await apiCall('GET', '/api/portal/settings');
+        const sRes = await apiFetch('/api/portal/settings');
+        const settings = await sRes.json();
         hint.textContent = settings.email_domain
             ? `Showing all tags for users with @${settings.email_domain} emails.`
             : 'No domain configured yet — go to Settings to set an email domain.';
     } catch (_) { hint.textContent = ''; }
 
     try {
-        const tags = await apiCall('GET', '/api/portal/tags');
+        const tRes = await apiFetch('/api/portal/tags');
+        if (!tRes.ok) throw new Error((await tRes.json()).detail || 'Failed to load tags');
+        const tags = await tRes.json();
         if (!tags.length) {
             tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray)">No tags found. Ensure a domain is configured in Settings and users have registered tags.</td></tr>';
             return;
@@ -955,7 +958,9 @@ async function loadGroupTags() {
 
 async function loadSettings() {
     try {
-        const settings = await apiCall('GET', '/api/portal/settings');
+        const res = await apiFetch('/api/portal/settings');
+        if (!res.ok) throw new Error((await res.json()).detail || 'Failed to load settings');
+        const settings = await res.json();
         document.getElementById('emailDomainInput').value = settings.email_domain || '';
     } catch (err) {
         showTabAlert('settings', 'Failed to load settings: ' + err.message, 'error');
@@ -965,7 +970,12 @@ async function loadSettings() {
 async function saveDomainSetting() {
     const domain = document.getElementById('emailDomainInput').value.trim();
     try {
-        await apiCall('PUT', '/api/portal/settings', { email_domain: domain });
+        const res = await apiFetch('/api/portal/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email_domain: domain }),
+        });
+        if (!res.ok) throw new Error((await res.json()).detail || 'Failed to save');
         showTabAlert('settings', `Domain saved: ${domain || '(cleared)'}`, 'success');
     } catch (err) {
         showTabAlert('settings', err.message, 'error');
