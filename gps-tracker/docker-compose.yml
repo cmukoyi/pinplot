@@ -40,6 +40,12 @@ services:
     networks:
       - pinplot_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     volumes:
       - nginx_logs:/var/log/nginx:ro
     environment:
