@@ -464,3 +464,136 @@ def list_group_tags(request: Request, db: Session = Depends(get_db)):
         ))
     return result
 
+
+# ---------------------------------------------------------------------------
+# Mobile users — list mobile-app Users in the group's email domain
+# ---------------------------------------------------------------------------
+
+class MobileUserOut(BaseModel):
+    id: UUID
+    email: str
+    first_name: Optional[str]
+    last_name: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/mobile-users", response_model=List[MobileUserOut])
+def list_mobile_users(request: Request, db: Session = Depends(get_db)):
+    """Return all active mobile-app Users whose email domain matches the group's
+    configured email_domain. Used to populate the assign-tag dropdown."""
+    me = get_portal_user_from_request(request, db)
+    group = db.query(UserGroup).filter(UserGroup.id == me.usergroup_id).first()
+    if not group or not group.email_domain:
+        return []
+    domain = group.email_domain.lower()
+    users = (
+        db.query(User)
+        .filter(User.email.ilike(f"%@{domain}"), User.is_active == True)
+        .order_by(User.email)
+        .all()
+    )
+    return [MobileUserOut(id=u.id, email=u.email, first_name=u.first_name, last_name=u.last_name)
+            for u in users]
+
+
+# ---------------------------------------------------------------------------
+# Tag management — create and reassign tags from the portal
+# ---------------------------------------------------------------------------
+
+class PortalTagCreate(BaseModel):
+    imei: str
+    description: Optional[str] = None
+    tag_type: Optional[str] = "scope"
+    user_id: UUID
+
+
+class PortalTagAssign(BaseModel):
+    user_id: UUID
+
+
+def _build_tag_out(tag: BLETag, owner_email: str) -> PortalTagOut:
+    return PortalTagOut(
+        id=tag.id,
+        imei=tag.imei,
+        device_name=tag.device_name,
+        device_model=tag.device_model,
+        description=tag.description,
+        tag_type=tag.tag_type,
+        is_active=tag.is_active,
+        last_seen=tag.last_seen,
+        latitude=tag.latitude,
+        longitude=tag.longitude,
+        location_description=tag.location_description,
+        battery_level=tag.battery_level,
+        owner_email=owner_email,
+    )
+
+
+def _get_group_and_assert_domain(me: PortalUser, db: Session) -> UserGroup:
+    group = db.query(UserGroup).filter(UserGroup.id == me.usergroup_id).first()
+    if not group or not group.email_domain:
+        raise HTTPException(status_code=400, detail="Configure a domain in Settings before managing tags")
+    return group
+
+
+def _assert_user_in_domain(user: User, domain: str) -> None:
+    if not user or not user.email.lower().endswith(f"@{domain.lower()}"):
+        raise HTTPException(status_code=403, detail="User does not belong to this group's domain")
+
+
+@router.post("/tags", response_model=PortalTagOut, status_code=201)
+def create_tag(data: PortalTagCreate, request: Request, db: Session = Depends(get_db)):
+    """Create a new BLE tag and assign it directly to a mobile-app user (group admin only)."""
+    me = get_portal_user_from_request(request, db)
+    if not me.is_group_admin:
+        raise HTTPException(status_code=403, detail="Only group admins can add tags")
+    group = _get_group_and_assert_domain(me, db)
+
+    target_user = db.query(User).filter(User.id == str(data.user_id)).first()
+    _assert_user_in_domain(target_user, group.email_domain)
+
+    imei = data.imei.strip()
+    if db.query(BLETag).filter(BLETag.imei == imei).first():
+        raise HTTPException(status_code=409, detail=f"Tag with IMEI '{imei}' already exists")
+
+    tag = BLETag(
+        user_id=str(data.user_id),
+        imei=imei,
+        description=data.description,
+        tag_type=data.tag_type or "scope",
+        is_active=True,
+    )
+    db.add(tag)
+    db.commit()
+    db.refresh(tag)
+    return _build_tag_out(tag, target_user.email)
+
+
+@router.put("/tags/{tag_id}/assign", response_model=PortalTagOut)
+def assign_tag(tag_id: str, data: PortalTagAssign, request: Request, db: Session = Depends(get_db)):
+    """Reassign an existing BLE tag to a different mobile-app user (group admin only)."""
+    me = get_portal_user_from_request(request, db)
+    if not me.is_group_admin:
+        raise HTTPException(status_code=403, detail="Only group admins can assign tags")
+    group = _get_group_and_assert_domain(me, db)
+
+    # Tag must belong to a user already in this group's domain
+    tag = (
+        db.query(BLETag)
+        .join(User, User.id == BLETag.user_id)
+        .filter(BLETag.id == tag_id, User.email.ilike(f"%@{group.email_domain.lower()}"))
+        .first()
+    )
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found in your group")
+
+    target_user = db.query(User).filter(User.id == str(data.user_id)).first()
+    _assert_user_in_domain(target_user, group.email_domain)
+
+    tag.user_id = str(data.user_id)
+    db.commit()
+    db.refresh(tag)
+    return _build_tag_out(tag, target_user.email)
+

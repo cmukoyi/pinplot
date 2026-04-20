@@ -418,14 +418,17 @@
                 <div class="card">
                     <div class="card-header">
                         <span class="card-title">Group Tags</span>
-                        <button class="btn btn-secondary btn-small" onclick="loadGroupTags()">↻ Refresh</button>
+                        <div style="display:flex;gap:8px">
+                            <button class="btn btn-secondary btn-small" onclick="loadGroupTags()">↻ Refresh</button>
+                            <button id="addTagBtn" class="btn btn-primary btn-small" onclick="openAddTagModal()" style="display:none">+ Add Tag</button>
+                        </div>
                     </div>
                     <div id="tagsAlert" class="alert" style="display:none"><span id="tagsAlertText"></span></div>
                     <p id="tagsDomainHint" style="font-size:13px;color:var(--gray);margin:0 0 12px"></p>
                     <div class="table-wrapper">
                         <table>
                             <thead>
-                                <tr>
+                                <tr id="tagsTableHead">
                                     <th>IMEI / Tag ID</th>
                                     <th>Label / Description</th>
                                     <th>Owner</th>
@@ -732,6 +735,45 @@
 </div>
 
 <!-- Add Portal User -->
+<!-- ═══ TAG MANAGEMENT MODAL ═══ -->
+<div id="tagMgmtModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span class="modal-title" id="tagMgmtTitle">Add Tag</span>
+            <button class="modal-close" onclick="closeModal('tagMgmtModal')">×</button>
+        </div>
+        <div id="tagMgmtAlert" class="alert" style="display:none"><span id="tagMgmtAlertText"></span></div>
+        <form id="tagMgmtForm" onsubmit="submitTagForm(event)">
+            <div id="tagMgmtImeiGroup" class="form-group">
+                <label>IMEI / Tag ID *</label>
+                <input type="text" id="tagMgmtImei" placeholder="e.g. 867747079036032" required>
+            </div>
+            <div id="tagMgmtDescGroup" class="form-group">
+                <label>Description</label>
+                <input type="text" id="tagMgmtDesc" placeholder="e.g. John's vehicle tracker">
+            </div>
+            <div id="tagMgmtTypeGroup" class="form-group">
+                <label>Tag Type</label>
+                <select id="tagMgmtType">
+                    <option value="scope">Scope</option>
+                    <option value="tracksolid">TrackSolid</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Assign to User *</label>
+                <select id="tagMgmtUser" required>
+                    <option value="">Loading users…</option>
+                </select>
+            </div>
+            <input type="hidden" id="tagMgmtTagId">
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('tagMgmtModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="tagMgmtSubmitBtn">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div id="addUserModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
@@ -912,9 +954,22 @@ function showTabAlert(prefix, msg, type) {
 // ══════════════════════════════════════════
 
 async function loadGroupTags() {
-    const tb = document.getElementById('tagsTableBody');
+    const tb   = document.getElementById('tagsTableBody');
     const hint = document.getElementById('tagsDomainHint');
-    tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray)">Loading…</td></tr>';
+    const isAdmin = getSession().user?.is_group_admin;
+    const colSpan = isAdmin ? 7 : 6;
+
+    // Show/hide Add Tag button and Actions column header
+    document.getElementById('addTagBtn').style.display = isAdmin ? '' : 'none';
+    const head = document.getElementById('tagsTableHead');
+    if (isAdmin && !head.querySelector('.actions-th')) {
+        const th = document.createElement('th');
+        th.className = 'actions-th';
+        th.textContent = 'Actions';
+        head.appendChild(th);
+    }
+
+    tb.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;padding:40px;color:var(--gray)">Loading…</td></tr>`;
 
     // Fetch settings to show domain hint
     try {
@@ -930,7 +985,7 @@ async function loadGroupTags() {
         if (!tRes.ok) throw new Error((await tRes.json()).detail || 'Failed to load tags');
         const tags = await tRes.json();
         if (!tags.length) {
-            tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray)">No tags found. Ensure a domain is configured in Settings and users have registered tags.</td></tr>';
+            tb.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;padding:40px;color:var(--gray)">No tags found. Ensure a domain is configured in Settings and users have registered tags.</td></tr>`;
             return;
         }
         tb.innerHTML = tags.map(t => {
@@ -938,6 +993,9 @@ async function loadGroupTags() {
                 ? '<span class="badge badge-success">Active</span>'
                 : '<span class="badge badge-danger">Inactive</span>';
             const lastSeen = t.last_seen ? new Date(t.last_seen).toLocaleString() : '—';
+            const actionsCell = isAdmin
+                ? `<td><button class="btn btn-secondary btn-small" onclick="openAssignTagModal('${esc(String(t.id))}', '${esc(t.owner_email)}')">Reassign</button></td>`
+                : '';
             return `<tr>
                 <td><code>${esc(t.imei)}</code></td>
                 <td>${esc(t.description || t.device_name || '—')}</td>
@@ -945,10 +1003,113 @@ async function loadGroupTags() {
                 <td>${esc(t.tag_type || '—')}</td>
                 <td>${statusBadge}</td>
                 <td style="font-size:12px">${esc(lastSeen)}</td>
+                ${actionsCell}
             </tr>`;
         }).join('');
     } catch (err) {
-        tb.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--red)">Failed to load tags: ${esc(err.message)}</td></tr>`;
+        tb.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;padding:40px;color:var(--red)">Failed to load tags: ${esc(err.message)}</td></tr>`;
+    }
+}
+
+// ══════════════════════════════════════════
+// TAG MANAGEMENT — add & reassign
+// ══════════════════════════════════════════
+
+let _mobileUsersCache = null;
+
+async function _loadMobileUsersIntoSelect() {
+    const sel = document.getElementById('tagMgmtUser');
+    sel.innerHTML = '<option value="">Loading users…</option>';
+    try {
+        const res = await apiFetch('/api/portal/mobile-users');
+        if (!res.ok) throw new Error('Failed to load users');
+        _mobileUsersCache = await res.json();
+        sel.innerHTML = '<option value="">— Select user —</option>' +
+            _mobileUsersCache.map(u => {
+                const name = [u.first_name, u.last_name].filter(Boolean).join(' ');
+                return `<option value="${esc(String(u.id))}">${esc(u.email)}${name ? ' (' + esc(name) + ')' : ''}</option>`;
+            }).join('');
+    } catch (err) {
+        sel.innerHTML = `<option value="">Error: ${esc(err.message)}</option>`;
+    }
+}
+
+async function openAddTagModal() {
+    document.getElementById('tagMgmtTitle').textContent = 'Add Tag';
+    document.getElementById('tagMgmtSubmitBtn').textContent = 'Add Tag';
+    document.getElementById('tagMgmtTagId').value = '';
+    document.getElementById('tagMgmtImei').value = '';
+    document.getElementById('tagMgmtDesc').value = '';
+    document.getElementById('tagMgmtType').value = 'scope';
+    document.getElementById('tagMgmtImeiGroup').style.display = '';
+    document.getElementById('tagMgmtDescGroup').style.display = '';
+    document.getElementById('tagMgmtTypeGroup').style.display = '';
+    document.getElementById('tagMgmtAlert').style.display = 'none';
+    openModal('tagMgmtModal');
+    await _loadMobileUsersIntoSelect();
+}
+
+async function openAssignTagModal(tagId, currentOwner) {
+    document.getElementById('tagMgmtTitle').textContent = `Reassign Tag`;
+    document.getElementById('tagMgmtSubmitBtn').textContent = 'Reassign';
+    document.getElementById('tagMgmtTagId').value = tagId;
+    document.getElementById('tagMgmtImeiGroup').style.display = 'none';
+    document.getElementById('tagMgmtDescGroup').style.display = 'none';
+    document.getElementById('tagMgmtTypeGroup').style.display = 'none';
+    document.getElementById('tagMgmtAlert').style.display = 'none';
+    openModal('tagMgmtModal');
+    await _loadMobileUsersIntoSelect();
+    // Pre-select the current owner if they exist in the list
+    if (_mobileUsersCache) {
+        const match = _mobileUsersCache.find(u => u.email === currentOwner);
+        if (match) document.getElementById('tagMgmtUser').value = String(match.id);
+    }
+}
+
+async function submitTagForm(e) {
+    e.preventDefault();
+    const tagId  = document.getElementById('tagMgmtTagId').value;
+    const userId = document.getElementById('tagMgmtUser').value;
+    const btn    = document.getElementById('tagMgmtSubmitBtn');
+    if (!userId) { return; }
+    btn.disabled = true;
+    const alertEl = document.getElementById('tagMgmtAlert');
+    alertEl.style.display = 'none';
+    try {
+        let res;
+        if (tagId) {
+            // Reassign existing tag
+            res = await apiFetch(`/api/portal/tags/${tagId}/assign`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId }),
+            });
+        } else {
+            // Create new tag
+            res = await apiFetch('/api/portal/tags', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    imei: document.getElementById('tagMgmtImei').value.trim(),
+                    description: document.getElementById('tagMgmtDesc').value.trim() || null,
+                    tag_type: document.getElementById('tagMgmtType').value,
+                    user_id: userId,
+                }),
+            });
+        }
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'Request failed');
+        }
+        closeModal('tagMgmtModal');
+        loadGroupTags();
+    } catch (err) {
+        const span = document.getElementById('tagMgmtAlertText');
+        span.textContent = err.message;
+        alertEl.className = 'alert alert-error';
+        alertEl.style.display = 'flex';
+    } finally {
+        btn.disabled = false;
     }
 }
 
