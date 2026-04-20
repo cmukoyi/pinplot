@@ -277,6 +277,14 @@
 
         /* Map */
         #gpsMap { height: 520px; border-radius: 10px; }
+        .gps-tag-row { display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .15s;border:1px solid transparent }
+        .gps-tag-row:hover { background:var(--light) }
+        .gps-tag-row.gps-marked { background:#fff7ed;border-color:#fb923c }
+        .gps-dot { width:12px;height:12px;border-radius:50%;flex-shrink:0;border:2px solid rgba(0,0,0,.2) }
+        .gps-dot-normal { background:#378ADD }
+        .gps-dot-marked  { background:#f97316 }
+        .gps-search-highlight { animation: gpsPulse .6s ease 2 }
+        @keyframes gpsPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.35)} }
 
         /* Drop zone */
         .drop-zone {
@@ -538,10 +546,23 @@
                 <div class="card">
                     <div class="card-header">
                         <span class="card-title">Live GPS Map</span>
-                        <button class="btn btn-secondary btn-small" onclick="refreshGPSMap()">↻ Refresh</button>
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                            <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+                                <input id="gpsSearchInput" type="text" placeholder="Search IMEI or description…"
+                                    style="border:none;padding:6px 10px;font-size:13px;outline:none;width:200px"
+                                    onkeydown="if(event.key==='Enter')gpsSearchAndZoom()">
+                                <button style="border:none;background:var(--primary);color:#fff;padding:0 10px;cursor:pointer;font-size:13px" onclick="gpsSearchAndZoom()">🔍</button>
+                            </div>
+                            <button class="btn btn-secondary btn-small" onclick="refreshGPSMap()">↻ Refresh</button>
+                        </div>
                     </div>
                     <div id="gpsAlert" class="alert alert-info" style="display:none"><span id="gpsAlertText"></span></div>
-                    <div id="gpsMap"></div>
+                    <div style="position:relative">
+                        <div id="gpsMap"></div>
+                        <div id="gpsMapOverlay" style="position:absolute;top:10px;right:10px;z-index:999;background:rgba(255,255,255,0.95);border-radius:8px;padding:8px 12px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.15);display:none">
+                            <span id="gpsMarkedCount">0</span> marked · <button style="border:none;background:none;color:var(--primary);cursor:pointer;font-size:12px;padding:0" onclick="gpsClearAllMarked()">Clear all</button>
+                        </div>
+                    </div>
                     <div id="gpsTagList" style="margin-top:20px"></div>
                 </div>
             </div>
@@ -1482,12 +1503,19 @@ function clearStaleTags() {
 }
 
 // ══════════════════════════════════════════
-// GPS MAP — Leaflet
+// GPS MAP — Leaflet  (domain-scoped group tags)
 // ══════════════════════════════════════════
-let _map = null;
+let _map            = null;
+let _gpsTags        = [];       // all tags fetched from API
+let _gpsMarkers     = {};       // imei → L.circleMarker
+let _markedTags     = new Set(); // imei of marked/tracked tags
+
+const GPS_STYLE_NORMAL = { radius:8,  fillColor:'#378ADD', color:'#185FA5', weight:2,   fillOpacity:.85, opacity:1 };
+const GPS_STYLE_MARKED = { radius:12, fillColor:'#f97316', color:'#c2410c', weight:2.5, fillOpacity:.95, opacity:1 };
+const GPS_STYLE_SEARCH = { radius:14, fillColor:'#10b981', color:'#065f46', weight:3,   fillOpacity:1,   opacity:1 };
 
 function initGPSMap() {
-    if (_mapInitialized) { refreshGPSMap(); return; }
+    if (_mapInitialized) { renderGPSTags(); return; }
     _map = L.map('gpsMap').setView([-25.7479, 28.2293], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
@@ -1499,21 +1527,388 @@ function initGPSMap() {
 
 function refreshGPSMap() { renderGPSTags(); }
 
-function renderGPSTags() {
+async function renderGPSTags() {
     if (!_map) return;
-    // Placeholder markers — replace with real API data when GPS endpoint is ready
-    const listEl = document.getElementById('gpsTagList');
-    if (!_tags.length) {
-        listEl.innerHTML = '<div class="alert alert-info">No tags added yet. Add tags in the Tags section first.</div>';
+    const listEl  = document.getElementById('gpsTagList');
+    const alertEl = document.getElementById('gpsAlert');
+    alertEl.style.display = 'none';
+
+    listEl.innerHTML = '<p style="font-size:13px;color:var(--gray)">Loading tags…</p>';
+
+    let tags = [];
+    try {
+        const res = await apiFetch('/api/portal/tags');
+        if (!res.ok) throw new Error((await res.json()).detail || 'Failed to load tags');
+        tags = await res.json();
+    } catch (err) {
+        listEl.innerHTML = `<div class="alert alert-error">Failed to load tags: ${esc(err.message)}</div>`;
         return;
     }
-    listEl.innerHTML = `
-        <p style="font-size:13px;color:var(--gray);margin-bottom:10px">
-            ${_tags.length} tag(s) registered. Live GPS positions will appear on the map once devices are transmitting.
-        </p>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">
-            ${_tags.map(t => `<span class="badge badge-warning">${esc(t.label || t.imei)}</span>`).join('')}
+
+    _gpsTags = tags;
+
+    // ── Clear existing markers ──────────────────────────
+    Object.values(_gpsMarkers).forEach(m => m.remove());
+    _gpsMarkers = {};
+
+    const located = tags.filter(t => t.latitude && t.longitude &&
+        !isNaN(parseFloat(t.latitude)) && !isNaN(parseFloat(t.longitude)));
+    const unlocated = tags.filter(t => !t.latitude || !t.longitude);
+
+    // ── Place markers ──────────────────────────────────
+    located.forEach(t => {
+        const lat = parseFloat(t.latitude);
+        const lng = parseFloat(t.longitude);
+        const isMarked = _markedTags.has(t.imei);
+        const style = isMarked ? { ...GPS_STYLE_MARKED } : { ...GPS_STYLE_NORMAL };
+        const marker = L.circleMarker([lat, lng], style).addTo(_map);
+        const label = esc(t.description || t.device_name || t.imei);
+        const ownerShort = esc(t.owner_email.split('@')[0]);
+        marker.bindPopup(`
+            <strong>${label}</strong><br>
+            <span style="font-size:11px;color:#666">${esc(t.imei)}</span><br>
+            <span style="font-size:11px">Owner: ${ownerShort}</span><br>
+            <span style="font-size:11px">Last seen: ${t.last_seen ? new Date(t.last_seen).toLocaleString() : '—'}</span><br>
+            <button onclick="toggleGpsMark('${esc(t.imei)}')" style="margin-top:6px;font-size:12px;padding:3px 8px;border-radius:4px;border:1px solid #ddd;cursor:pointer;background:#f3f4f6" id="popup-mark-${esc(t.imei.replace(/[^a-z0-9]/gi,'_'))}">
+                ${isMarked ? '★ Unmark' : '☆ Mark for tracking'}
+            </button>
+        `);
+        _gpsMarkers[t.imei] = marker;
+    });
+
+    // ── Auto-fit map to all located tags ──────────────
+    if (located.length > 0) {
+        const bounds = L.latLngBounds(located.map(t => [parseFloat(t.latitude), parseFloat(t.longitude)]));
+        _map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+    }
+
+    // ── Update marked overlay counter ─────────────────
+    _updateMarkedOverlay();
+
+    // ── Render tag list panel ──────────────────────────
+    if (!tags.length) {
+        listEl.innerHTML = '<div class="alert alert-info">No tags in this group yet. Configure a domain in Settings and add tags.</div>';
+        return;
+    }
+
+    const legend = `<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:12px;font-size:12px;color:var(--gray)">
+        <span><span class="gps-dot gps-dot-normal" style="display:inline-block;margin-right:4px"></span>Normal</span>
+        <span><span class="gps-dot gps-dot-marked" style="display:inline-block;margin-right:4px"></span>Marked / Tracked</span>
+        <span style="margin-left:auto;color:var(--gray)">${located.length} on map · ${unlocated.length} no GPS fix</span>
+    </div>`;
+
+    const rows = tags.map(t => {
+        const isMarked  = _markedTags.has(t.imei);
+        const hasGPS    = !!_gpsMarkers[t.imei];
+        const dotClass  = isMarked ? 'gps-dot-marked' : 'gps-dot-normal';
+        const rowClass  = isMarked ? 'gps-marked' : '';
+        const label     = esc(t.description || t.device_name || '—');
+        const safeId    = t.imei.replace(/[^a-z0-9]/gi, '_');
+        const zoomBtn   = hasGPS
+            ? `<button onclick="gpsZoomTo('${esc(t.imei)}')" title="Zoom to tag" style="border:none;background:none;cursor:pointer;font-size:15px;padding:0 4px">🎯</button>`
+            : `<span title="No GPS fix" style="font-size:15px;opacity:.35;padding:0 4px">📍</span>`;
+        return `
+        <div class="gps-tag-row ${rowClass}" id="gps-row-${safeId}" onclick="toggleGpsMark('${esc(t.imei)}')">
+            <span class="gps-dot ${dotClass}"></span>
+            <input type="checkbox" ${isMarked ? 'checked' : ''} onclick="event.stopPropagation();toggleGpsMark('${esc(t.imei)}')" style="cursor:pointer">
+            <code style="font-size:12px;flex-shrink:0">${esc(t.imei)}</code>
+            <span style="font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${label}">${label}</span>
+            <span style="font-size:11px;color:var(--gray);flex-shrink:0">${esc(t.owner_email.split('@')[0])}</span>
+            ${zoomBtn}
         </div>`;
+    }).join('');
+
+    listEl.innerHTML = legend +
+        `<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;max-height:280px;overflow-y:auto">${rows}</div>`;
+}
+
+function toggleGpsMark(imei) {
+    if (_markedTags.has(imei)) {
+        _markedTags.delete(imei);
+    } else {
+        _markedTags.add(imei);
+    }
+    const isMarked = _markedTags.has(imei);
+
+    // Update map marker style
+    if (_gpsMarkers[imei]) {
+        _gpsMarkers[imei].setStyle(isMarked ? GPS_STYLE_MARKED : GPS_STYLE_NORMAL);
+        _gpsMarkers[imei].setRadius ? null : null; // circleMarker handles via setStyle
+        // Update popup button text if open
+        const safeId = imei.replace(/[^a-z0-9]/gi, '_');
+        const popupBtn = document.getElementById(`popup-mark-${safeId}`);
+        if (popupBtn) popupBtn.textContent = isMarked ? '★ Unmark' : '☆ Mark for tracking';
+    }
+
+    // Update list row
+    const safeId = imei.replace(/[^a-z0-9]/gi, '_');
+    const row = document.getElementById(`gps-row-${safeId}`);
+    if (row) {
+        row.classList.toggle('gps-marked', isMarked);
+        const dot = row.querySelector('.gps-dot');
+        if (dot) { dot.classList.toggle('gps-dot-normal', !isMarked); dot.classList.toggle('gps-dot-marked', isMarked); }
+        const cb = row.querySelector('input[type=checkbox]');
+        if (cb) cb.checked = isMarked;
+    }
+
+    _updateMarkedOverlay();
+}
+
+function gpsClearAllMarked() {
+    const prev = [..._markedTags];
+    _markedTags.clear();
+    prev.forEach(imei => {
+        if (_gpsMarkers[imei]) _gpsMarkers[imei].setStyle(GPS_STYLE_NORMAL);
+        const safeId = imei.replace(/[^a-z0-9]/gi, '_');
+        const row = document.getElementById(`gps-row-${safeId}`);
+        if (row) {
+            row.classList.remove('gps-marked');
+            const dot = row.querySelector('.gps-dot');
+            if (dot) { dot.classList.replace('gps-dot-marked', 'gps-dot-normal'); }
+            const cb = row.querySelector('input[type=checkbox]');
+            if (cb) cb.checked = false;
+        }
+    });
+    _updateMarkedOverlay();
+}
+
+function _updateMarkedOverlay() {
+    const overlay = document.getElementById('gpsMapOverlay');
+    if (!overlay) return;
+    const count = _markedTags.size;
+    document.getElementById('gpsMarkedCount').textContent = count;
+    overlay.style.display = count > 0 ? '' : 'none';
+}
+
+function gpsZoomTo(imei) {
+    const marker = _gpsMarkers[imei];
+    if (!marker) return;
+    _map.flyTo(marker.getLatLng(), 17, { duration: 1 });
+    marker.openPopup();
+}
+
+function gpsSearchAndZoom() {
+    const q = document.getElementById('gpsSearchInput').value.trim().toLowerCase();
+    if (!q) return;
+    const match = _gpsTags.find(t =>
+        t.imei.toLowerCase().includes(q) ||
+        (t.description || '').toLowerCase().includes(q) ||
+        (t.device_name || '').toLowerCase().includes(q)
+    );
+    if (!match) {
+        const alertEl = document.getElementById('gpsAlert');
+        document.getElementById('gpsAlertText').textContent = `No tag found matching "${q}"`;
+        alertEl.style.display = 'flex';
+        setTimeout(() => { alertEl.style.display = 'none'; }, 3000);
+        return;
+    }
+    if (_gpsMarkers[match.imei]) {
+        // Flash it green briefly to highlight, then restore
+        _gpsMarkers[match.imei].setStyle(GPS_STYLE_SEARCH);
+        _map.flyTo(_gpsMarkers[match.imei].getLatLng(), 17, { duration: 1 });
+        _gpsMarkers[match.imei].openPopup();
+        setTimeout(() => {
+            if (_gpsMarkers[match.imei]) {
+                _gpsMarkers[match.imei].setStyle(_markedTags.has(match.imei) ? GPS_STYLE_MARKED : GPS_STYLE_NORMAL);
+            }
+        }, 2500);
+    } else {
+        // Tag found but no GPS fix — scroll row into view
+        const safeId = match.imei.replace(/[^a-z0-9]/gi, '_');
+        const row = document.getElementById(`gps-row-${safeId}`);
+        if (row) { row.scrollIntoView({ behavior: 'smooth', block: 'center' }); row.classList.add('gps-search-highlight'); setTimeout(() => row.classList.remove('gps-search-highlight'), 1500); }
+        const alertEl = document.getElementById('gpsAlert');
+        document.getElementById('gpsAlertText').textContent = `"${match.description || match.imei}" has no GPS fix yet.`;
+        alertEl.style.display = 'flex';
+        setTimeout(() => { alertEl.style.display = 'none'; }, 3000);
+    }
+    let tags = [];
+    try {
+        const res = await apiFetch('/api/portal/tags');
+        if (!res.ok) throw new Error((await res.json()).detail || 'Failed to load tags');
+        tags = await res.json();
+    } catch (err) {
+        listEl.innerHTML = `<div class="alert alert-error">Failed to load tags: ${esc(err.message)}</div>`;
+        return;
+    }
+
+    _gpsTags = tags;
+
+    // ── Clear existing markers ──────────────────────────
+    Object.values(_gpsMarkers).forEach(m => m.remove());
+    _gpsMarkers = {};
+
+    const located = tags.filter(t => t.latitude && t.longitude &&
+        !isNaN(parseFloat(t.latitude)) && !isNaN(parseFloat(t.longitude)));
+    const unlocated = tags.filter(t => !t.latitude || !t.longitude);
+
+    // ── Place markers ──────────────────────────────────
+    located.forEach(t => {
+        const lat = parseFloat(t.latitude);
+        const lng = parseFloat(t.longitude);
+        const isMarked = _markedTags.has(t.imei);
+        const style = isMarked ? { ...GPS_STYLE_MARKED } : { ...GPS_STYLE_NORMAL };
+        const marker = L.circleMarker([lat, lng], style).addTo(_map);
+        const label = esc(t.description || t.device_name || t.imei);
+        const ownerShort = esc(t.owner_email.split('@')[0]);
+        marker.bindPopup(`
+            <strong>${label}</strong><br>
+            <span style="font-size:11px;color:#666">${esc(t.imei)}</span><br>
+            <span style="font-size:11px">Owner: ${ownerShort}</span><br>
+            <span style="font-size:11px">Last seen: ${t.last_seen ? new Date(t.last_seen).toLocaleString() : '—'}</span><br>
+            <button onclick="toggleGpsMark('${esc(t.imei)}')" style="margin-top:6px;font-size:12px;padding:3px 8px;border-radius:4px;border:1px solid #ddd;cursor:pointer;background:#f3f4f6" id="popup-mark-${esc(t.imei.replace(/[^a-z0-9]/gi,'_'))}">
+                ${isMarked ? '★ Unmark' : '☆ Mark for tracking'}
+            </button>
+        `);
+        _gpsMarkers[t.imei] = marker;
+    });
+
+    // ── Auto-fit map to all located tags ──────────────
+    if (located.length > 0) {
+        const bounds = L.latLngBounds(located.map(t => [parseFloat(t.latitude), parseFloat(t.longitude)]));
+        _map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+    }
+
+    // ── Update marked overlay counter ─────────────────
+    _updateMarkedOverlay();
+
+    // ── Render tag list panel ──────────────────────────
+    if (!tags.length) {
+        listEl.innerHTML = '<div class="alert alert-info">No tags in this group yet. Configure a domain in Settings and add tags.</div>';
+        return;
+    }
+
+    const legend = `<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:12px;font-size:12px;color:var(--gray)">
+        <span><span class="gps-dot gps-dot-normal" style="display:inline-block;margin-right:4px"></span>Normal</span>
+        <span><span class="gps-dot gps-dot-marked" style="display:inline-block;margin-right:4px"></span>Marked / Tracked</span>
+        <span style="margin-left:auto;color:var(--gray)">${located.length} on map · ${unlocated.length} no GPS fix</span>
+    </div>`;
+
+    const rows = tags.map(t => {
+        const isMarked  = _markedTags.has(t.imei);
+        const hasGPS    = !!_gpsMarkers[t.imei];
+        const dotClass  = isMarked ? 'gps-dot-marked' : 'gps-dot-normal';
+        const rowClass  = isMarked ? 'gps-marked' : '';
+        const label     = esc(t.description || t.device_name || '—');
+        const safeId    = t.imei.replace(/[^a-z0-9]/gi, '_');
+        const zoomBtn   = hasGPS
+            ? `<button onclick="gpsZoomTo('${esc(t.imei)}')" title="Zoom to tag" style="border:none;background:none;cursor:pointer;font-size:15px;padding:0 4px">🎯</button>`
+            : `<span title="No GPS fix" style="font-size:15px;opacity:.35;padding:0 4px">📍</span>`;
+        return `
+        <div class="gps-tag-row ${rowClass}" id="gps-row-${safeId}" onclick="toggleGpsMark('${esc(t.imei)}')">
+            <span class="gps-dot ${dotClass}"></span>
+            <input type="checkbox" ${isMarked ? 'checked' : ''} onclick="event.stopPropagation();toggleGpsMark('${esc(t.imei)}')" style="cursor:pointer">
+            <code style="font-size:12px;flex-shrink:0">${esc(t.imei)}</code>
+            <span style="font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${label}">${label}</span>
+            <span style="font-size:11px;color:var(--gray);flex-shrink:0">${esc(t.owner_email.split('@')[0])}</span>
+            ${zoomBtn}
+        </div>`;
+    }).join('');
+
+    listEl.innerHTML = legend +
+        `<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;max-height:280px;overflow-y:auto">${rows}</div>`;
+}
+
+function toggleGpsMark(imei) {
+    if (_markedTags.has(imei)) {
+        _markedTags.delete(imei);
+    } else {
+        _markedTags.add(imei);
+    }
+    const isMarked = _markedTags.has(imei);
+
+    // Update map marker style
+    if (_gpsMarkers[imei]) {
+        _gpsMarkers[imei].setStyle(isMarked ? GPS_STYLE_MARKED : GPS_STYLE_NORMAL);
+        _gpsMarkers[imei].setRadius ? null : null; // circleMarker handles via setStyle
+        // Update popup button text if open
+        const safeId = imei.replace(/[^a-z0-9]/gi, '_');
+        const popupBtn = document.getElementById(`popup-mark-${safeId}`);
+        if (popupBtn) popupBtn.textContent = isMarked ? '★ Unmark' : '☆ Mark for tracking';
+    }
+
+    // Update list row
+    const safeId = imei.replace(/[^a-z0-9]/gi, '_');
+    const row = document.getElementById(`gps-row-${safeId}`);
+    if (row) {
+        row.classList.toggle('gps-marked', isMarked);
+        const dot = row.querySelector('.gps-dot');
+        if (dot) { dot.classList.toggle('gps-dot-normal', !isMarked); dot.classList.toggle('gps-dot-marked', isMarked); }
+        const cb = row.querySelector('input[type=checkbox]');
+        if (cb) cb.checked = isMarked;
+    }
+
+    _updateMarkedOverlay();
+}
+
+function gpsClearAllMarked() {
+    const prev = [..._markedTags];
+    _markedTags.clear();
+    prev.forEach(imei => {
+        if (_gpsMarkers[imei]) _gpsMarkers[imei].setStyle(GPS_STYLE_NORMAL);
+        const safeId = imei.replace(/[^a-z0-9]/gi, '_');
+        const row = document.getElementById(`gps-row-${safeId}`);
+        if (row) {
+            row.classList.remove('gps-marked');
+            const dot = row.querySelector('.gps-dot');
+            if (dot) { dot.classList.replace('gps-dot-marked', 'gps-dot-normal'); }
+            const cb = row.querySelector('input[type=checkbox]');
+            if (cb) cb.checked = false;
+        }
+    });
+    _updateMarkedOverlay();
+}
+
+function _updateMarkedOverlay() {
+    const overlay = document.getElementById('gpsMapOverlay');
+    if (!overlay) return;
+    const count = _markedTags.size;
+    document.getElementById('gpsMarkedCount').textContent = count;
+    overlay.style.display = count > 0 ? '' : 'none';
+}
+
+function gpsZoomTo(imei) {
+    const marker = _gpsMarkers[imei];
+    if (!marker) return;
+    _map.flyTo(marker.getLatLng(), 17, { duration: 1 });
+    marker.openPopup();
+}
+
+function gpsSearchAndZoom() {
+    const q = document.getElementById('gpsSearchInput').value.trim().toLowerCase();
+    if (!q) return;
+    const match = _gpsTags.find(t =>
+        t.imei.toLowerCase().includes(q) ||
+        (t.description || '').toLowerCase().includes(q) ||
+        (t.device_name || '').toLowerCase().includes(q)
+    );
+    if (!match) {
+        const alertEl = document.getElementById('gpsAlert');
+        document.getElementById('gpsAlertText').textContent = `No tag found matching "${q}"`;
+        alertEl.style.display = 'flex';
+        setTimeout(() => { alertEl.style.display = 'none'; }, 3000);
+        return;
+    }
+    if (_gpsMarkers[match.imei]) {
+        // Flash it green briefly to highlight, then restore
+        _gpsMarkers[match.imei].setStyle(GPS_STYLE_SEARCH);
+        _map.flyTo(_gpsMarkers[match.imei].getLatLng(), 17, { duration: 1 });
+        _gpsMarkers[match.imei].openPopup();
+        setTimeout(() => {
+            if (_gpsMarkers[match.imei]) {
+                _gpsMarkers[match.imei].setStyle(_markedTags.has(match.imei) ? GPS_STYLE_MARKED : GPS_STYLE_NORMAL);
+            }
+        }, 2500);
+    } else {
+        // Tag found but no GPS fix — scroll row into view
+        const safeId = match.imei.replace(/[^a-z0-9]/gi, '_');
+        const row = document.getElementById(`gps-row-${safeId}`);
+        if (row) { row.scrollIntoView({ behavior: 'smooth', block: 'center' }); row.classList.add('gps-search-highlight'); setTimeout(() => row.classList.remove('gps-search-highlight'), 1500); }
+        const alertEl = document.getElementById('gpsAlert');
+        document.getElementById('gpsAlertText').textContent = `"${match.description || match.imei}" has no GPS fix yet.`;
+        alertEl.style.display = 'flex';
+        setTimeout(() => { alertEl.style.display = 'none'; }, 3000);
+    }
 }
 
 // ══════════════════════════════════════════
