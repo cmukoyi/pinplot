@@ -1841,6 +1841,8 @@ function gpsSearchAndZoom() {
         alertEl.style.display = 'flex';
         setTimeout(() => { alertEl.style.display = 'none'; }, 3000);
     }
+}
+async function _gpsSearchDuplicate_doNotCall() {
     let tags = [];
     try {
         const res = await apiFetch('/api/portal/tags');
