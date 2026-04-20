@@ -226,12 +226,13 @@ class UserGroup(Base):
     """
     __tablename__ = "user_groups"
 
-    id         = get_uuid_column()
-    name       = Column(String(200), nullable=False, unique=True)
-    slug       = Column(String(100), nullable=False, unique=True)  # URL-safe identifier
-    is_active  = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    id           = get_uuid_column()
+    name         = Column(String(200), nullable=False, unique=True)
+    slug         = Column(String(100), nullable=False, unique=True)  # URL-safe identifier
+    email_domain = Column(String(255), nullable=True, index=True)   # e.g. "gmail.com" — auto-assigns mobile users
+    is_active    = Column(Boolean, nullable=False, default=True)
+    created_at   = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at   = Column(DateTime(timezone=True), onupdate=func.now())
 
     portal_users = relationship("PortalUser", back_populates="usergroup",
                                 cascade="all, delete-orphan")

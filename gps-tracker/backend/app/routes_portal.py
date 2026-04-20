@@ -15,7 +15,7 @@ import os
 import logging
 
 from app.database import get_db
-from app.models import UserGroup, PortalUser, Building, Floor, IndoorGateway
+from app.models import UserGroup, PortalUser, Building, Floor, IndoorGateway, BLETag, User
 from app.admin_auth import hash_password, verify_password
 
 router = APIRouter(prefix="/api/portal", tags=["portal"])
@@ -329,3 +329,138 @@ def list_all_gateways(request: Request, db: Session = Depends(get_db)):
             "building_id": str(gw.floor.building_id),
         }
     return result
+
+
+# ---------------------------------------------------------------------------
+# Settings — group admin can configure email domain auto-assignment
+# ---------------------------------------------------------------------------
+
+class GroupSettingsOut(BaseModel):
+    id: UUID
+    name: str
+    slug: str
+    email_domain: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class GroupSettingsUpdate(BaseModel):
+    email_domain: Optional[str] = None   # set to "" or null to clear
+
+
+@router.get("/settings", response_model=GroupSettingsOut)
+def get_settings(request: Request, db: Session = Depends(get_db)):
+    """Return the current UserGroup settings for the logged-in portal user."""
+    me = get_portal_user_from_request(request, db)
+    group = db.query(UserGroup).filter(UserGroup.id == me.usergroup_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="User group not found")
+    return GroupSettingsOut.model_validate(group)
+
+
+@router.put("/settings", response_model=GroupSettingsOut)
+def update_settings(
+    data: GroupSettingsUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Update UserGroup settings (group admin only)."""
+    me = get_portal_user_from_request(request, db)
+    if not me.is_group_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Only group admins can update settings")
+
+    group = db.query(UserGroup).filter(UserGroup.id == me.usergroup_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="User group not found")
+
+    # Normalise domain: strip whitespace, lowercase, strip leading "@" if present
+    domain = (data.email_domain or "").strip().lower().lstrip("@") or None
+
+    # Ensure no other group is already using this domain
+    if domain:
+        conflict = db.query(UserGroup).filter(
+            UserGroup.email_domain == domain,
+            UserGroup.id != group.id,
+        ).first()
+        if conflict:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Domain '{domain}' is already claimed by another group",
+            )
+
+    group.email_domain = domain
+    db.commit()
+    db.refresh(group)
+    return GroupSettingsOut.model_validate(group)
+
+
+# ---------------------------------------------------------------------------
+# Tags — all BLE tags belonging to mobile-app users whose email domain
+#         matches the group's configured email_domain
+# ---------------------------------------------------------------------------
+
+class PortalTagOut(BaseModel):
+    id: UUID
+    imei: str
+    device_name: Optional[str]
+    device_model: Optional[str]
+    description: Optional[str]
+    tag_type: Optional[str]
+    is_active: bool
+    last_seen: Optional[datetime]
+    latitude: Optional[str]
+    longitude: Optional[str]
+    location_description: Optional[str]
+    battery_level: Optional[int]
+    owner_email: str
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/tags", response_model=List[PortalTagOut])
+def list_group_tags(request: Request, db: Session = Depends(get_db)):
+    """Return all BLE tags belonging to mobile-app users whose email domain
+    matches the group's configured email_domain.
+
+    Returns an empty list (not an error) when no domain is configured yet.
+    """
+    me = get_portal_user_from_request(request, db)
+    group = db.query(UserGroup).filter(UserGroup.id == me.usergroup_id).first()
+    if not group or not group.email_domain:
+        return []
+
+    domain = group.email_domain.lower()
+
+    tags = (
+        db.query(BLETag, User.email)
+        .join(User, User.id == BLETag.user_id)
+        .filter(
+            User.email.ilike(f"%@{domain}"),
+            BLETag.is_active == True,
+        )
+        .order_by(BLETag.added_at.desc())
+        .all()
+    )
+
+    result = []
+    for tag, owner_email in tags:
+        result.append(PortalTagOut(
+            id=tag.id,
+            imei=tag.imei,
+            device_name=tag.device_name,
+            device_model=tag.device_model,
+            description=tag.description,
+            tag_type=tag.tag_type,
+            is_active=tag.is_active,
+            last_seen=tag.last_seen,
+            latitude=tag.latitude,
+            longitude=tag.longitude,
+            location_description=tag.location_description,
+            battery_level=tag.battery_level,
+            owner_email=owner_email,
+        ))
+    return result
+

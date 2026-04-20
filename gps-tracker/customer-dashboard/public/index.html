@@ -384,6 +384,11 @@
                     <span>👥</span><span>Users</span>
                 </button>
             </li>
+            <li class="sidebar-item">
+                <button class="sidebar-link" onclick="switchTab('settings')">
+                    <span>⚙️</span><span>Settings</span>
+                </button>
+            </li>
         </ul>
 
         <div class="sidebar-bottom">
@@ -412,28 +417,25 @@
             <div id="tab-tags" class="tab-content active">
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title">Add Tags</span>
-                        <div style="display:flex;gap:10px">
-                            <button class="btn btn-secondary btn-small" onclick="openModal('singleTagModal')">+ Single Tag</button>
-                            <button class="btn btn-primary btn-small" onclick="openModal('bulkTagModal')">⬆ Bulk CSV</button>
-                        </div>
+                        <span class="card-title">Group Tags</span>
+                        <button class="btn btn-secondary btn-small" onclick="loadGroupTags()">↻ Refresh</button>
                     </div>
-
                     <div id="tagsAlert" class="alert" style="display:none"><span id="tagsAlertText"></span></div>
-
+                    <p id="tagsDomainHint" style="font-size:13px;color:var(--gray);margin:0 0 12px"></p>
                     <div class="table-wrapper">
                         <table>
                             <thead>
                                 <tr>
                                     <th>IMEI / Tag ID</th>
-                                    <th>Label</th>
-                                    <th>Assigned To</th>
+                                    <th>Label / Description</th>
+                                    <th>Owner</th>
+                                    <th>Type</th>
                                     <th>Status</th>
-                                    <th>Added</th>
+                                    <th>Last Seen</th>
                                 </tr>
                             </thead>
                             <tbody id="tagsTableBody">
-                                <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--gray)">No tags yet — add one above.</td></tr>
+                                <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray)">Loading…</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -538,6 +540,30 @@
                     <div id="gpsAlert" class="alert alert-info" style="display:none"><span id="gpsAlertText"></span></div>
                     <div id="gpsMap"></div>
                     <div id="gpsTagList" style="margin-top:20px"></div>
+                </div>
+            </div>
+
+            <!-- ═══ SETTINGS TAB ═══ -->
+            <div id="tab-settings" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Group Settings</span>
+                    </div>
+                    <div id="settingsAlert" class="alert" style="display:none"><span id="settingsAlertText"></span></div>
+                    <div style="max-width:480px">
+                        <div class="form-group" style="margin-bottom:8px">
+                            <label style="font-weight:600">Email Domain Auto-Assignment</label>
+                            <p style="font-size:13px;color:var(--gray);margin:4px 0 12px">All mobile-app users who register with an email matching this domain will automatically have their tags visible here. Example: <code>acmecorp.com</code></p>
+                            <div style="display:flex;gap:8px;align-items:center">
+                                <span style="font-size:14px;color:var(--gray)">@</span>
+                                <input type="text" id="emailDomainInput" placeholder="e.g. acmecorp.com" style="flex:1">
+                            </div>
+                        </div>
+                        <div style="margin-top:16px;display:flex;gap:10px">
+                            <button class="btn btn-primary" onclick="saveDomainSetting()">Save</button>
+                            <button class="btn btn-secondary" onclick="clearDomainSetting()">Clear Domain</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -837,7 +863,7 @@ function showDashboard(user, group) {
 // ══════════════════════════════════════════
 // Tab switching
 // ══════════════════════════════════════════
-const TAB_TITLES = { tags: 'Tags', building: 'Building', gps: 'GPS Map', users: 'Users' };
+const TAB_TITLES = { tags: 'Tags', building: 'Building', gps: 'GPS Map', users: 'Users', settings: 'Settings' };
 let _mapInitialized = false;
 
 function switchTab(name) {
@@ -852,6 +878,8 @@ function switchTab(name) {
     if (name === 'building')  loadBuildings();
     if (name === 'gps')      initGPSMap();
     if (name === 'users')    loadUsers();
+    if (name === 'tags')     loadGroupTags();
+    if (name === 'settings') loadSettings();
 }
 
 // ══════════════════════════════════════════
@@ -880,98 +908,73 @@ function showTabAlert(prefix, msg, type) {
 }
 
 // ══════════════════════════════════════════
-// TAGS — local store (no backend endpoint yet)
+// TAGS — API-driven (domain-scoped to UserGroup)
 // ══════════════════════════════════════════
-let _tags = JSON.parse(localStorage.getItem('pp_tags_' + (getSession().group?.id || '')) || '[]');
 
-function saveTags() {
-    localStorage.setItem('pp_tags_' + (getSession().group?.id || ''), JSON.stringify(_tags));
-}
-
-function loadTags() {
-    _tags = JSON.parse(localStorage.getItem('pp_tags_' + (getSession().group?.id || '')) || '[]');
-    renderTagsTable();
-}
-
-function renderTagsTable() {
+async function loadGroupTags() {
     const tb = document.getElementById('tagsTableBody');
-    if (!_tags.length) {
-        tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--gray)">No tags yet — add one above.</td></tr>';
-        return;
+    const hint = document.getElementById('tagsDomainHint');
+    tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray)">Loading…</td></tr>';
+
+    // Fetch settings to show domain hint
+    try {
+        const settings = await apiCall('GET', '/api/portal/settings');
+        hint.textContent = settings.email_domain
+            ? `Showing all tags for users with @${settings.email_domain} emails.`
+            : 'No domain configured yet — go to Settings to set an email domain.';
+    } catch (_) { hint.textContent = ''; }
+
+    try {
+        const tags = await apiCall('GET', '/api/portal/tags');
+        if (!tags.length) {
+            tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray)">No tags found. Ensure a domain is configured in Settings and users have registered tags.</td></tr>';
+            return;
+        }
+        tb.innerHTML = tags.map(t => {
+            const statusBadge = t.is_active
+                ? '<span class="badge badge-success">Active</span>'
+                : '<span class="badge badge-danger">Inactive</span>';
+            const lastSeen = t.last_seen ? new Date(t.last_seen).toLocaleString() : '—';
+            return `<tr>
+                <td><code>${esc(t.imei)}</code></td>
+                <td>${esc(t.description || t.device_name || '—')}</td>
+                <td style="font-size:12px;color:var(--gray)">${esc(t.owner_email)}</td>
+                <td>${esc(t.tag_type || '—')}</td>
+                <td>${statusBadge}</td>
+                <td style="font-size:12px">${esc(lastSeen)}</td>
+            </tr>`;
+        }).join('');
+    } catch (err) {
+        tb.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--red)">Failed to load tags: ${esc(err.message)}</td></tr>`;
     }
-    tb.innerHTML = _tags.map((t, i) => `
-        <tr>
-            <td><code>${esc(t.imei)}</code></td>
-            <td>${esc(t.label || '—')}</td>
-            <td>${esc(t.assignedTo || '—')}</td>
-            <td><span class="badge badge-success">Active</span></td>
-            <td>${t.added ? new Date(t.added).toLocaleDateString() : '—'}</td>
-        </tr>
-    `).join('');
 }
 
-function submitSingleTag(e) {
-    e.preventDefault();
-    const imei  = document.getElementById('stImei').value.trim();
-    const label = document.getElementById('stLabel').value.trim();
-    if (_tags.find(t => t.imei === imei)) {
-        showTabAlert('singleTag', 'This IMEI is already added.', 'error'); return;
+// ══════════════════════════════════════════
+// SETTINGS — email domain configuration
+// ══════════════════════════════════════════
+
+async function loadSettings() {
+    try {
+        const settings = await apiCall('GET', '/api/portal/settings');
+        document.getElementById('emailDomainInput').value = settings.email_domain || '';
+    } catch (err) {
+        showTabAlert('settings', 'Failed to load settings: ' + err.message, 'error');
     }
-    _tags.push({ imei, label, added: new Date().toISOString() });
-    saveTags(); renderTagsTable();
-    closeModal('singleTagModal');
-    document.getElementById('stImei').value = '';
-    document.getElementById('stLabel').value = '';
-    showTabAlert('tags', `Tag ${imei} added.`, 'success');
 }
 
-// ── CSV bulk ──
-let _csvRows = [];
-
-function handleCSVDrop(e) {
-    e.preventDefault();
-    document.getElementById('csvDropZone').classList.remove('dragover');
-    const file = e.dataTransfer.files[0];
-    if (file) handleCSVFile(file);
+async function saveDomainSetting() {
+    const domain = document.getElementById('emailDomainInput').value.trim();
+    try {
+        await apiCall('PUT', '/api/portal/settings', { email_domain: domain });
+        showTabAlert('settings', `Domain saved: ${domain || '(cleared)'}`, 'success');
+    } catch (err) {
+        showTabAlert('settings', err.message, 'error');
+    }
 }
 
-function handleCSVFile(file) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-        const lines = ev.target.result.split(/\r?\n/).filter(l => l.trim());
-        _csvRows = [];
-        let start = 0;
-        if (lines[0].toLowerCase().includes('imei')) start = 1;
-        for (let i = start; i < lines.length; i++) {
-            const parts = lines[i].split(',');
-            if (parts[0]?.trim()) _csvRows.push({ imei: parts[0].trim(), label: (parts[1] || '').trim() });
-        }
-        if (!_csvRows.length) {
-            showTabAlert('bulkTag', 'No valid rows found in CSV.', 'error'); return;
-        }
-        document.getElementById('csvPreviewLabel').textContent = `${_csvRows.length} tags to import:`;
-        document.getElementById('csvPreviewBody').innerHTML = _csvRows.map(r =>
-            `<tr><td><code>${esc(r.imei)}</code></td><td>${esc(r.label)}</td></tr>`
-        ).join('');
-        document.getElementById('csvPreview').style.display = 'block';
-    };
-    reader.readAsText(file);
-}
-
-function submitBulkTags() {
-    let added = 0;
-    _csvRows.forEach(r => {
-        if (!_tags.find(t => t.imei === r.imei)) {
-            _tags.push({ imei: r.imei, label: r.label, added: new Date().toISOString() });
-            added++;
-        }
-    });
-    saveTags(); renderTagsTable();
-    closeModal('bulkTagModal');
-    document.getElementById('csvPreview').style.display = 'none';
-    _csvRows = [];
-    showTabAlert('tags', `${added} tag(s) imported.`, 'success');
+async function clearDomainSetting() {
+    document.getElementById('emailDomainInput').value = '';
+    await saveDomainSetting();
 }
 
 // ══════════════════════════════════════════
