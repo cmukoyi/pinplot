@@ -420,19 +420,14 @@
         <div class="nav-section">
             <div class="nav-section-label">Tracking</div>
 
-            <button class="nav-item active" data-tab="tags" onclick="switchTab('tags')">
-                <span class="nav-icon"><i class="fa-solid fa-tags"></i></span>
-                <span class="nav-label">Tags</span>
+            <button class="nav-item active" data-tab="livemap" onclick="switchTab('livemap')">
+                <span class="nav-icon"><i class="fa-solid fa-map"></i></span>
+                <span class="nav-label">Live Map</span>
             </button>
 
             <button class="nav-item" data-tab="building" onclick="switchTab('building')">
                 <span class="nav-icon"><i class="fa-solid fa-building"></i></span>
                 <span class="nav-label">Building</span>
-            </button>
-
-            <button class="nav-item" data-tab="gps" onclick="switchTab('gps')">
-                <span class="nav-icon"><i class="fa-solid fa-map-location-dot"></i></span>
-                <span class="nav-label">GPS Map</span>
             </button>
         </div>
 
@@ -467,48 +462,37 @@
     <main id="main-content">
         <div class="top-bar">
             <div>
-                <div class="top-bar-title" id="topBarTitle">Tags</div>
+                <div class="top-bar-title" id="topBarTitle">Live Map</div>
                 <div class="top-bar-company" id="topBarCompany"></div>
             </div>
         </div>
 
         <div class="content">
 
-            <!-- ═══ TAGS TAB ═══ -->
-            <div id="tab-tags" class="tab-content active">
-                <div class="card">
-                    <div class="card-header">
-                        <span class="card-title">Group Tags</span>
-                        <div style="display:flex;gap:8px;flex-wrap:wrap">
-                            <button class="btn btn-secondary btn-small" onclick="loadGroupTags()">↻ Refresh</button>
-                            <button id="deleteTagsBtn" class="btn btn-small" onclick="deleteSelectedTags()" style="display:none;background:#ef4444;color:#fff;border-color:#ef4444">🗑 Delete Selected</button>
-                            <button id="addTagBtn" class="btn btn-primary btn-small" onclick="openAddTagModal()" style="display:none">+ Add Tag</button>
+            <!-- ═══ LIVE MAP TAB ═══ -->
+            <div id="tab-livemap" class="tab-content active">
+                <aside class="map-sidebar">
+                    <div class="map-sidebar-top">
+                        <h2><i class="fa-solid fa-satellite-dish" style="color:var(--primary);margin-right:6px"></i> Live Assets</h2>
+                        <div class="search-input-wrap">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input id="lm-search" class="search-input" type="text" placeholder="Search IMEI or label…" oninput="lmFilterList()">
                         </div>
                     </div>
-                    <div id="tagsAlert" class="alert" style="display:none"><span id="tagsAlertText"></span></div>
-                    <p id="tagsDomainHint" style="font-size:13px;color:var(--gray);margin:0 0 12px"></p>
-                    <div class="table-wrapper">
-                        <table>
-                            <thead>
-                                <tr id="tagsTableHead">
-                                    <th id="tagsSelectAllTh" style="width:36px;display:none"><input type="checkbox" id="tagsSelectAll" title="Select all" onchange="tagsToggleAll(this.checked)"></th>
-                                    <th>IMEI / Tag ID</th>
-                                    <th>Label / Description</th>
-                                    <th>Owner</th>
-                                    <th>Type</th>
-                                    <th>Status</th>
-                                    <th>Date Added</th>
-                                    <th>Package</th>
-                                    <th>Expiry</th>
-                                    <th>Days Left</th>
-                                    <th>Last Seen</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tagsTableBody">
-                                <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--gray)">Loading…</td></tr>
-                            </tbody>
-                        </table>
+
+                    <div class="stat-chips">
+                        <div class="stat-chip"><span class="stat-num" id="lm-stat-total">—</span><span>Total</span></div>
+                        <div class="stat-chip online"><span class="stat-num" id="lm-stat-located">—</span><span>On Map</span></div>
+                        <div class="stat-chip offline"><span class="stat-num" id="lm-stat-noloc">—</span><span>No GPS</span></div>
+                        <div class="stat-chip idle"><span class="stat-num" id="lm-stat-inactive">—</span><span>Inactive</span></div>
                     </div>
+
+                    <div id="lm-asset-list"></div>
+                    <div id="lm-detail-panel"></div>
+                </aside>
+
+                <div class="map-area">
+                    <div id="liveMap"></div>
                 </div>
             </div>
 
@@ -600,31 +584,7 @@
                 </div>
             </div>
 
-            <!-- ═══ GPS TAB ═══ -->
-            <div id="tab-gps" class="tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <span class="card-title">Live GPS Map</span>
-                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                            <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden">
-                                <input id="gpsSearchInput" type="text" placeholder="Search IMEI or description…"
-                                    style="border:none;padding:6px 10px;font-size:13px;outline:none;width:200px"
-                                    onkeydown="if(event.key==='Enter')gpsSearchAndZoom()">
-                                <button style="border:none;background:var(--primary);color:#fff;padding:0 10px;cursor:pointer;font-size:13px" onclick="gpsSearchAndZoom()">🔍</button>
-                            </div>
-                            <button class="btn btn-secondary btn-small" onclick="refreshGPSMap()">↻ Refresh</button>
-                        </div>
-                    </div>
-                    <div id="gpsAlert" class="alert alert-info" style="display:none"><span id="gpsAlertText"></span></div>
-                    <div style="position:relative">
-                        <div id="gpsMap"></div>
-                        <div id="gpsMapOverlay" style="position:absolute;top:10px;right:10px;z-index:999;background:rgba(255,255,255,0.95);border-radius:8px;padding:8px 12px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.15);display:none">
-                            <span id="gpsMarkedCount">0</span> marked · <button style="border:none;background:none;color:var(--primary);cursor:pointer;font-size:12px;padding:0" onclick="gpsClearAllMarked()">Clear all</button>
-                        </div>
-                    </div>
-                    <div id="gpsTagList" style="margin-top:20px"></div>
-                </div>
-            </div>
+            <!-- GPS tab removed — functionality merged into Live Map tab -->
 
             <!-- ═══ SETTINGS TAB ═══ -->
             <div id="tab-settings" class="tab-content">
@@ -1036,14 +996,14 @@ function showDashboard(user, group) {
         avatarEl.textContent = initials;
     }
 
-    switchTab('tags');
+    switchTab('livemap');
     loadBuildings();
 }
 
 // ══════════════════════════════════════════
 // Tab switching
 // ══════════════════════════════════════════
-const TAB_TITLES = { tags: 'Tags', building: 'Building', gps: 'GPS Map', users: 'Users', settings: 'Settings', qr: 'QR Codes' };
+const TAB_TITLES = { livemap: 'Live Map', building: 'Building', users: 'Users', settings: 'Settings', qr: 'QR Codes' };
 let _mapInitialized = false;
 
 function switchTab(name) {
@@ -1058,9 +1018,12 @@ function switchTab(name) {
     const pageTitleEl = document.getElementById('pageTitle');
     if (pageTitleEl) pageTitleEl.textContent = TAB_TITLES[name] || name;
 
-    if (name === 'tags')     loadGroupTags();
-    if (name === 'building')  loadBuildings();
-    if (name === 'gps')      initGPSMap();
+    // Toggle full-bleed mode on the content wrapper for Live Map
+    const contentEl = document.querySelector('.content');
+    if (contentEl) contentEl.classList.toggle('live-map-active', name === 'livemap');
+
+    if (name === 'livemap')  initLiveMap();
+    if (name === 'building') loadBuildings();
     if (name === 'users')    loadUsers();
     if (name === 'settings') loadSettings();
     if (name === 'qr')       loadQRTagList();
@@ -2225,9 +2188,214 @@ async function submitAddUser(e) {
 })();
 
 // ══════════════════════════════════════════
+// LIVE MAP  (GPS tags + Leaflet map)
+// ══════════════════════════════════════════
+let _liveMap        = null;
+let _lmMapReady     = false;
+let _lmTags         = [];        // all tags from API
+let _lmMarkers      = {};        // imei → L.marker
+let _lmSelected     = null;      // currently selected imei
+
+function _lmStatusClass(tag) {
+    if (!tag.is_active) return 'offline';
+    if (tag.latitude && tag.longitude) return 'online';
+    return 'idle';
+}
+
+function _lmMarkerIcon(tag) {
+    const status = _lmStatusClass(tag);
+    const colors = { online: '#10B981', idle: '#F59E0B', offline: '#EF4444' };
+    const c = colors[status] || '#6B7280';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="44" viewBox="0 0 36 44">
+      <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 26 18 26S36 31.5 36 18C36 8.06 27.94 0 18 0z" fill="${c}"/>
+      <circle cx="18" cy="18" r="11" fill="white" opacity="0.95"/>
+      <text x="18" y="23" text-anchor="middle" font-size="13" font-family="sans-serif" fill="${c}">
+        ${status === 'online' ? '●' : status === 'idle' ? '◐' : '○'}
+      </text>
+    </svg>`;
+    return L.divIcon({
+        html: `<div style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))">${svg}</div>`,
+        className: '', iconSize: [36,44], iconAnchor: [18,44], popupAnchor: [0,-44]
+    });
+}
+
+async function initLiveMap() {
+    // Init Leaflet map once
+    if (!_lmMapReady) {
+        _liveMap = L.map('liveMap', { zoomControl: true }).setView([-25.7479, 28.2293], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+            maxZoom: 19
+        }).addTo(_liveMap);
+        _lmMapReady = true;
+    } else {
+        _liveMap.invalidateSize();
+    }
+    await _lmLoadTags();
+}
+
+async function _lmLoadTags() {
+    document.getElementById('lm-asset-list').innerHTML =
+        '<div style="padding:20px;text-align:center;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
+    try {
+        const res = await apiFetch('/api/portal/tags');
+        if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+        _lmTags = await res.json();
+    } catch (err) {
+        document.getElementById('lm-asset-list').innerHTML =
+            `<div style="padding:20px;text-align:center;color:var(--danger)"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(err.message)}</div>`;
+        return;
+    }
+    _lmPlaceMarkers();
+    _lmRenderList();
+    _lmUpdateStats();
+}
+
+function _lmPlaceMarkers() {
+    Object.values(_lmMarkers).forEach(m => m.remove());
+    _lmMarkers = {};
+    const located = _lmTags.filter(t => t.latitude && t.longitude &&
+        !isNaN(parseFloat(t.latitude)) && !isNaN(parseFloat(t.longitude)));
+    located.forEach(t => {
+        const m = L.marker([parseFloat(t.latitude), parseFloat(t.longitude)], { icon: _lmMarkerIcon(t) })
+            .addTo(_liveMap);
+        const label = esc(t.description || t.device_name || t.imei);
+        m.bindPopup(`
+            <div class="map-popup">
+                <strong>${label}</strong><br>
+                <small style="font-family:monospace">${esc(t.imei)}</small><br>
+                <div style="margin:4px 0;font-size:.8rem;color:#555">
+                    Owner: ${esc((t.owner_email||'').split('@')[0])}<br>
+                    Last seen: ${t.last_seen ? new Date(t.last_seen).toLocaleString() : '—'}
+                </div>
+            </div>
+        `, { maxWidth: 240 });
+        m.on('click', () => _lmSelectTag(t.imei));
+        _lmMarkers[t.imei] = m;
+    });
+    if (located.length > 0) {
+        const bounds = L.latLngBounds(located.map(t => [parseFloat(t.latitude), parseFloat(t.longitude)]));
+        _liveMap.fitBounds(bounds, { padding: [40,40], maxZoom: 16 });
+    }
+}
+
+function _lmRenderList(query) {
+    query = (query || document.getElementById('lm-search')?.value || '').toLowerCase();
+    const list = _lmTags.filter(t => {
+        if (!query) return true;
+        const haystack = [t.imei, t.description, t.device_name, t.owner_email].join(' ').toLowerCase();
+        return haystack.includes(query);
+    });
+    const container = document.getElementById('lm-asset-list');
+    if (!list.length) {
+        container.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-3)">
+            <i class="fa-solid fa-magnifying-glass" style="font-size:24px;opacity:.3;display:block;margin-bottom:8px"></i>
+            No assets found</div>`;
+        return;
+    }
+    container.innerHTML = list.map(t => {
+        const status = _lmStatusClass(t);
+        const label  = esc(t.description || t.device_name || t.imei);
+        const owner  = esc((t.owner_email||'').split('@')[0]);
+        const hasGPS = !!(t.latitude && t.longitude);
+        const cls    = _lmSelected === t.imei ? ' selected' : '';
+        const statusColors = { online: 'var(--success)', idle: 'var(--warning)', offline: 'var(--danger)' };
+        const iconBg  = `${statusColors[status]}20`;
+        const iconClr = statusColors[status];
+        const faIcon  = hasGPS ? 'fa-location-dot' : 'fa-tag';
+        const battery = t.battery_level != null
+            ? `<span style="font-size:.72rem;color:var(--text-3)">${t.battery_level}%</span>` : '';
+        return `<div class="asset-row${cls}" data-imei="${esc(t.imei)}" onclick="lmSelectFromList('${esc(t.imei)}')">
+            <div class="asset-row-icon" style="background:${iconBg};color:${iconClr}">
+                <i class="fa-solid ${faIcon}"></i>
+            </div>
+            <div class="asset-row-info">
+                <span class="asset-row-name">${label}</span>
+                <span class="asset-row-tag">${esc(t.imei)}</span>
+            </div>
+            <div class="asset-row-right">
+                <span class="status-dot status-${status}"></span>
+                ${battery}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function _lmUpdateStats() {
+    const located   = _lmTags.filter(t => t.latitude && t.longitude).length;
+    const inactive  = _lmTags.filter(t => !t.is_active).length;
+    document.getElementById('lm-stat-total').textContent    = _lmTags.length;
+    document.getElementById('lm-stat-located').textContent  = located;
+    document.getElementById('lm-stat-noloc').textContent    = _lmTags.length - located;
+    document.getElementById('lm-stat-inactive').textContent = inactive;
+}
+
+function lmFilterList() {
+    _lmRenderList(document.getElementById('lm-search').value);
+}
+
+function lmSelectFromList(imei) {
+    _lmSelectTag(imei);
+    if (_lmMarkers[imei]) {
+        _liveMap.flyTo(_lmMarkers[imei].getLatLng(), 16, { duration: 0.8 });
+        _lmMarkers[imei].openPopup();
+    }
+}
+
+function _lmSelectTag(imei) {
+    _lmSelected = imei;
+    document.querySelectorAll('#lm-asset-list .asset-row').forEach(r => r.classList.remove('selected'));
+    const row = document.querySelector(`#lm-asset-list .asset-row[data-imei="${imei}"]`);
+    if (row) { row.classList.add('selected'); row.scrollIntoView({ block: 'nearest' }); }
+    const tag = _lmTags.find(t => t.imei === imei);
+    if (tag) _lmRenderDetail(tag);
+}
+
+function _lmRenderDetail(t) {
+    const panel = document.getElementById('lm-detail-panel');
+    if (!panel) return;
+    const label   = esc(t.description || t.device_name || t.imei);
+    const status  = _lmStatusClass(t);
+    const statusColors = { online: 'var(--success)', idle: 'var(--warning)', offline: 'var(--danger)' };
+    const statusLabel  = { online: 'Active + GPS', idle: 'Active, No GPS', offline: 'Inactive' };
+    const lastSeen  = t.last_seen   ? new Date(t.last_seen).toLocaleString()    : '—';
+    const expiry    = t.expiry_date ? new Date(t.expiry_date).toLocaleDateString() : '—';
+    const daysLeft  = t.days_remaining != null
+        ? (t.days_remaining > 0 ? `${t.days_remaining}d left` : t.days_remaining === 0 ? 'Today' : 'Expired')
+        : '—';
+    panel.innerHTML = `
+        <div class="detail-header">
+            <div class="detail-icon" style="background:${statusColors[status]}20;color:${statusColors[status]}">
+                <i class="fa-solid fa-location-dot"></i>
+            </div>
+            <div>
+                <h3>${label}</h3>
+                <small style="font-family:monospace;color:var(--text-3)">${esc(t.imei)}</small>
+            </div>
+            <button class="btn-icon close-detail" onclick="document.getElementById('lm-detail-panel').innerHTML=''">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="detail-grid">
+            <div class="detail-item"><label>Status</label><span style="color:${statusColors[status]}">${statusLabel[status]}</span></div>
+            <div class="detail-item"><label>Owner</label><span>${esc((t.owner_email||'').split('@')[0])}</span></div>
+            <div class="detail-item"><label>Package</label><span>${esc(t.package_name||'—')}</span></div>
+            <div class="detail-item"><label>Days Left</label><span>${daysLeft}</span></div>
+            <div class="detail-item"><label>Expiry</label><span>${expiry}</span></div>
+            <div class="detail-item"><label>Last Seen</label><span>${lastSeen}</span></div>
+            <div class="detail-item detail-full"><label>Type</label><span>${esc(t.tag_type||'—')}</span></div>
+        </div>
+        ${_lmMarkers[t.imei] ? `<div class="detail-actions">
+            <button class="btn btn-primary btn-sm" onclick="lmSelectFromList('${esc(t.imei)}')">
+                <i class="fa-solid fa-crosshairs"></i> Centre on Map
+            </button>
+        </div>` : ''}
+    `;
+}
+
+// ══════════════════════════════════════════
 // QR CODE GENERATION
 // ══════════════════════════════════════════
-let _qrInstance = null;
 let _qrTagsCache = [];
 
 async function loadQRTagList() {
