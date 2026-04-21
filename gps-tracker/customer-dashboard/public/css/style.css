@@ -890,6 +890,12 @@ tbody tr:hover { background: var(--bg-3); }
   background: var(--bg-3);
 }
 
+.asset-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 16px;
+}
+
 /* ── Status dots ──────────────────────────────────────────── */
 .status-dot {
   width: 8px; height: 8px;

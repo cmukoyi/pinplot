@@ -503,34 +503,112 @@
 
             <!-- ═══ ASSET LIST TAB ═══ -->
             <div id="tab-assets" class="tab-content">
-                <div class="content">
-                    <div class="card" style="text-align:center;padding:60px 24px;color:var(--text-3)">
-                        <i class="fa-solid fa-list" style="font-size:48px;opacity:.3;display:block;margin-bottom:16px"></i>
-                        <h3 style="margin:0 0 8px">Asset List</h3>
-                        <p style="margin:0;font-size:14px">Coming soon — full asset table with status, owner and package details.</p>
+                <div class="view-header">
+                    <h2><i class="fa-solid fa-list" style="color:var(--primary);margin-right:8px"></i>Asset List</h2>
+                    <div class="search-input-wrap" style="flex:1;max-width:300px">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input id="al-search" class="search-input" type="text" placeholder="Search name, IMEI…" oninput="alRenderTable()">
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="openModal('singleTagModal')">
+                        <i class="fa-solid fa-plus"></i> Add Tag
+                    </button>
+                </div>
+
+                <div style="display:flex;gap:8px;padding:10px 20px;background:var(--bg-2);border-bottom:1px solid var(--border);flex-shrink:0">
+                    <div class="stat-chip" style="padding:6px 14px;font-size:.78rem"><span class="stat-num" id="al-stat-total">—</span><span>Total</span></div>
+                    <div class="stat-chip online" style="padding:6px 14px;font-size:.78rem"><span class="stat-num" id="al-stat-active">—</span><span>Active</span></div>
+                    <div class="stat-chip idle" style="padding:6px 14px;font-size:.78rem"><span class="stat-num" id="al-stat-located">—</span><span>On Map</span></div>
+                    <div class="stat-chip offline" style="padding:6px 14px;font-size:.78rem"><span class="stat-num" id="al-stat-inactive">—</span><span>Inactive</span></div>
+                </div>
+
+                <div class="view-body">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Asset / Tag</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Battery</th>
+                                    <th>GPS</th>
+                                    <th>Last Seen</th>
+                                    <th>Expires</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="al-tbody">
+                                <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3)">Loading…</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
 
             <!-- ═══ MOVEMENT HISTORY TAB ═══ -->
             <div id="tab-history" class="tab-content">
-                <div class="content">
-                    <div class="card" style="text-align:center;padding:60px 24px;color:var(--text-3)">
-                        <i class="fa-solid fa-route" style="font-size:48px;opacity:.3;display:block;margin-bottom:16px"></i>
-                        <h3 style="margin:0 0 8px">Movement History</h3>
-                        <p style="margin:0;font-size:14px">Coming soon — playback routes and historical GPS trails per asset.</p>
+                <div class="hist-controls">
+                    <div class="hist-asset-name-wrap">
+                        <label for="hist-asset-select"><i class="fa-solid fa-tag"></i> Asset / Tag</label>
+                        <select id="hist-asset-select" onchange="histChangeAsset(this.value)" style="min-width:220px"></select>
                     </div>
+                    <div>
+                        <label>From</label>
+                        <input type="date" id="hist-from">
+                        <input type="time" id="hist-from-t" value="07:00">
+                    </div>
+                    <div>
+                        <label>To</label>
+                        <input type="date" id="hist-to">
+                        <input type="time" id="hist-to-t" value="18:00">
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="histLoadTrack()">
+                        <i class="fa-solid fa-magnifying-glass"></i> Load Track
+                    </button>
+                    <button class="btn btn-ghost btn-sm" id="hist-export-btn" style="display:none" onclick="histExport()">
+                        <i class="fa-solid fa-download"></i> Export CSV
+                    </button>
+                </div>
+
+                <div class="hist-body">
+                    <div id="hist-map"></div>
+
+                    <aside class="hist-timeline-panel">
+                        <div class="hist-timeline-header">
+                            <i class="fa-solid fa-timeline" style="color:var(--primary)"></i>
+                            Position Timeline
+                        </div>
+
+                        <div class="hist-legend">
+                            <span><span class="legend-dot" style="background:#10B981"></span>Start</span>
+                            <span><span class="legend-dot" style="background:#3B82F6"></span>Waypoint</span>
+                            <span><span class="legend-dot" style="background:#EF4444"></span>End</span>
+                        </div>
+
+                        <div style="padding:8px 16px;border-bottom:1px solid var(--border);font-size:.78rem;color:var(--text-3)">
+                            <strong id="hist-asset-name" style="color:var(--text)">—</strong><br>
+                            <span id="hist-track-summary">Select an asset and click Load Track</span>
+                        </div>
+
+                        <div id="hist-timeline"></div>
+                    </aside>
                 </div>
             </div>
 
             <!-- ═══ ASSET MANAGEMENT TAB ═══ -->
             <div id="tab-asset-mgmt" class="tab-content">
-                <div class="content">
-                    <div class="card" style="text-align:center;padding:60px 24px;color:var(--text-3)">
-                        <i class="fa-solid fa-tags" style="font-size:48px;opacity:.3;display:block;margin-bottom:16px"></i>
-                        <h3 style="margin:0 0 8px">Asset Management</h3>
-                        <p style="margin:0;font-size:14px">Coming soon — register, edit and manage all tracked assets.</p>
+                <div class="view-header">
+                    <h2><i class="fa-solid fa-tags" style="color:var(--primary);margin-right:8px"></i>Asset Management</h2>
+                    <div class="search-input-wrap" style="flex:1;max-width:280px">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input id="am-search" class="search-input" type="text" placeholder="Search IMEI, name…" oninput="amRenderCards()">
                     </div>
+                    <button class="btn btn-primary btn-sm" onclick="openModal('singleTagModal')">
+                        <i class="fa-solid fa-plus"></i> Add Tag
+                    </button>
+                </div>
+
+                <div class="view-body">
+                    <div id="am-grid"></div>
                 </div>
             </div>
 
@@ -1061,6 +1139,9 @@ function switchTab(name) {
     if (contentEl) contentEl.classList.toggle('live-map-active', name === 'livemap');
 
     if (name === 'livemap')    initLiveMap();
+    if (name === 'assets')     initAssetList();
+    if (name === 'history')    initHistoryTab();
+    if (name === 'asset-mgmt') initAssetMgmt();
     if (name === 'building')   loadBuildings();
     if (name === 'users')      loadUsers();
     if (name === 'settings')   loadSettings();
@@ -2429,6 +2510,389 @@ function _lmRenderDetail(t) {
             </button>
         </div>` : ''}
     `;
+}
+
+// ══════════════════════════════════════════
+// ASSET LIST
+// ══════════════════════════════════════════
+let _alLoaded = false;
+
+async function initAssetList() {
+    // Reuse tags from Live Map if already loaded, otherwise fetch fresh
+    if (_lmTags.length) {
+        _alLoaded = true;
+        alRenderTable();
+        alUpdateStats();
+    } else {
+        document.getElementById('al-tbody').innerHTML =
+            '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>';
+        try {
+            const res = await apiFetch('/api/portal/tags');
+            if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+            _lmTags = await res.json();
+            _alLoaded = true;
+        } catch (err) {
+            document.getElementById('al-tbody').innerHTML =
+                `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--danger)"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(err.message)}</td></tr>`;
+            return;
+        }
+        alRenderTable();
+        alUpdateStats();
+    }
+}
+
+function alUpdateStats() {
+    const t = _lmTags;
+    const active   = t.filter(x => x.is_active).length;
+    const located  = t.filter(x => x.latitude && x.longitude).length;
+    const inactive = t.filter(x => !x.is_active).length;
+    document.getElementById('al-stat-total').textContent    = t.length;
+    document.getElementById('al-stat-active').textContent   = active;
+    document.getElementById('al-stat-located').textContent  = located;
+    document.getElementById('al-stat-inactive').textContent = inactive;
+}
+
+function alRenderTable() {
+    const query = (document.getElementById('al-search')?.value || '').toLowerCase();
+    const list  = _lmTags.filter(t => {
+        if (!query) return true;
+        return [t.imei, t.description, t.device_name, t.owner_email].join(' ').toLowerCase().includes(query);
+    });
+    const tbody = document.getElementById('al-tbody');
+    if (!tbody) return;
+    if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="table-empty" style="text-align:center;padding:40px;color:var(--text-3)">No assets match the search.</td></tr>';
+        return;
+    }
+    const statusColors = { online: 'var(--success)', idle: 'var(--warning)', offline: 'var(--danger)' };
+    const statusLabel  = { online: 'Active + GPS', idle: 'Active', offline: 'Inactive' };
+    tbody.innerHTML = list.map(t => {
+        const status = _lmStatusClass(t);
+        const label  = esc(t.description || t.device_name || t.imei);
+        const owner  = esc((t.owner_email || '').split('@')[0] || '—');
+        const batPct = t.battery_level != null ? t.battery_level : null;
+        const batCls = batPct == null ? '' : batPct <= 20 ? 'battery-critical' : batPct <= 50 ? 'battery-low' : 'battery-ok';
+        const batHtml= batPct != null
+            ? `<span class="battery-wrap ${batCls}"><i class="fa-solid fa-battery-full"></i> <small>${batPct}%</small></span>` : '—';
+        const hasGPS = !!(t.latitude && t.longitude);
+        const gpsHtml = hasGPS
+            ? `<span style="color:var(--success);font-size:.78rem"><i class="fa-solid fa-location-dot"></i> ${parseFloat(t.latitude).toFixed(4)}</span>`
+            : `<span style="color:var(--text-3);font-size:.78rem"><i class="fa-solid fa-location-dot"></i> No GPS</span>`;
+        const lastSeen = t.last_seen ? new Date(t.last_seen).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+        const daysLeft = t.days_remaining != null
+            ? (t.days_remaining > 30 ? `<span style="color:var(--success)">${t.days_remaining}d</span>`
+             : t.days_remaining > 7  ? `<span style="color:var(--warning)">${t.days_remaining}d</span>`
+             : t.days_remaining >= 0 ? `<span style="color:var(--danger)">${t.days_remaining}d</span>`
+             : `<span style="color:var(--danger)">Expired</span>`) : '—';
+        return `<tr>
+            <td>
+                <div class="table-asset-name">
+                    <div class="tbl-icon" style="background:${statusColors[status]}20;color:${statusColors[status]}">
+                        <i class="fa-solid fa-location-dot"></i>
+                    </div>
+                    <div>
+                        <strong>${label}</strong>
+                        <small class="mono">${esc(t.imei)}</small>
+                    </div>
+                </div>
+            </td>
+            <td style="font-size:.78rem;color:var(--text-2)">${esc(t.tag_type || '—')}</td>
+            <td>
+                <div style="display:flex;align-items:center;gap:5px">
+                    <span class="status-dot status-${status}"></span>
+                    <span style="font-size:.78rem">${statusLabel[status]}</span>
+                </div>
+            </td>
+            <td>${batHtml}</td>
+            <td>${gpsHtml}</td>
+            <td style="font-size:.78rem;color:var(--text-2)">${lastSeen}</td>
+            <td style="font-size:.78rem">${daysLeft}</td>
+            <td>
+                <div class="row-actions">
+                    ${hasGPS ? `<button class="btn-icon-sm" title="View on map" onclick="switchTab('livemap');setTimeout(()=>lmSelectFromList('${esc(t.imei)}'),600)">
+                        <i class="fa-solid fa-map-pin"></i>
+                    </button>` : ''}
+                    <button class="btn-icon-sm" title="Movement History" onclick="switchTab('history');setTimeout(()=>histPreselect('${esc(t.imei)}'),300)">
+                        <i class="fa-solid fa-route"></i>
+                    </button>
+                    <button class="btn-icon-sm" title="Edit" onclick="openTagMgmtModal('edit','${esc(t.imei)}')">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+// ══════════════════════════════════════════
+// MOVEMENT HISTORY
+// ══════════════════════════════════════════
+let _histMap       = null;
+let _histMapReady  = false;
+let _histMarkers   = [];
+let _histPolyline  = null;
+let _histTrack     = [];
+
+async function initHistoryTab() {
+    // Populate asset selector from live tags (load if needed)
+    if (!_lmTags.length) {
+        try {
+            const res = await apiFetch('/api/portal/tags');
+            if (res.ok) _lmTags = await res.json();
+        } catch (_) {}
+    }
+    const sel = document.getElementById('hist-asset-select');
+    if (sel && _lmTags.length) {
+        const cur = sel.value;
+        sel.innerHTML = _lmTags.map(t =>
+            `<option value="${esc(t.imei)}">${esc(t.description || t.device_name || t.imei)}</option>`
+        ).join('');
+        if (cur) sel.value = cur;
+    }
+    // Default date range = today
+    const today = new Date().toISOString().slice(0, 10);
+    if (document.getElementById('hist-from').value === '') {
+        document.getElementById('hist-from').value = today;
+        document.getElementById('hist-to').value   = today;
+    }
+    // Init map once
+    if (!_histMapReady) {
+        _histMap = L.map('hist-map', { zoomControl: true }).setView([-25.7479, 28.2293], 11);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>', maxZoom: 19
+        }).addTo(_histMap);
+        _histMapReady = true;
+    } else {
+        _histMap.invalidateSize();
+    }
+    if (sel && sel.value) histChangeAsset(sel.value);
+}
+
+function histChangeAsset(imei) {
+    const tag = _lmTags.find(t => t.imei === imei);
+    const name = tag ? (tag.description || tag.device_name || imei) : imei;
+    const el = document.getElementById('hist-asset-name');
+    if (el) el.textContent = name;
+}
+
+function histPreselect(imei) {
+    const sel = document.getElementById('hist-asset-select');
+    if (sel) { sel.value = imei; histChangeAsset(imei); }
+}
+
+async function histLoadTrack() {
+    const imei  = document.getElementById('hist-asset-select')?.value;
+    const from  = document.getElementById('hist-from')?.value;
+    const fromT = document.getElementById('hist-from-t')?.value || '00:00';
+    const to    = document.getElementById('hist-to')?.value;
+    const toT   = document.getElementById('hist-to-t')?.value   || '23:59';
+    if (!imei) { return; }
+
+    document.getElementById('hist-track-summary').textContent = 'Loading…';
+    document.getElementById('hist-timeline').innerHTML =
+        '<div style="padding:24px;text-align:center;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+
+    try {
+        const url = `/api/portal/tags/${encodeURIComponent(imei)}/history?from=${from}T${fromT}&to=${to}T${toT}`;
+        const res = await apiFetch(url);
+        if (res.status === 404 || res.status === 501) {
+            _histRenderEmpty('Track history API not yet enabled.');
+            return;
+        }
+        if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+        const data = await res.json();
+        _histTrack = data.points || data;
+        _histRenderAll();
+    } catch (err) {
+        _histRenderEmpty('Could not load track: ' + err.message);
+    }
+}
+
+function _histRenderEmpty(msg) {
+    document.getElementById('hist-track-summary').textContent = msg;
+    document.getElementById('hist-timeline').innerHTML =
+        `<div style="padding:32px;text-align:center;color:var(--text-3)">
+            <i class="fa-solid fa-route" style="font-size:36px;opacity:.2;display:block;margin-bottom:12px"></i>
+            <p style="font-size:.85rem">${esc(msg)}</p>
+        </div>`;
+}
+
+function _histRenderAll() {
+    const pts = _histTrack;
+    document.getElementById('hist-track-summary').textContent = `${pts.length} position${pts.length !== 1 ? 's' : ''} recorded`;
+    document.getElementById('hist-export-btn').style.display = pts.length ? '' : 'none';
+
+    // Clear old map layers
+    _histMarkers.forEach(m => _histMap.removeLayer(m));
+    if (_histPolyline) _histMap.removeLayer(_histPolyline);
+    _histMarkers = [];
+
+    if (!pts.length) {
+        _histRenderEmpty('No GPS positions found for this date range.');
+        return;
+    }
+
+    // Polyline
+    const latlngs = pts.map(p => [parseFloat(p.lat || p.latitude), parseFloat(p.lng || p.longitude)]);
+    _histPolyline = L.polyline(latlngs, { color: '#3B82F6', weight: 3, opacity: .7, dashArray: '8 4' }).addTo(_histMap);
+
+    // Numbered markers
+    pts.forEach((p, i) => {
+        const isFirst = i === 0, isLast = i === pts.length - 1;
+        const color = isFirst ? '#10B981' : isLast ? '#EF4444' : '#3B82F6';
+        const icon  = L.divIcon({
+            html: `<div class="hist-marker" style="background:${color}"><span>${i + 1}</span></div>`,
+            className: '', iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -18]
+        });
+        const lat = parseFloat(p.lat || p.latitude), lng = parseFloat(p.lng || p.longitude);
+        const m = L.marker([lat, lng], { icon }).addTo(_histMap);
+        const ts = p.timestamp || p.gps_time || p.gpsTime || '';
+        m.bindPopup(`<div class="hist-popup">
+            <div class="hist-popup-seq" style="background:${color}">${i + 1}</div>
+            <div>
+                <strong>${esc(p.event || 'Position ' + (i + 1))}</strong><br>
+                <small>${ts ? new Date(ts).toLocaleString() : ''}</small><br>
+                ${p.speed != null ? `<small><i class='fa-solid fa-gauge'></i> ${p.speed} km/h</small>` : ''}
+            </div>
+        </div>`, { maxWidth: 260 });
+        m.on('click', () => _histHighlight(i + 1));
+        _histMarkers.push(m);
+    });
+    _histMap.fitBounds(_histPolyline.getBounds(), { padding: [40, 40] });
+
+    // Timeline
+    const container = document.getElementById('hist-timeline');
+    container.innerHTML = pts.map((p, i) => {
+        const isFirst = i === 0, isLast = i === pts.length - 1;
+        const color = isFirst ? '#10B981' : isLast ? '#EF4444' : '#3B82F6';
+        const ts    = p.timestamp || p.gps_time || p.gpsTime || '';
+        const label = p.event || (isFirst ? 'Start' : isLast ? 'End' : 'Waypoint ' + i);
+        return `<div class="timeline-item" id="tl-${i+1}" onclick="_histHighlight(${i+1})">
+            <div class="tl-left">
+                <div class="tl-circle" style="border-color:${color};color:${color}">${i + 1}</div>
+                ${i < pts.length - 1 ? '<div class="tl-line"></div>' : ''}
+            </div>
+            <div class="tl-body">
+                <div class="tl-event">${esc(label)}</div>
+                ${ts ? `<div class="tl-meta"><span><i class="fa-regular fa-clock"></i> ${new Date(ts).toLocaleString()}</span></div>` : ''}
+                ${p.speed != null ? `<div class="tl-meta"><span><i class="fa-solid fa-gauge"></i> ${p.speed} km/h</span></div>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function _histHighlight(seq) {
+    document.querySelectorAll('.timeline-item').forEach(el => el.classList.remove('tl-active'));
+    const el = document.getElementById(`tl-${seq}`);
+    if (el) { el.classList.add('tl-active'); el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    const m = _histMarkers[seq - 1];
+    if (m && _histMap) { _histMap.flyTo(m.getLatLng(), 16, { duration: 0.6 }); m.openPopup(); }
+}
+
+function histExport() {
+    if (!_histTrack.length) return;
+    const rows = [['seq','lat','lng','timestamp','speed','event']];
+    _histTrack.forEach((p, i) => rows.push([
+        i + 1,
+        p.lat || p.latitude || '',
+        p.lng || p.longitude || '',
+        p.timestamp || p.gps_time || p.gpsTime || '',
+        p.speed || '',
+        p.event || ''
+    ]));
+    const csv  = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a    = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `history_${Date.now()}.csv`;
+    a.click();
+}
+
+// ══════════════════════════════════════════
+// ASSET MANAGEMENT
+// ══════════════════════════════════════════
+async function initAssetMgmt() {
+    if (_lmTags.length) {
+        amRenderCards();
+        return;
+    }
+    document.getElementById('am-grid').innerHTML =
+        '<div style="padding:40px;text-align:center;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
+    try {
+        const res = await apiFetch('/api/portal/tags');
+        if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+        _lmTags = await res.json();
+    } catch (err) {
+        document.getElementById('am-grid').innerHTML =
+            `<div style="padding:40px;text-align:center;color:var(--danger)"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(err.message)}</div>`;
+        return;
+    }
+    amRenderCards();
+}
+
+function amRenderCards() {
+    const query = (document.getElementById('am-search')?.value || '').toLowerCase();
+    const list  = _lmTags.filter(t => {
+        if (!query) return true;
+        return [t.imei, t.description, t.device_name, t.owner_email].join(' ').toLowerCase().includes(query);
+    });
+    const grid = document.getElementById('am-grid');
+    if (!grid) return;
+    if (!list.length) {
+        grid.innerHTML = `<div style="padding:60px;text-align:center;color:var(--text-3)">
+            <i class="fa-solid fa-box-open" style="font-size:48px;opacity:.2;display:block;margin-bottom:16px"></i>
+            <p>No assets found.</p></div>`;
+        return;
+    }
+    const statusColors = { online: 'var(--success)', idle: 'var(--warning)', offline: 'var(--danger)' };
+    const statusLabel  = { online: 'Active + GPS', idle: 'Active, No GPS', offline: 'Inactive' };
+    grid.innerHTML = `<div class="asset-card-grid">${list.map(t => {
+        const status   = _lmStatusClass(t);
+        const color    = statusColors[status];
+        const label    = esc(t.description || t.device_name || t.imei);
+        const owner    = esc((t.owner_email || '').split('@')[0] || '—');
+        const pkg      = esc(t.package_name || '—');
+        const tagType  = esc(t.tag_type || '—');
+        const lastSeen = t.last_seen ? new Date(t.last_seen).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+        const daysLeft = t.days_remaining != null
+            ? (t.days_remaining > 0 ? `${t.days_remaining} days left` : t.days_remaining === 0 ? 'Expires today' : 'Expired') : '—';
+        const daysColor= t.days_remaining != null ? (t.days_remaining > 30 ? 'var(--success)' : t.days_remaining > 7 ? 'var(--warning)' : 'var(--danger)') : 'var(--text-3)';
+        const batPct   = t.battery_level;
+        const batCls   = batPct == null ? '' : batPct <= 20 ? 'battery-critical' : batPct <= 50 ? 'battery-low' : 'battery-ok';
+        const batHtml  = batPct != null
+            ? `<span class="battery-wrap ${batCls}"><i class="fa-solid fa-battery-full"></i> ${batPct}%</span>` : '—';
+        return `<div class="asset-card">
+            <div class="asset-card-header" style="border-top:3px solid ${color}">
+                <div class="asset-card-icon" style="background:${color}20;color:${color}">
+                    <i class="fa-solid fa-location-dot"></i>
+                </div>
+                <div class="asset-card-title">
+                    <strong>${label}</strong>
+                    <small>${tagType}</small>
+                </div>
+                <span class="status-dot status-${status}" style="margin-left:auto" title="${statusLabel[status]}"></span>
+            </div>
+            <div class="asset-card-body">
+                <div class="card-kv"><span>IMEI</span><span class="mono small">${esc(t.imei)}</span></div>
+                <div class="card-kv"><span>Owner</span><span>${owner}</span></div>
+                <div class="card-kv"><span>Package</span><span>${pkg}</span></div>
+                <div class="card-kv"><span>Battery</span>${batHtml}</div>
+                <div class="card-kv"><span>Last Seen</span><span>${lastSeen}</span></div>
+                <div class="card-kv"><span>Expires</span><span style="color:${daysColor}">${daysLeft}</span></div>
+            </div>
+            <div class="asset-card-footer">
+                <button class="btn btn-ghost btn-sm" onclick="openTagMgmtModal('edit','${esc(t.imei)}')">
+                    <i class="fa-solid fa-pen"></i> Edit
+                </button>
+                ${t.latitude && t.longitude ? `<button class="btn btn-ghost btn-sm" onclick="switchTab('livemap');setTimeout(()=>lmSelectFromList('${esc(t.imei)}'),600)">
+                    <i class="fa-solid fa-map-pin"></i> Map
+                </button>` : ''}
+                <button class="btn btn-ghost btn-sm" onclick="switchTab('history');setTimeout(()=>histPreselect('${esc(t.imei)}'),300)">
+                    <i class="fa-solid fa-route"></i> History
+                </button>
+            </div>
+        </div>`;
+    }).join('')}</div>`;
 }
 
 // ══════════════════════════════════════════
