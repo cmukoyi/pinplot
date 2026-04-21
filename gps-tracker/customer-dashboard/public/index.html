@@ -425,28 +425,33 @@
                 <span class="nav-label">Live Map</span>
             </button>
 
-            <button class="nav-item" data-tab="building" onclick="switchTab('building')">
-                <span class="nav-icon"><i class="fa-solid fa-building"></i></span>
-                <span class="nav-label">Building</span>
+            <button class="nav-item" data-tab="assets" onclick="switchTab('assets')">
+                <span class="nav-icon"><i class="fa-solid fa-list"></i></span>
+                <span class="nav-label">Asset List</span>
+            </button>
+
+            <button class="nav-item" data-tab="history" onclick="switchTab('history')">
+                <span class="nav-icon"><i class="fa-solid fa-route"></i></span>
+                <span class="nav-label">Movement History</span>
             </button>
         </div>
 
         <div class="nav-section">
             <div class="nav-section-label">Management</div>
 
+            <button class="nav-item" data-tab="asset-mgmt" onclick="switchTab('asset-mgmt')">
+                <span class="nav-icon"><i class="fa-solid fa-tags"></i></span>
+                <span class="nav-label">Asset Management</span>
+            </button>
+
             <button class="nav-item" data-tab="users" onclick="switchTab('users')">
                 <span class="nav-icon"><i class="fa-solid fa-users"></i></span>
-                <span class="nav-label">Users</span>
+                <span class="nav-label">User Accounts</span>
             </button>
 
-            <button class="nav-item" data-tab="settings" onclick="switchTab('settings')">
-                <span class="nav-icon"><i class="fa-solid fa-gear"></i></span>
-                <span class="nav-label">Settings</span>
-            </button>
-
-            <button class="nav-item" data-tab="qr" onclick="switchTab('qr')">
-                <span class="nav-icon"><i class="fa-solid fa-qrcode"></i></span>
-                <span class="nav-label">QR Codes</span>
+            <button class="nav-item" data-tab="building" onclick="switchTab('building')">
+                <span class="nav-icon"><i class="fa-solid fa-layer-group"></i></span>
+                <span class="nav-label">Floor Plan</span>
             </button>
         </div>
 
@@ -496,7 +501,40 @@
                 </div>
             </div>
 
-            <!-- ═══ BUILDING TAB ═══ -->
+            <!-- ═══ ASSET LIST TAB ═══ -->
+            <div id="tab-assets" class="tab-content">
+                <div class="content">
+                    <div class="card" style="text-align:center;padding:60px 24px;color:var(--text-3)">
+                        <i class="fa-solid fa-list" style="font-size:48px;opacity:.3;display:block;margin-bottom:16px"></i>
+                        <h3 style="margin:0 0 8px">Asset List</h3>
+                        <p style="margin:0;font-size:14px">Coming soon — full asset table with status, owner and package details.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ MOVEMENT HISTORY TAB ═══ -->
+            <div id="tab-history" class="tab-content">
+                <div class="content">
+                    <div class="card" style="text-align:center;padding:60px 24px;color:var(--text-3)">
+                        <i class="fa-solid fa-route" style="font-size:48px;opacity:.3;display:block;margin-bottom:16px"></i>
+                        <h3 style="margin:0 0 8px">Movement History</h3>
+                        <p style="margin:0;font-size:14px">Coming soon — playback routes and historical GPS trails per asset.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ ASSET MANAGEMENT TAB ═══ -->
+            <div id="tab-asset-mgmt" class="tab-content">
+                <div class="content">
+                    <div class="card" style="text-align:center;padding:60px 24px;color:var(--text-3)">
+                        <i class="fa-solid fa-tags" style="font-size:48px;opacity:.3;display:block;margin-bottom:16px"></i>
+                        <h3 style="margin:0 0 8px">Asset Management</h3>
+                        <p style="margin:0;font-size:14px">Coming soon — register, edit and manage all tracked assets.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ FLOOR PLAN (BUILDING) TAB ═══ -->
             <div id="tab-building" class="tab-content">
 
                 <!-- Building selector row -->
@@ -1003,7 +1041,7 @@ function showDashboard(user, group) {
 // ══════════════════════════════════════════
 // Tab switching
 // ══════════════════════════════════════════
-const TAB_TITLES = { livemap: 'Live Map', building: 'Building', users: 'Users', settings: 'Settings', qr: 'QR Codes' };
+const TAB_TITLES = { livemap: 'Live Map', assets: 'Asset List', history: 'Movement History', 'asset-mgmt': 'Asset Management', users: 'User Accounts', building: 'Floor Plan', settings: 'Settings', qr: 'QR Codes' };
 let _mapInitialized = false;
 
 function switchTab(name) {
@@ -1022,11 +1060,11 @@ function switchTab(name) {
     const contentEl = document.querySelector('.content');
     if (contentEl) contentEl.classList.toggle('live-map-active', name === 'livemap');
 
-    if (name === 'livemap')  initLiveMap();
-    if (name === 'building') loadBuildings();
-    if (name === 'users')    loadUsers();
-    if (name === 'settings') loadSettings();
-    if (name === 'qr')       loadQRTagList();
+    if (name === 'livemap')    initLiveMap();
+    if (name === 'building')   loadBuildings();
+    if (name === 'users')      loadUsers();
+    if (name === 'settings')   loadSettings();
+    if (name === 'qr')         loadQRTagList();
 }
 
 // ══════════════════════════════════════════
