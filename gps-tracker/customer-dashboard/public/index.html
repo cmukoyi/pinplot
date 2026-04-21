@@ -481,18 +481,48 @@
                         <h2><i class="fa-solid fa-satellite-dish" style="color:var(--primary);margin-right:6px"></i> Live Assets</h2>
                         <div class="search-input-wrap">
                             <i class="fa-solid fa-magnifying-glass"></i>
-                            <input id="lm-search" class="search-input" type="text" placeholder="Search IMEI or label…" oninput="lmFilterList()">
+                            <input id="lm-search" class="search-input" type="text" placeholder="Search assets or tags…" oninput="lmFilterList()">
                         </div>
                     </div>
 
+                    <!-- Stats -->
                     <div class="stat-chips">
-                        <div class="stat-chip"><span class="stat-num" id="lm-stat-total">—</span><span>Total</span></div>
-                        <div class="stat-chip online"><span class="stat-num" id="lm-stat-located">—</span><span>On Map</span></div>
-                        <div class="stat-chip offline"><span class="stat-num" id="lm-stat-noloc">—</span><span>No GPS</span></div>
-                        <div class="stat-chip idle"><span class="stat-num" id="lm-stat-inactive">—</span><span>Inactive</span></div>
+                        <div class="stat-chip">
+                            <span class="stat-num" id="lm-stat-total">—</span>
+                            <span>Total</span>
+                        </div>
+                        <div class="stat-chip online">
+                            <span class="stat-num" id="lm-stat-online">—</span>
+                            <span>Online</span>
+                        </div>
+                        <div class="stat-chip idle">
+                            <span class="stat-num" id="lm-stat-idle">—</span>
+                            <span>Idle</span>
+                        </div>
+                        <div class="stat-chip offline">
+                            <span class="stat-num" id="lm-stat-offline">—</span>
+                            <span>Offline</span>
+                        </div>
                     </div>
 
+                    <!-- Status filter -->
+                    <div class="cat-filter" id="lm-status-filter">
+                        <button class="cat-btn active" onclick="lmFilterStatus('all', this)">All</button>
+                        <button class="cat-btn" onclick="lmFilterStatus('online', this)">
+                            <span class="status-dot status-online" style="display:inline-block;margin-right:4px"></span>Online
+                        </button>
+                        <button class="cat-btn" onclick="lmFilterStatus('idle', this)">
+                            <span class="status-dot status-idle" style="display:inline-block;margin-right:4px"></span>Idle
+                        </button>
+                        <button class="cat-btn" onclick="lmFilterStatus('offline', this)">
+                            <span class="status-dot status-offline" style="display:inline-block;margin-right:4px"></span>Offline
+                        </button>
+                    </div>
+
+                    <!-- Asset list -->
                     <div id="lm-asset-list"></div>
+
+                    <!-- Asset detail panel -->
                     <div id="lm-detail-panel"></div>
                 </aside>
 
@@ -2314,6 +2344,7 @@ let _lmMapReady     = false;
 let _lmTags         = [];        // all tags from API
 let _lmMarkers      = {};        // imei → L.marker
 let _lmSelected     = null;      // currently selected imei
+let _lmStatusFilter = 'all';     // all | online | idle | offline
 
 function _lmStatusClass(tag) {
     if (!tag.is_active) return 'offline';
@@ -2379,14 +2410,20 @@ function _lmPlaceMarkers() {
         const m = L.marker([parseFloat(t.latitude), parseFloat(t.longitude)], { icon: _lmMarkerIcon(t) })
             .addTo(_liveMap);
         const label = esc(t.description || t.device_name || t.imei);
+        const status = _lmStatusClass(t);
+        const statusLabels = { online: 'Online', idle: 'Idle', offline: 'Offline' };
         m.bindPopup(`
             <div class="map-popup">
                 <strong>${label}</strong><br>
-                <small style="font-family:monospace">${esc(t.imei)}</small><br>
-                <div style="margin:4px 0;font-size:.8rem;color:#555">
-                    Owner: ${esc((t.owner_email||'').split('@')[0])}<br>
-                    Last seen: ${t.last_seen ? new Date(t.last_seen).toLocaleString() : '—'}
+                <small class="mono">${esc(t.imei)}</small>
+                <div class="popup-status">
+                    <span class="status-dot status-${status}"></span>
+                    <span>${statusLabels[status]}</span>
                 </div>
+                ${t.last_seen ? `<div style="font-size:.78rem;color:var(--text-3);margin-bottom:6px">${new Date(t.last_seen).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>` : ''}
+                <button class="btn-popup-hist" onclick="switchTab('history');setTimeout(()=>histPreselect('${esc(t.imei)}'),300)">
+                    <i class='fa-solid fa-route'></i> History
+                </button>
             </div>
         `, { maxWidth: 240 });
         m.on('click', () => _lmSelectTag(t.imei));
@@ -2401,29 +2438,29 @@ function _lmPlaceMarkers() {
 function _lmRenderList(query) {
     query = (query || document.getElementById('lm-search')?.value || '').toLowerCase();
     const list = _lmTags.filter(t => {
+        if (_lmStatusFilter !== 'all' && _lmStatusClass(t) !== _lmStatusFilter) return false;
         if (!query) return true;
         const haystack = [t.imei, t.description, t.device_name, t.owner_email].join(' ').toLowerCase();
         return haystack.includes(query);
     });
     const container = document.getElementById('lm-asset-list');
     if (!list.length) {
-        container.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-3)">
-            <i class="fa-solid fa-magnifying-glass" style="font-size:24px;opacity:.3;display:block;margin-bottom:8px"></i>
-            No assets found</div>`;
+        container.innerHTML = `<div class="empty-list"><i class="fa-solid fa-magnifying-glass"></i><p>No assets found</p></div>`;
         return;
     }
     container.innerHTML = list.map(t => {
         const status = _lmStatusClass(t);
         const label  = esc(t.description || t.device_name || t.imei);
-        const owner  = esc((t.owner_email||'').split('@')[0]);
         const hasGPS = !!(t.latitude && t.longitude);
         const cls    = _lmSelected === t.imei ? ' selected' : '';
         const statusColors = { online: 'var(--success)', idle: 'var(--warning)', offline: 'var(--danger)' };
         const iconBg  = `${statusColors[status]}20`;
         const iconClr = statusColors[status];
         const faIcon  = hasGPS ? 'fa-location-dot' : 'fa-tag';
-        const battery = t.battery_level != null
-            ? `<span style="font-size:.72rem;color:var(--text-3)">${t.battery_level}%</span>` : '';
+        const batPct  = t.battery_level;
+        const batCls  = batPct == null ? '' : batPct <= 20 ? 'battery-critical' : batPct <= 50 ? 'battery-low' : 'battery-ok';
+        const battery = batPct != null
+            ? `<span class="battery-wrap ${batCls}"><i class="fa-solid fa-battery-full"></i> <small>${batPct}%</small></span>` : '';
         return `<div class="asset-row${cls}" data-imei="${esc(t.imei)}" onclick="lmSelectFromList('${esc(t.imei)}')">
             <div class="asset-row-icon" style="background:${iconBg};color:${iconClr}">
                 <i class="fa-solid ${faIcon}"></i>
@@ -2441,16 +2478,24 @@ function _lmRenderList(query) {
 }
 
 function _lmUpdateStats() {
-    const located   = _lmTags.filter(t => t.latitude && t.longitude).length;
-    const inactive  = _lmTags.filter(t => !t.is_active).length;
-    document.getElementById('lm-stat-total').textContent    = _lmTags.length;
-    document.getElementById('lm-stat-located').textContent  = located;
-    document.getElementById('lm-stat-noloc').textContent    = _lmTags.length - located;
-    document.getElementById('lm-stat-inactive').textContent = inactive;
+    const online  = _lmTags.filter(t => _lmStatusClass(t) === 'online').length;
+    const idle    = _lmTags.filter(t => _lmStatusClass(t) === 'idle').length;
+    const offline = _lmTags.filter(t => _lmStatusClass(t) === 'offline').length;
+    document.getElementById('lm-stat-total').textContent   = _lmTags.length;
+    document.getElementById('lm-stat-online').textContent  = online;
+    document.getElementById('lm-stat-idle').textContent    = idle;
+    document.getElementById('lm-stat-offline').textContent = offline;
 }
 
 function lmFilterList() {
     _lmRenderList(document.getElementById('lm-search').value);
+}
+
+function lmFilterStatus(status, btn) {
+    _lmStatusFilter = status;
+    document.querySelectorAll('#lm-status-filter .cat-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    _lmRenderList();
 }
 
 function lmSelectFromList(imei) {
