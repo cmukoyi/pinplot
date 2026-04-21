@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -26,329 +26,6 @@
     <!-- New design system CSS -->
     <link rel="stylesheet" href="/customer/css/style.css" />
 
-    <!-- Legacy inline styles kept only for transition — will be empty after migration -->
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        :root {
-            --primary:      #006400;
-            --primary-dark: #004d00;
-            --secondary:    #228B22;
-            --danger:       #ef4444;
-            --warning:      #f59e0b;
-            --dark:         #1a1a1a;
-            --light:        #f4f6f4;
-            --gray:         #6b7280;
-            --border:       #e5e7eb;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--light);
-            color: var(--dark);
-        }
-
-        /* ── LOGIN ── */
-        .login-container {
-            display: flex;
-            min-height: 100vh;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #006400 0%, #004d00 100%);
-            padding: 20px;
-        }
-
-        .login-box {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,.3);
-            max-width: 420px;
-            width: 100%;
-            padding: 48px 40px;
-        }
-
-        .login-header { text-align: center; margin-bottom: 36px; }
-
-        .login-logo { margin-bottom: 16px; display: flex; justify-content: center; }
-
-        .logo-image { height: 72px; width: auto; max-width: 180px; object-fit: contain; }
-
-        .login-title   { font-size: 22px; font-weight: 700; color: var(--dark); margin-bottom: 6px; }
-        .login-subtitle{ color: var(--gray); font-size: 13px; }
-
-        .form-group { margin-bottom: 18px; }
-
-        label {
-            display: block; font-size: 13px; font-weight: 600;
-            color: var(--dark); margin-bottom: 6px;
-        }
-
-        input[type="text"], input[type="password"], input[type="email"],
-        input[type="number"], select, textarea {
-            width: 100%;
-            padding: 11px 14px;
-            border: 2px solid var(--border);
-            border-radius: 8px;
-            font-size: 14px;
-            transition: border-color .2s;
-            background: white;
-            font-family: inherit;
-        }
-
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(0,100,0,.12);
-        }
-
-        .btn {
-            padding: 11px 22px;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all .2s;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-        }
-
-        .btn-primary   { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-dark); }
-        .btn-primary:disabled { opacity: .6; cursor: default; }
-        .btn-secondary { background: white; color: var(--primary); border: 2px solid var(--primary); }
-        .btn-secondary:hover { background: var(--primary); color: white; }
-        .btn-success   { background: var(--primary); color: white; }
-        .btn-success:hover { background: var(--primary-dark); }
-        .btn-danger    { background: var(--danger); color: white; }
-        .btn-danger:hover { background: #dc2626; }
-        .btn-small     { padding: 6px 14px; font-size: 12px; }
-        .btn-full      { width: 100%; }
-
-        .login-error {
-            background: rgba(239,68,68,.1); color: #991b1b;
-            border-left: 4px solid var(--danger);
-            border-radius: 6px;
-            padding: 10px 14px; font-size: 13px; margin-bottom: 16px; display: none;
-        }
-
-        /* ── LAYOUT ── */
-        #dashboardPage { display: none; }
-        .dashboard-container { display: flex; min-height: 100vh; }
-
-        /* Sidebar */
-        .sidebar {
-            width: 260px;
-            background: #006400;
-            color: white;
-            padding: 24px;
-            position: fixed;
-            height: 100vh;
-            left: 0; top: 0;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .sidebar-logo {
-            font-size: 20px; font-weight: 700;
-            margin-bottom: 32px;
-            display: flex; align-items: center; gap: 10px;
-        }
-
-        .sidebar-logo img { height: 40px; width: auto; }
-
-        .sidebar-menu { list-style: none; flex: 1; }
-
-        .sidebar-item { margin-bottom: 6px; }
-
-        .sidebar-link {
-            display: flex; align-items: center; gap: 12px;
-            padding: 11px 14px;
-            border-radius: 8px;
-            color: rgba(255,255,255,.75);
-            cursor: pointer;
-            transition: all .2s;
-            font-size: 14px; font-weight: 500;
-            border: none; background: none; width: 100%; text-align: left;
-        }
-
-        .sidebar-link:hover { background: rgba(255,255,255,.1); color: white; }
-        .sidebar-link.active { background: rgba(255,255,255,.22); color: white; font-weight: 700; }
-
-        .sidebar-bottom { padding-top: 16px; border-top: 1px solid rgba(255,255,255,.2); }
-
-        .sidebar-user { font-size: 12px; color: rgba(255,255,255,.5); margin-bottom: 12px; }
-        .sidebar-user strong { display: block; color: rgba(255,255,255,.85); font-size: 13px; }
-
-        /* Main content */
-        .main-content { margin-left: 260px; flex: 1; background: var(--light); }
-
-        .top-bar {
-            background: white; border-bottom: 1px solid var(--border);
-            padding: 18px 36px;
-            display: flex; justify-content: space-between; align-items: center;
-            position: sticky; top: 0; z-index: 10;
-        }
-
-        .top-bar-title { font-size: 20px; font-weight: 700; color: var(--dark); }
-        .top-bar-company { font-size: 13px; color: var(--gray); margin-top: 2px; }
-
-        .content { padding: 32px 36px; }
-
-        /* Tab panes */
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        /* Cards */
-        .card {
-            background: white; border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,.08);
-            padding: 24px; margin-bottom: 24px;
-        }
-
-        .card-header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 20px; padding-bottom: 16px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .card-title { font-size: 16px; font-weight: 700; color: var(--dark); }
-
-        /* Stats */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 16px; margin-bottom: 28px;
-        }
-
-        .stat-card {
-            background: white; border-radius: 10px;
-            padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
-        }
-
-        .stat-label { font-size: 12px; color: var(--gray); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
-        .stat-value { font-size: 28px; font-weight: 700; color: var(--primary); }
-
-        /* Tables */
-        .table-wrapper { overflow-x: auto; }
-
-        table { width: 100%; border-collapse: collapse; }
-
-        thead { background: var(--light); border-bottom: 2px solid var(--border); }
-
-        th { padding: 13px 16px; text-align: left; font-size: 12px; font-weight: 700; color: var(--dark); text-transform: uppercase; letter-spacing: .5px; }
-
-        td { padding: 13px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
-
-        tr:hover { background: #fafafa; }
-
-        .badge {
-            display: inline-block; padding: 3px 10px; border-radius: 20px;
-            font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
-        }
-
-        .badge-success { background: rgba(16,185,129,.15); color: #059669; }
-        .badge-warning { background: rgba(245,158,11,.15); color: #b45309; }
-        .room-label { background: rgba(59,130,246,0.12); border: 1px solid #3b82f6; color: #1d4ed8; font-size: 11px; padding: 2px 6px; white-space: nowrap; border-radius: 3px; }
-        .badge-danger  { background: rgba(239,68,68,.15);  color: #991b1b; }
-        .badge-info    { background: rgba(59,130,246,.15);  color: #1e40af; }
-
-        /* Alerts */
-        .alert {
-            padding: 14px 18px; border-radius: 8px; margin-bottom: 18px;
-            font-size: 14px; display: flex; align-items: center; gap: 10px;
-        }
-
-        .alert-success { background: rgba(16,185,129,.1); color: #059669; border-left: 4px solid #10b981; }
-        .alert-error   { background: rgba(239,68,68,.1);  color: #991b1b; border-left: 4px solid #ef4444; }
-        .alert-info    { background: rgba(59,130,246,.1);  color: #1e40af; border-left: 4px solid #3b82f6; }
-        .alert-warning { background: rgba(245,158,11,.1);  color: #b45309; border-left: 4px solid #f59e0b; }
-
-        /* Modals */
-        .modal {
-            display: none; position: fixed; top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(0,0,0,.5); z-index: 1000;
-            align-items: center; justify-content: center;
-        }
-        .modal.active { display: flex; }
-
-        .modal-content {
-            background: white; border-radius: 12px;
-            max-width: 520px; width: 90%; max-height: 90vh;
-            overflow-y: auto; padding: 32px;
-        }
-
-        .modal-header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 24px;
-        }
-
-        .modal-title { font-size: 18px; font-weight: 700; color: var(--dark); }
-
-        .modal-close {
-            background: none; border: none; font-size: 22px;
-            cursor: pointer; color: var(--gray); line-height: 1;
-        }
-        .modal-close:hover { color: var(--dark); }
-
-        /* Map */
-        #gpsMap { height: 520px; border-radius: 10px; }
-        .gps-tag-row { display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .15s;border:1px solid transparent }
-        .gps-tag-row:hover { background:var(--light) }
-        .gps-tag-row.gps-marked { background:#fff7ed;border-color:#fb923c }
-        .gps-dot { width:12px;height:12px;border-radius:50%;flex-shrink:0;border:2px solid rgba(0,0,0,.2) }
-        .gps-dot-normal { background:#378ADD }
-        .gps-dot-marked  { background:#f97316 }
-        .gps-search-highlight { animation: gpsPulse .6s ease 2 }
-        @keyframes gpsPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.35)} }
-
-        /* Drop zone */
-        .drop-zone {
-            border: 2px dashed var(--border); border-radius: 10px;
-            padding: 40px; text-align: center; cursor: pointer;
-            transition: border-color .2s, background .2s;
-            color: var(--gray);
-        }
-        .drop-zone:hover, .drop-zone.dragover {
-            border-color: var(--primary); background: rgba(59,130,246,.04);
-        }
-        .drop-zone .dz-icon { font-size: 36px; margin-bottom: 10px; }
-        .drop-zone p { font-size: 14px; }
-
-        /* Floor plan placeholder */
-        .floor-plan-area {
-            min-height: 400px; background: #f3f4f6;
-            border-radius: 10px; display: flex;
-            align-items: center; justify-content: center;
-            flex-direction: column; gap: 12px; color: var(--gray);
-        }
-        .floor-plan-area .fp-icon { font-size: 56px; }
-
-        /* Empty state */
-        .empty-state { text-align: center; padding: 60px 40px; color: var(--gray); }
-        .empty-state-icon { font-size: 48px; margin-bottom: 14px; }
-        .empty-state-title { font-size: 15px; font-weight: 700; color: var(--dark); margin-bottom: 6px; }
-
-        /* Responsive */
-        @media (max-width: 1024px) {
-            .sidebar { width: 72px; padding: 16px 8px; }
-            .sidebar-logo span:last-child,
-            .sidebar-link span:last-child,
-            .sidebar-user, .sidebar-bottom .btn-full span { display: none; }
-            .sidebar-logo { justify-content: center; }
-            .sidebar-link { justify-content: center; padding: 12px; }
-            .main-content { margin-left: 72px; }
-        }
-
-        @media (max-width: 640px) {
-            .content { padding: 20px 16px; }
-            .top-bar { padding: 14px 16px; }
-        }
-    </style>
 </head>
 <body>
 
@@ -391,7 +68,7 @@
 
     <!-- ── HEADER ── -->
     <header id="app-header">
-        <button id="sidebar-toggle" title="Toggle sidebar" onclick="document.getElementById('portalSidebar').classList.toggle('collapsed')">
+        <button id="sidebar-toggle" title="Toggle sidebar" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">
             <i class="fa-solid fa-bars"></i>
         </button>
 
@@ -415,7 +92,7 @@
     </header>
 
     <!-- ── SIDEBAR ── -->
-    <nav id="portalSidebar">
+    <nav id="sidebar">
 
         <div class="nav-section">
             <div class="nav-section-label">Tracking</div>
@@ -465,13 +142,6 @@
 
     <!-- ── MAIN CONTENT ── -->
     <main id="main-content">
-        <div class="top-bar">
-            <div>
-                <div class="top-bar-title" id="topBarTitle">Live Map</div>
-                <div class="top-bar-company" id="topBarCompany"></div>
-            </div>
-        </div>
-
         <div class="content">
 
             <!-- ═══ LIVE MAP TAB ═══ -->
@@ -1133,7 +803,6 @@ function showDashboard(user, group) {
     const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || user.email;
     document.getElementById('sidebarUserName').textContent = name;
     document.getElementById('sidebarCompany').textContent  = group.name;
-    document.getElementById('topBarCompany').textContent   = group.name;
 
     // Set header avatar initials
     const avatarEl = document.getElementById('headerAvatar');
@@ -1159,8 +828,6 @@ function switchTab(name) {
     document.getElementById('tab-' + name).classList.add('active');
     const btn = document.querySelector(`.nav-item[data-tab="${name}"], .sidebar-link[onclick*="'${name}'"]`);
     if (btn) btn.classList.add('active');
-    document.getElementById('topBarTitle').textContent = TAB_TITLES[name] || name;
-    // Update header page title
     const pageTitleEl = document.getElementById('pageTitle');
     if (pageTitleEl) pageTitleEl.textContent = TAB_TITLES[name] || name;
 
