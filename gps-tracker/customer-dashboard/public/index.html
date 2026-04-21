@@ -34,7 +34,7 @@
     <div class="login-box">
         <div class="login-header">
             <div class="login-logo">
-                <img src="/admin/assets/logo.png" alt="Pinplot" class="logo-image"
+                <img src="/customer/assets/logo.png" alt="Pinplot" class="logo-image"
                      onerror="this.style.display='none';document.getElementById('logoFallback').style.display='flex'">
                 <div id="logoFallback" class="login-logo-fallback" style="display:none">
                     <i class="fa-solid fa-location-dot"></i>
@@ -175,18 +175,12 @@
                         </div>
                     </div>
 
-                    <!-- Status filter -->
-                    <div class="cat-filter" id="lm-status-filter">
-                        <button class="cat-btn active" onclick="lmFilterStatus('all', this)">All</button>
-                        <button class="cat-btn" onclick="lmFilterStatus('online', this)">
-                            <span class="status-dot status-online" style="display:inline-block;margin-right:4px"></span>Online
-                        </button>
-                        <button class="cat-btn" onclick="lmFilterStatus('idle', this)">
-                            <span class="status-dot status-idle" style="display:inline-block;margin-right:4px"></span>Idle
-                        </button>
-                        <button class="cat-btn" onclick="lmFilterStatus('offline', this)">
-                            <span class="status-dot status-offline" style="display:inline-block;margin-right:4px"></span>Offline
-                        </button>
+                    <!-- Category filter -->
+                    <div class="cat-filter" id="lm-cat-filter">
+                        <button class="cat-btn active" onclick="lmFilterCat('all', this)">All</button>
+                        <button class="cat-btn" onclick="lmFilterCat('vehicle', this)"><i class="fa-solid fa-car"></i> Vehicles</button>
+                        <button class="cat-btn" onclick="lmFilterCat('equipment', this)"><i class="fa-solid fa-toolbox"></i> Equipment</button>
+                        <button class="cat-btn" onclick="lmFilterCat('container', this)"><i class="fa-solid fa-box"></i> Containers</button>
                     </div>
 
                     <!-- Asset list -->
@@ -2011,7 +2005,7 @@ let _lmMapReady     = false;
 let _lmTags         = [];        // all tags from API
 let _lmMarkers      = {};        // imei → L.marker
 let _lmSelected     = null;      // currently selected imei
-let _lmStatusFilter = 'all';     // all | online | idle | offline
+let _lmCatFilter    = 'all';      // all | vehicle | equipment | container
 
 function _lmStatusClass(tag) {
     if (!tag.is_active) return 'offline';
@@ -2105,7 +2099,7 @@ function _lmPlaceMarkers() {
 function _lmRenderList(query) {
     query = (query || document.getElementById('lm-search')?.value || '').toLowerCase();
     const list = _lmTags.filter(t => {
-        if (_lmStatusFilter !== 'all' && _lmStatusClass(t) !== _lmStatusFilter) return false;
+        if (_lmCatFilter !== 'all' && (t.tag_type || '').toLowerCase() !== _lmCatFilter) return false;
         if (!query) return true;
         const haystack = [t.imei, t.description, t.device_name, t.owner_email].join(' ').toLowerCase();
         return haystack.includes(query);
@@ -2158,9 +2152,9 @@ function lmFilterList() {
     _lmRenderList(document.getElementById('lm-search').value);
 }
 
-function lmFilterStatus(status, btn) {
-    _lmStatusFilter = status;
-    document.querySelectorAll('#lm-status-filter .cat-btn').forEach(b => b.classList.remove('active'));
+function lmFilterCat(cat, btn) {
+    _lmCatFilter = cat;
+    document.querySelectorAll('#lm-cat-filter .cat-btn').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
     _lmRenderList();
 }
