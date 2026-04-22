@@ -208,12 +208,7 @@
                     </button>
                 </div>
 
-                <div style="display:flex;gap:8px;padding:10px 20px;background:var(--bg-2);border-bottom:1px solid var(--border);flex-shrink:0">
-                    <div class="stat-chip" style="padding:6px 14px;font-size:.78rem"><span class="stat-num" id="al-stat-total">—</span><span>Total</span></div>
-                    <div class="stat-chip online" style="padding:6px 14px;font-size:.78rem"><span class="stat-num" id="al-stat-active">—</span><span>Active</span></div>
-                    <div class="stat-chip idle" style="padding:6px 14px;font-size:.78rem"><span class="stat-num" id="al-stat-located">—</span><span>On Map</span></div>
-                    <div class="stat-chip offline" style="padding:6px 14px;font-size:.78rem"><span class="stat-num" id="al-stat-inactive">—</span><span>Inactive</span></div>
-                </div>
+                <div id="al-category-chips" style="padding:10px 20px;background:var(--bg-2);border-bottom:1px solid var(--border);flex-shrink:0"></div>
 
                 <div class="view-body">
                     <div class="table-wrap">
@@ -221,11 +216,11 @@
                             <thead>
                                 <tr>
                                     <th>Asset / Tag</th>
-                                    <th>Type</th>
+                                    <th>Category</th>
                                     <th>Status</th>
                                     <th>Battery</th>
-                                    <th>GPS</th>
-                                    <th>Last Seen</th>
+                                    <th>Last Location</th>
+                                    <th>Last Update</th>
                                     <th>Expires</th>
                                     <th>Actions</th>
                                 </tr>
@@ -2223,12 +2218,21 @@ function _lmRenderDetail(t) {
 // ══════════════════════════════════════════
 let _alLoaded = false;
 
+let _alCatFilter = 'all'; // all | vehicle | equipment | container | personal
+
+const _AL_CATS = [
+    { id: 'vehicle',   label: 'Vehicles',   icon: 'fa-car',      color: '#3b82f6' },
+    { id: 'equipment', label: 'Equipment',  icon: 'fa-toolbox',  color: '#f59e0b' },
+    { id: 'container', label: 'Containers', icon: 'fa-box',      color: '#8b5cf6' },
+    { id: 'personal',  label: 'Personal',   icon: 'fa-user',     color: '#10b981' },
+];
+
 async function initAssetList() {
     // Reuse tags from Live Map if already loaded, otherwise fetch fresh
     if (_lmTags.length) {
         _alLoaded = true;
+        alRenderCategoryChips();
         alRenderTable();
-        alUpdateStats();
     } else {
         document.getElementById('al-tbody').innerHTML =
             '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>';
@@ -2242,25 +2246,45 @@ async function initAssetList() {
                 `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--danger)"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(err.message)}</td></tr>`;
             return;
         }
+        alRenderCategoryChips();
         alRenderTable();
-        alUpdateStats();
     }
 }
 
-function alUpdateStats() {
-    const t = _lmTags;
-    const active   = t.filter(x => x.is_active).length;
-    const located  = t.filter(x => x.latitude && x.longitude).length;
-    const inactive = t.filter(x => !x.is_active).length;
-    document.getElementById('al-stat-total').textContent    = t.length;
-    document.getElementById('al-stat-active').textContent   = active;
-    document.getElementById('al-stat-located').textContent  = located;
-    document.getElementById('al-stat-inactive').textContent = inactive;
+function alCatLabel(tag_type) {
+    const t = (tag_type || '').toLowerCase();
+    const c = _AL_CATS.find(c => c.id === t);
+    return c ? c : { id: t || 'other', label: tag_type || 'Other', icon: 'fa-tag', color: 'var(--text-3)' };
+}
+
+function alRenderCategoryChips() {
+    const wrap = document.getElementById('al-category-chips');
+    if (!wrap) return;
+    const tags = _lmTags;
+    const chips = [
+        `<button class="chip ${_alCatFilter === 'all' ? 'chip-active' : ''}" onclick="alFilterCat('all')">
+            All <span class="chip-count">${tags.length}</span>
+        </button>`
+    ].concat(_AL_CATS.map(c => {
+        const count = tags.filter(t => (t.tag_type || '').toLowerCase() === c.id).length;
+        return `<button class="chip ${_alCatFilter === c.id ? 'chip-active' : ''}" onclick="alFilterCat('${c.id}')" style="--chip-color:${c.color}">
+            <i class="fa-solid ${c.icon}"></i> ${c.label} <span class="chip-count">${count}</span>
+        </button>`;
+    }));
+    wrap.innerHTML = chips.join('');
+}
+
+function alFilterCat(cat) {
+    _alCatFilter = cat;
+    alRenderCategoryChips();
+    alRenderTable();
 }
 
 function alRenderTable() {
     const query = (document.getElementById('al-search')?.value || '').toLowerCase();
     const list  = _lmTags.filter(t => {
+        const inCat = _alCatFilter === 'all' || (t.tag_type || '').toLowerCase() === _alCatFilter;
+        if (!inCat) return false;
         if (!query) return true;
         return [t.imei, t.description, t.device_name, t.owner_email].join(' ').toLowerCase().includes(query);
     });
@@ -2281,8 +2305,8 @@ function alRenderTable() {
         const batHtml= batPct != null
             ? `<span class="battery-wrap ${batCls}"><i class="fa-solid fa-battery-full"></i> <small>${batPct}%</small></span>` : '—';
         const hasGPS = !!(t.latitude && t.longitude);
-        const gpsHtml = hasGPS
-            ? `<span style="color:var(--success);font-size:.78rem"><i class="fa-solid fa-location-dot"></i> ${parseFloat(t.latitude).toFixed(4)}</span>`
+        const locHtml = hasGPS
+            ? `<span style="color:var(--success);font-size:.78rem"><i class="fa-solid fa-location-dot"></i> ${esc(t.location_description || (parseFloat(t.latitude).toFixed(4) + ', ' + parseFloat(t.longitude).toFixed(4)))}</span>`
             : `<span style="color:var(--text-3);font-size:.78rem"><i class="fa-solid fa-location-dot"></i> No GPS</span>`;
         const lastSeen = t.last_seen ? new Date(t.last_seen).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
         const daysLeft = t.days_remaining != null
@@ -2293,8 +2317,8 @@ function alRenderTable() {
         return `<tr>
             <td>
                 <div class="table-asset-name">
-                    <div class="tbl-icon" style="background:${statusColors[status]}20;color:${statusColors[status]}">
-                        <i class="fa-solid fa-location-dot"></i>
+                    <div class="tbl-icon" style="background:${alCatLabel(t.tag_type).color}20;color:${alCatLabel(t.tag_type).color}">
+                        <i class="fa-solid ${alCatLabel(t.tag_type).icon}"></i>
                     </div>
                     <div>
                         <strong>${label}</strong>
@@ -2302,7 +2326,7 @@ function alRenderTable() {
                     </div>
                 </div>
             </td>
-            <td style="font-size:.78rem;color:var(--text-2)">${esc(t.tag_type || '—')}</td>
+            <td style="font-size:.78rem;color:var(--text-2)">${alCatLabel(t.tag_type).label}</td>
             <td>
                 <div style="display:flex;align-items:center;gap:5px">
                     <span class="status-dot status-${status}"></span>
@@ -2310,7 +2334,7 @@ function alRenderTable() {
                 </div>
             </td>
             <td>${batHtml}</td>
-            <td>${gpsHtml}</td>
+            <td>${locHtml}</td>
             <td style="font-size:.78rem;color:var(--text-2)">${lastSeen}</td>
             <td style="font-size:.78rem">${daysLeft}</td>
             <td>
