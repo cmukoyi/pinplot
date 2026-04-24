@@ -221,6 +221,22 @@ class AppFeatures(Base):
     updated_at     = Column(DateTime(timezone=True), onupdate=func.now())
 
 
+class UserGroupPackage(Base):
+    """Many-to-many link between a UserGroup and its allowed TagPackages.
+
+    A group can have multiple packages (e.g. 80-day, 120-day, 300-day).
+    is_default marks the one auto-applied by bulk-import and any flow that
+    needs a fallback; exactly one row per group should have is_default=True.
+    """
+    __tablename__ = "user_group_packages"
+
+    id           = get_uuid_column()
+    usergroup_id = Column(String(36), ForeignKey("user_groups.id"), nullable=False, index=True)
+    package_id   = Column(String(36), ForeignKey("tag_packages.id"), nullable=False)
+    is_default   = Column(Boolean, nullable=False, default=False)
+    created_at   = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class UserGroup(Base):
     """A tenant / company on the customer portal.
 
@@ -233,7 +249,7 @@ class UserGroup(Base):
     name         = Column(String(200), nullable=False, unique=True)
     slug         = Column(String(100), nullable=False, unique=True)  # URL-safe identifier
     email_domain = Column(String(255), nullable=True, index=True)   # e.g. "gmail.com" — auto-assigns mobile users
-    default_package_id = Column(String(36), ForeignKey("tag_packages.id"), nullable=True)  # auto-applied when adding tags
+    default_package_id = Column(String(36), ForeignKey("tag_packages.id"), nullable=True)  # kept for bulk-import fallback
     is_active    = Column(Boolean, nullable=False, default=True)
     created_at   = Column(DateTime(timezone=True), server_default=func.now())
     updated_at   = Column(DateTime(timezone=True), onupdate=func.now())
@@ -243,6 +259,8 @@ class UserGroup(Base):
     buildings    = relationship("Building", back_populates="usergroup",
                                 cascade="all, delete-orphan")
     tag_categories = relationship("TagCategory", back_populates="usergroup",
+                                  cascade="all, delete-orphan")
+    group_packages = relationship("UserGroupPackage", foreign_keys=[UserGroupPackage.usergroup_id],
                                   cascade="all, delete-orphan")
 
 

@@ -1273,7 +1273,7 @@
 
                         <!-- Edit Group Modal -->
                         <div id="editGroupModal" class="modal">
-                            <div class="modal-content">
+                            <div class="modal-content" style="max-width:560px">
                                 <div class="modal-header">
                                     <h3 class="modal-title">Edit Group — <span id="egGroupName"></span></h3>
                                     <button class="modal-close" onclick="closeModal('editGroupModal')">×</button>
@@ -1289,12 +1289,29 @@
                                             <input type="text" id="egDomain" class="form-input" placeholder="e.g. acmecorp.com" style="flex:1">
                                         </div>
                                     </div>
+                                    <!-- Multi-package section -->
                                     <div class="form-group">
-                                        <label class="form-label">Default Tag Package</label>
-                                        <p style="font-size:13px;color:var(--text-secondary);margin:4px 0 10px">Automatically applied to all tags added or bulk-imported for this group. Tags cannot be added without a package.</p>
-                                        <select id="egPackage" class="form-input">
-                                            <option value="">— No default package —</option>
-                                        </select>
+                                        <label class="form-label">Assigned Tag Packages</label>
+                                        <p style="font-size:13px;color:var(--text-secondary);margin:4px 0 10px">Tags added to this group can use any of these packages. The <strong>Default</strong> package is auto-applied on bulk import.</p>
+                                        <table id="egPackagesTable" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px">
+                                            <thead>
+                                                <tr style="background:var(--bg-secondary);text-align:left">
+                                                    <th style="padding:6px 10px">Package</th>
+                                                    <th style="padding:6px 10px">Days</th>
+                                                    <th style="padding:6px 10px">Default</th>
+                                                    <th style="padding:6px 10px"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="egPackageRows">
+                                                <tr><td colspan="4" style="padding:10px;text-align:center;color:var(--text-secondary)">Loading…</td></tr>
+                                            </tbody>
+                                        </table>
+                                        <div style="display:flex;gap:8px;align-items:center">
+                                            <select id="egAddPkgSelect" class="form-input" style="flex:1">
+                                                <option value="">— Add a package —</option>
+                                            </select>
+                                            <button type="button" class="btn btn-secondary" onclick="egAddPackage()">Add</button>
+                                        </div>
                                     </div>
                                     <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px">
                                         <button type="button" class="btn btn-secondary" onclick="clearGroupDomain()">Clear Domain</button>
@@ -2244,8 +2261,9 @@
                     const domainBadge = g.email_domain
                         ? `<code style="font-size:11px;opacity:.8">@${escHtml(g.email_domain)}</code>`
                         : '<span style="color:var(--text-secondary);font-size:11px">—</span>';
-                    const pkgBadge = g.default_package_name
-                        ? `<span class="badge badge-success" style="font-size:11px">${escHtml(g.default_package_name)}</span>`
+                    const pkgs = g.packages || [];
+                    const pkgBadge = pkgs.length > 0
+                        ? pkgs.map(p => `<span class="badge badge-success" style="font-size:11px;margin-right:2px">${escHtml(p.package_name)}${p.is_default ? ' ★' : ''}</span>`).join('')
                         : '<span style="color:var(--text-secondary);font-size:11px">—</span>';
                     return `<tr>
                         <td><strong>${escHtml(g.name)}</strong></td>
@@ -2256,7 +2274,7 @@
                         <td>${badge}</td>
                         <td>${date}</td>
                         <td style="display:flex;gap:6px">
-                            <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openEditGroupModal('${g.id}','${escHtml(g.name)}','${escHtml(g.email_domain||'')}','${g.default_package_id||''}')">Edit</button>
+                            <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openEditGroupModal('${g.id}','${escHtml(g.name)}','${escHtml(g.email_domain||'')}')">Edit</button>
                             ${deactivateBtn}
                         </td>
                     </tr>`;
@@ -2338,29 +2356,105 @@
             }
         }
 
-        function openEditGroupModal(groupId, groupName, emailDomain, defaultPackageId) {
+        // --- Edit Group helpers ---
+        let _egAllPackages = [];   // all active packages from API (used to populate "Add" dropdown)
+
+        async function openEditGroupModal(groupId, groupName, emailDomain) {
             document.getElementById('egGroupId').value = groupId;
             document.getElementById('egGroupName').textContent = groupName;
             document.getElementById('egDomain').value = emailDomain || '';
             document.getElementById('egAlert').style.display = 'none';
             document.getElementById('egSubmitBtn').disabled = false;
             document.getElementById('egSubmitBtn').textContent = 'Save';
-            // Populate the package dropdown
-            fetch(`${API_URL}/api/admin/packages`, { headers: { 'Authorization': `Bearer ${authToken}` } })
-                .then(r => r.json())
-                .then(pkgs => {
-                    const sel = document.getElementById('egPackage');
-                    sel.innerHTML = '<option value="">— No default package —</option>';
-                    pkgs.filter(p => p.is_active).forEach(p => {
+            document.getElementById('editGroupModal').classList.add('active');
+            // Load all packages + this group's assigned packages in parallel
+            await _egRefreshPackages(groupId);
+        }
+
+        async function _egRefreshPackages(groupId) {
+            if (!groupId) groupId = document.getElementById('egGroupId').value;
+            const tbody = document.getElementById('egPackageRows');
+            tbody.innerHTML = '<tr><td colspan="4" style="padding:10px;text-align:center;color:var(--text-secondary)">Loading…</td></tr>';
+            try {
+                const [allPkgs, groupPkgs] = await Promise.all([
+                    fetch(`${API_URL}/api/admin/packages`, { headers: { 'Authorization': `Bearer ${authToken}` } }).then(r => r.json()),
+                    fetch(`${API_URL}/api/admin/usergroups/${groupId}/packages`, { headers: { 'Authorization': `Bearer ${authToken}` } }).then(r => r.json()),
+                ]);
+                _egAllPackages = allPkgs.filter(p => p.is_active);
+                const assignedIds = new Set(groupPkgs.map(p => p.package_id));
+                // Populate assigned packages table
+                if (groupPkgs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="padding:10px;text-align:center;color:var(--text-secondary)">No packages assigned yet.</td></tr>';
+                } else {
+                    tbody.innerHTML = groupPkgs.map(p => `
+                        <tr id="egpkg-${p.package_id}" style="border-bottom:1px solid var(--border-color)">
+                            <td style="padding:7px 10px">${p.package_name}</td>
+                            <td style="padding:7px 10px">${p.validity_days}d</td>
+                            <td style="padding:7px 10px">
+                                ${p.is_default
+                                    ? '<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:9px;font-size:11px;font-weight:600">Default</span>'
+                                    : `<button type="button" class="btn btn-secondary" style="font-size:11px;padding:2px 8px" onclick="egSetDefault('${groupId}','${p.package_id}')">Set Default</button>`
+                                }
+                            </td>
+                            <td style="padding:7px 10px">
+                                <button type="button" class="btn" style="font-size:11px;padding:2px 8px;background:var(--danger-color,#ef4444);color:#fff" onclick="egRemovePackage('${groupId}','${p.package_id}')">Remove</button>
+                            </td>
+                        </tr>`).join('');
+                }
+                // Populate "Add" dropdown with unassigned active packages
+                const sel = document.getElementById('egAddPkgSelect');
+                sel.innerHTML = '<option value="">— Add a package —</option>';
+                _egAllPackages.forEach(p => {
+                    if (!assignedIds.has(p.id)) {
                         const opt = document.createElement('option');
                         opt.value = p.id;
                         opt.textContent = `${p.name} (${p.validity_days}d)`;
-                        if (p.id === defaultPackageId) opt.selected = true;
                         sel.appendChild(opt);
-                    });
-                })
-                .catch(() => {});
-            document.getElementById('editGroupModal').classList.add('active');
+                    }
+                });
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="4" style="padding:10px;color:red">Failed to load packages.</td></tr>';
+            }
+        }
+
+        async function egAddPackage() {
+            const groupId = document.getElementById('egGroupId').value;
+            const pkgId = document.getElementById('egAddPkgSelect').value;
+            if (!pkgId) return;
+            try {
+                const res = await fetch(`${API_URL}/api/admin/usergroups/${groupId}/packages/${pkgId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` },
+                });
+                if (res.status === 401) { handle401(); return; }
+                if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.detail || 'Failed to add package'); return; }
+                await _egRefreshPackages(groupId);
+            } catch (e) { alert('Network error'); }
+        }
+
+        async function egRemovePackage(groupId, pkgId) {
+            if (!confirm('Remove this package from the group?')) return;
+            try {
+                const res = await fetch(`${API_URL}/api/admin/usergroups/${groupId}/packages/${pkgId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${authToken}` },
+                });
+                if (res.status === 401) { handle401(); return; }
+                if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.detail || 'Failed to remove package'); return; }
+                await _egRefreshPackages(groupId);
+            } catch (e) { alert('Network error'); }
+        }
+
+        async function egSetDefault(groupId, pkgId) {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/usergroups/${groupId}/packages/${pkgId}/set-default`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${authToken}` },
+                });
+                if (res.status === 401) { handle401(); return; }
+                if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.detail || 'Failed to set default'); return; }
+                await _egRefreshPackages(groupId);
+            } catch (e) { alert('Network error'); }
         }
 
         function clearGroupDomain() {
@@ -2375,9 +2469,7 @@
             document.getElementById('egAlert').style.display = 'none';
             const groupId = document.getElementById('egGroupId').value;
             const domain  = document.getElementById('egDomain').value.trim();
-            const packageId = document.getElementById('egPackage').value || null;
             try {
-                // Save domain
                 const res = await fetch(`${API_URL}/api/admin/usergroups/${groupId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
@@ -2386,17 +2478,6 @@
                 if (res.status === 401) { handle401(); return; }
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Update failed');
-                // Save default package
-                const pkgRes = await fetch(`${API_URL}/api/admin/usergroups/${groupId}/package`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ package_id: packageId })
-                });
-                if (pkgRes.status === 401) { handle401(); return; }
-                if (!pkgRes.ok) {
-                    const pkgData = await pkgRes.json().catch(() => ({}));
-                    throw new Error(pkgData.detail || 'Failed to save package');
-                }
                 closeModal('editGroupModal');
                 loadUsergroups();
             } catch (err) {

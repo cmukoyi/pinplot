@@ -11,7 +11,7 @@ import logging
 
 from app.database import get_db
 from app.models_admin import AdminUser, AppLog, AuditLog, BillingData, BillingTransaction
-from app.models import AppFeatures, UserGroup, PortalUser, Building, Floor, IndoorGateway, Room
+from app.models import AppFeatures, UserGroup, UserGroupPackage, PortalUser, Building, Floor, IndoorGateway, Room
 from app.admin_auth import (
     hash_password, verify_password, create_admin_access_token,
     decode_admin_token, check_role_permission
@@ -778,6 +778,16 @@ class PortalUserOut(BaseModel):
         from_attributes = True
 
 
+class GroupPackageOut(BaseModel):
+    package_id: str
+    package_name: str
+    validity_days: int
+    is_default: bool
+
+    class Config:
+        from_attributes = True
+
+
 class UserGroupOut(BaseModel):
     id: UUID
     name: str
@@ -786,6 +796,7 @@ class UserGroupOut(BaseModel):
     email_domain: Optional[str] = None
     default_package_id: Optional[str] = None
     default_package_name: Optional[str] = None
+    packages: List[GroupPackageOut] = []
     created_at: Optional[datetime] = None
     portal_users: List[PortalUserOut] = []
 
@@ -793,16 +804,43 @@ class UserGroupOut(BaseModel):
         from_attributes = True
 
     @classmethod
-    def from_group(cls, g, pkg_map: dict):
-        pkg = pkg_map.get(str(g.default_package_id)) if g.default_package_id else None
+    def from_group(cls, g, pkg_map: dict, group_pkgs: list):
+        """Build response from a UserGroup ORM object.
+        pkg_map: {str(pkg_id) -> TagPackage}
+        group_pkgs: list of UserGroupPackage rows for this group (any order)
+        """
+        # Derive default from join table (is_default=True) or fall back to legacy column
+        default_pkg_id: Optional[str] = None
+        default_pkg_name: Optional[str] = None
+        packages_out: List[GroupPackageOut] = []
+        for gp in group_pkgs:
+            pkg = pkg_map.get(str(gp.package_id))
+            if pkg is None:
+                continue
+            packages_out.append(GroupPackageOut(
+                package_id=str(gp.package_id),
+                package_name=pkg.name,
+                validity_days=pkg.validity_days,
+                is_default=gp.is_default,
+            ))
+            if gp.is_default:
+                default_pkg_id = str(gp.package_id)
+                default_pkg_name = pkg.name
+        # Fall back to legacy column if join table has no default row yet
+        if not default_pkg_id and g.default_package_id:
+            legacy = pkg_map.get(str(g.default_package_id))
+            if legacy:
+                default_pkg_id = str(g.default_package_id)
+                default_pkg_name = legacy.name
         return cls(
             id=g.id,
             name=g.name,
             slug=g.slug,
             is_active=g.is_active,
             email_domain=g.email_domain,
-            default_package_id=str(g.default_package_id) if g.default_package_id else None,
-            default_package_name=pkg.name if pkg else None,
+            default_package_id=default_pkg_id,
+            default_package_name=default_pkg_name,
+            packages=packages_out,
             created_at=g.created_at,
             portal_users=g.portal_users,
         )
@@ -907,13 +945,24 @@ def list_usergroups(
         .order_by(UserGroup.created_at.desc())
         .all()
     )
-    # Build package lookup for default packages
-    pkg_ids = {str(g.default_package_id) for g in groups if g.default_package_id}
+    # Collect all package IDs referenced by either join table or legacy column
+    group_ids = [str(g.id) for g in groups]
+    all_gps = (
+        db.query(UserGroupPackage)
+        .filter(UserGroupPackage.usergroup_id.in_(group_ids))
+        .all()
+    ) if group_ids else []
+    pkg_ids = {str(gp.package_id) for gp in all_gps}
+    pkg_ids |= {str(g.default_package_id) for g in groups if g.default_package_id}
     pkg_map = {}
     if pkg_ids:
         for p in db.query(_TagPackage).filter(_TagPackage.id.in_(pkg_ids)).all():
             pkg_map[str(p.id)] = p
-    return [UserGroupOut.from_group(g, pkg_map) for g in groups]
+    # Group join-table rows by group_id
+    gps_by_group: dict = {}
+    for gp in all_gps:
+        gps_by_group.setdefault(str(gp.usergroup_id), []).append(gp)
+    return [UserGroupOut.from_group(g, pkg_map, gps_by_group.get(str(g.id), [])) for g in groups]
 
 
 @router.put("/usergroups/{group_id}/deactivate")
@@ -971,7 +1020,7 @@ def update_usergroup(
 
 
 class UserGroupPackageAssign(BaseModel):
-    package_id: Optional[str] = None  # None clears the default package
+    package_id: Optional[str] = None  # None clears the default package (legacy)
 
 
 @router.put("/usergroups/{group_id}/package")
@@ -981,9 +1030,7 @@ def assign_group_package(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Assign (or clear) the default tag package for a UserGroup (manager+).
-    Tags added to this group will automatically receive this package and have their
-    expiry_date computed from it."""
+    """Legacy single-assign kept for backward compat. Prefer the /packages sub-routes."""
     admin = get_admin_from_request(request, db)
     if not check_role_permission(admin.role, "manager"):
         raise HTTPException(status_code=403, detail="Requires manager role")
@@ -995,11 +1042,178 @@ def assign_group_package(
         if not pkg:
             raise HTTPException(status_code=404, detail="Package not found or inactive")
         group.default_package_id = data.package_id
+        # Also upsert into join table as is_default
+        _upsert_group_package(db, group_id, data.package_id, make_default=True)
     else:
         group.default_package_id = None
     db.commit()
-    pkg_name = pkg.name if data.package_id and pkg else None
+    pkg_name = pkg.name if data.package_id else None
     return {"id": str(group.id), "default_package_id": group.default_package_id, "default_package_name": pkg_name}
+
+
+def _upsert_group_package(db: Session, group_id: str, package_id: str, make_default: bool = False):
+    """Add package to group's join table if not present; optionally set as default."""
+    import uuid as _uuid2
+    existing = db.query(UserGroupPackage).filter(
+        UserGroupPackage.usergroup_id == group_id,
+        UserGroupPackage.package_id == package_id,
+    ).first()
+    if existing:
+        if make_default:
+            existing.is_default = True
+    else:
+        db.add(UserGroupPackage(
+            id=str(_uuid2.uuid4()),
+            usergroup_id=group_id,
+            package_id=package_id,
+            is_default=make_default,
+        ))
+
+
+# --- Multi-package management routes ---
+
+@router.get("/usergroups/{group_id}/packages", response_model=List[GroupPackageOut])
+def list_group_packages(
+    group_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """List all packages assigned to a UserGroup (viewer+)."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "viewer"):
+        raise HTTPException(status_code=403, detail="Requires viewer role")
+    if not db.query(UserGroup).filter(UserGroup.id == group_id).first():
+        raise HTTPException(status_code=404, detail="User group not found")
+    rows = db.query(UserGroupPackage).filter(UserGroupPackage.usergroup_id == group_id).all()
+    pkg_ids = [str(r.package_id) for r in rows]
+    pkg_map = {str(p.id): p for p in db.query(_TagPackage).filter(_TagPackage.id.in_(pkg_ids)).all()} if pkg_ids else {}
+    return [
+        GroupPackageOut(
+            package_id=str(r.package_id),
+            package_name=pkg_map[str(r.package_id)].name if str(r.package_id) in pkg_map else "Unknown",
+            validity_days=pkg_map[str(r.package_id)].validity_days if str(r.package_id) in pkg_map else 0,
+            is_default=r.is_default,
+        )
+        for r in rows
+    ]
+
+
+@router.post("/usergroups/{group_id}/packages/{pkg_id}", response_model=GroupPackageOut)
+def add_package_to_group(
+    group_id: str,
+    pkg_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Assign a package to a UserGroup (manager+). First assigned package becomes default."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=403, detail="Requires manager role")
+    group = db.query(UserGroup).filter(UserGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="User group not found")
+    pkg = db.query(_TagPackage).filter(_TagPackage.id == pkg_id, _TagPackage.is_active == True).first()
+    if not pkg:
+        raise HTTPException(status_code=404, detail="Package not found or inactive")
+    # Check if already assigned
+    existing = db.query(UserGroupPackage).filter(
+        UserGroupPackage.usergroup_id == group_id,
+        UserGroupPackage.package_id == pkg_id,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Package already assigned to this group")
+    # First package auto-becomes default
+    has_any = db.query(UserGroupPackage).filter(UserGroupPackage.usergroup_id == group_id).count()
+    make_default = has_any == 0
+    import uuid as _uuid2
+    row = UserGroupPackage(
+        id=str(_uuid2.uuid4()),
+        usergroup_id=group_id,
+        package_id=pkg_id,
+        is_default=make_default,
+    )
+    db.add(row)
+    if make_default:
+        group.default_package_id = pkg_id
+    db.commit()
+    return GroupPackageOut(
+        package_id=str(pkg.id),
+        package_name=pkg.name,
+        validity_days=pkg.validity_days,
+        is_default=make_default,
+    )
+
+
+@router.delete("/usergroups/{group_id}/packages/{pkg_id}")
+def remove_package_from_group(
+    group_id: str,
+    pkg_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Remove a package from a UserGroup (manager+). Cannot remove the last package."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=403, detail="Requires manager role")
+    row = db.query(UserGroupPackage).filter(
+        UserGroupPackage.usergroup_id == group_id,
+        UserGroupPackage.package_id == pkg_id,
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Package not assigned to this group")
+    total = db.query(UserGroupPackage).filter(UserGroupPackage.usergroup_id == group_id).count()
+    if total <= 1:
+        raise HTTPException(status_code=400, detail="Cannot remove the only package from a group")
+    was_default = row.is_default
+    db.delete(row)
+    db.flush()
+    if was_default:
+        # Auto-assign the oldest remaining package as default
+        next_row = (
+            db.query(UserGroupPackage)
+            .filter(UserGroupPackage.usergroup_id == group_id)
+            .order_by(UserGroupPackage.created_at.asc())
+            .first()
+        )
+        if next_row:
+            next_row.is_default = True
+            group = db.query(UserGroup).filter(UserGroup.id == group_id).first()
+            if group:
+                group.default_package_id = next_row.package_id
+    db.commit()
+    return {"detail": "Package removed"}
+
+
+@router.put("/usergroups/{group_id}/packages/{pkg_id}/set-default")
+def set_group_default_package(
+    group_id: str,
+    pkg_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Mark a package as the default for a UserGroup (manager+).
+    Also keeps user_groups.default_package_id in sync for bulk-import."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=403, detail="Requires manager role")
+    group = db.query(UserGroup).filter(UserGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="User group not found")
+    target = db.query(UserGroupPackage).filter(
+        UserGroupPackage.usergroup_id == group_id,
+        UserGroupPackage.package_id == pkg_id,
+    ).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Package not assigned to this group")
+    # Clear existing default
+    db.query(UserGroupPackage).filter(
+        UserGroupPackage.usergroup_id == group_id,
+        UserGroupPackage.is_default == True,
+    ).update({"is_default": False}, synchronize_session="fetch")
+    target.is_default = True
+    group.default_package_id = pkg_id
+    db.commit()
+    return {"detail": "Default package updated"}
 
 
 # ---------------------------------------------------------------------------

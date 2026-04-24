@@ -15,7 +15,7 @@ import os
 import logging
 
 from app.database import get_db
-from app.models import UserGroup, PortalUser, Building, Floor, IndoorGateway, BLETag, User, TagCategory
+from app.models import UserGroup, UserGroupPackage, PortalUser, Building, Floor, IndoorGateway, BLETag, User, TagCategory
 from app.models_admin import TagPackage
 from app.admin_auth import hash_password, verify_password
 
@@ -573,8 +573,20 @@ class PackageOut(BaseModel):
 
 @router.get("/packages", response_model=List[PackageOut])
 def list_active_packages(request: Request, db: Session = Depends(get_db)):
-    """Return all active tag packages for the Add Tag dropdown."""
-    get_portal_user_from_request(request, db)  # auth only
+    """Return tag packages available to the caller's group for the Add Tag dropdown.
+    Only packages explicitly assigned to the group are returned; falls back to all
+    active packages if none have been assigned yet (backward compat)."""
+    me = get_portal_user_from_request(request, db)
+    assigned = db.query(UserGroupPackage).filter(UserGroupPackage.usergroup_id == me.usergroup_id).all()
+    if assigned:
+        pkg_ids = [str(r.package_id) for r in assigned]
+        return (
+            db.query(TagPackage)
+            .filter(TagPackage.id.in_(pkg_ids), TagPackage.is_active == True)
+            .order_by(TagPackage.validity_days)
+            .all()
+        )
+    # Fallback: no explicit assignments — return all active packages
     return db.query(TagPackage).filter(TagPackage.is_active == True).order_by(TagPackage.validity_days).all()
 
 
