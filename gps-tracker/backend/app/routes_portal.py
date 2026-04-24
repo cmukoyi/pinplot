@@ -604,6 +604,44 @@ def _assert_user_in_domain(user: User, domain: str) -> None:
         raise HTTPException(status_code=403, detail="User does not belong to this group's domain")
 
 
+class PortalTagUpdate(BaseModel):
+    description: Optional[str] = None
+    tag_type: Optional[str] = None
+    user_id: Optional[str] = None
+
+
+@router.put("/tags/{tag_id}", response_model=PortalTagOut)
+def update_tag(tag_id: str, data: PortalTagUpdate, request: Request, db: Session = Depends(get_db)):
+    """Update a BLE tag's description, type, or assigned user (group admin only)."""
+    me = get_portal_user_from_request(request, db)
+    if not me.is_group_admin:
+        raise HTTPException(status_code=403, detail="Only group admins can edit tags")
+    group = _get_group_and_assert_domain(me, db)
+
+    tag = (
+        db.query(BLETag)
+        .join(User, User.id == BLETag.user_id)
+        .filter(BLETag.id == tag_id, User.email.ilike(f"%@{group.email_domain.lower()}"))
+        .first()
+    )
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found in your group")
+
+    if data.description is not None:
+        tag.description = data.description or None
+    if data.tag_type is not None:
+        tag.tag_type = data.tag_type
+    if data.user_id is not None:
+        target_user = db.query(User).filter(User.id == str(data.user_id)).first()
+        _assert_user_in_domain(target_user, group.email_domain)
+        tag.user_id = str(data.user_id)
+
+    db.commit()
+    db.refresh(tag)
+    owner = db.query(User).filter(User.id == tag.user_id).first()
+    return _build_tag_out(tag, owner.email if owner else "", db)
+
+
 @router.post("/tags", response_model=PortalTagOut, status_code=201)
 def create_tag(data: PortalTagCreate, request: Request, db: Session = Depends(get_db)):
     """Create a new BLE tag and assign it directly to a mobile-app user (group admin only)."""

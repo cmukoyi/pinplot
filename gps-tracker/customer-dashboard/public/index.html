@@ -664,13 +664,14 @@
                     <option value="">Loading users…</option>
                 </select>
             </div>
-            <div class="form-group">
+            <div id="tagMgmtPackageGroup" class="form-group">
                 <label>Package *</label>
                 <select id="tagMgmtPackage" required>
                     <option value="">Loading packages…</option>
                 </select>
             </div>
             <input type="hidden" id="tagMgmtTagId">
+            <input type="hidden" id="tagMgmtMode" value="">
             <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
                 <button type="button" class="btn btn-secondary" onclick="closeModal('tagMgmtModal')">Cancel</button>
                 <button type="submit" class="btn btn-primary" id="tagMgmtSubmitBtn">Save</button>
@@ -1059,12 +1060,20 @@ async function openAddTagModal() {
     document.getElementById('tagMgmtTitle').textContent = 'Add Tag';
     document.getElementById('tagMgmtSubmitBtn').textContent = 'Add Tag';
     document.getElementById('tagMgmtTagId').value = '';
+    document.getElementById('tagMgmtMode').value = '';
     document.getElementById('tagMgmtImei').value = '';
+    const imeiInput = document.getElementById('tagMgmtImei');
+    imeiInput.readOnly = false;
+    imeiInput.style.background = '';
+    imeiInput.style.color = '';
+    imeiInput.setAttribute('required', '');
     document.getElementById('tagMgmtDesc').value = '';
     document.getElementById('tagMgmtType').value = 'scope';
     document.getElementById('tagMgmtImeiGroup').style.display = '';
     document.getElementById('tagMgmtDescGroup').style.display = '';
     document.getElementById('tagMgmtTypeGroup').style.display = '';
+    document.getElementById('tagMgmtPackageGroup').style.display = '';
+    document.getElementById('tagMgmtPackage').setAttribute('required', '');
     document.getElementById('tagMgmtAlert').style.display = 'none';
     openModal('tagMgmtModal');
     await Promise.all([_loadMobileUsersIntoSelect(), _loadPackagesIntoSelect()]);
@@ -1087,9 +1096,50 @@ async function openAssignTagModal(tagId, currentOwner) {
     }
 }
 
+async function openTagMgmtModal(mode, imei) {
+    if (mode !== 'edit') return;
+    const tag = _lmTags.find(t => t.imei === imei);
+    if (!tag) return;
+
+    document.getElementById('tagMgmtTitle').textContent = 'Edit Tag';
+    document.getElementById('tagMgmtSubmitBtn').textContent = 'Save Changes';
+    document.getElementById('tagMgmtTagId').value = String(tag.id);
+    document.getElementById('tagMgmtMode').value = 'edit';
+    document.getElementById('tagMgmtAlert').style.display = 'none';
+
+    // IMEI — display but read-only
+    const imeiInput = document.getElementById('tagMgmtImei');
+    imeiInput.value = tag.imei;
+    imeiInput.readOnly = true;
+    imeiInput.style.background = 'var(--bg-2,#f3f4f6)';
+    imeiInput.style.color = 'var(--text-3,#6b7280)';
+    imeiInput.removeAttribute('required');
+    document.getElementById('tagMgmtImeiGroup').style.display = '';
+
+    // Description
+    document.getElementById('tagMgmtDesc').value = tag.description || '';
+    document.getElementById('tagMgmtDescGroup').style.display = '';
+
+    // Tag type
+    document.getElementById('tagMgmtType').value = tag.tag_type || 'scope';
+    document.getElementById('tagMgmtTypeGroup').style.display = '';
+
+    // Package — hide in edit mode (package changes require a separate flow)
+    document.getElementById('tagMgmtPackageGroup').style.display = 'none';
+    document.getElementById('tagMgmtPackage').removeAttribute('required');
+
+    openModal('tagMgmtModal');
+    await _loadMobileUsersIntoSelect();
+    if (_mobileUsersCache) {
+        const match = _mobileUsersCache.find(u => u.email === tag.owner_email);
+        if (match) document.getElementById('tagMgmtUser').value = String(match.id);
+    }
+}
+
 async function submitTagForm(e) {
     e.preventDefault();
     const tagId  = document.getElementById('tagMgmtTagId').value;
+    const mode   = document.getElementById('tagMgmtMode').value;
     const userId = document.getElementById('tagMgmtUser').value;
     const btn    = document.getElementById('tagMgmtSubmitBtn');
     if (!userId) { return; }
@@ -1098,7 +1148,18 @@ async function submitTagForm(e) {
     alertEl.style.display = 'none';
     try {
         let res;
-        if (tagId) {
+        if (tagId && mode === 'edit') {
+            // Full edit — description, tag_type, user reassignment
+            res = await apiFetch(`/api/portal/tags/${tagId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    description: document.getElementById('tagMgmtDesc').value.trim() || null,
+                    tag_type: document.getElementById('tagMgmtType').value,
+                    user_id: userId,
+                }),
+            });
+        } else if (tagId) {
             // Reassign existing tag
             res = await apiFetch(`/api/portal/tags/${tagId}/assign`, {
                 method: 'PUT',
@@ -1128,6 +1189,8 @@ async function submitTagForm(e) {
             throw new Error(err.detail || 'Request failed');
         }
         closeModal('tagMgmtModal');
+        // Refresh the tags cache so cards reflect the change
+        _lmTags = [];
         loadGroupTags();
     } catch (err) {
         const span = document.getElementById('tagMgmtAlertText');
