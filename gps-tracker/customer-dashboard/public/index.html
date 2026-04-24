@@ -2451,7 +2451,7 @@ async function histLoadTrips() {
     _histClearMap();
 
     try {
-        const res = await apiFetch('/api/trips', {
+        const res = await apiFetch('/api/portal/trips', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2538,7 +2538,7 @@ async function histSelectTrip(tripId, idx) {
     _histClearMap();
 
     try {
-        const res = await apiFetch(`/api/trips/${encodeURIComponent(tripId)}/events`);
+        const res = await apiFetch(`/api/portal/trips/${encodeURIComponent(tripId)}/events`);
         const data = await res.json();
         if (!data.success) throw new Error(data.error || 'API error');
         _histTrack = (data.events || []).map(e => ({
