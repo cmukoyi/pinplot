@@ -337,8 +337,10 @@ input, select, textarea { font-family: var(--font); }
   transform: translateY(-50%);
   color: var(--text-3);
   font-size: .85rem;
+  pointer-events: none;
+  z-index: 1;
 }
-.search-input {
+input.search-input {
   width: 100%;
   background: var(--bg-3);
   border: 1px solid var(--border);
@@ -348,12 +350,12 @@ input, select, textarea { font-family: var(--font); }
   font-size: .84rem;
   transition: var(--transition);
 }
-.search-input:focus {
+input.search-input:focus {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-glow);
 }
-.search-input::placeholder { color: var(--text-3); }
+input.search-input::placeholder { color: var(--text-3); }
 
 .stat-chips {
   display: flex;
