@@ -1324,8 +1324,12 @@ function showDashboard(user, group) {
         avatarEl.textContent = initials;
     }
 
-    switchTab('livemap');
-    loadBuildings();
+    // Defer map init so the browser has painted the dashboard container
+    // and Leaflet can read real pixel dimensions (avoids 0×0 tile issue on login).
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        switchTab('livemap');
+        loadBuildings();
+    }));
 }
 
 // ══════════════════════════════════════════
@@ -2838,6 +2842,9 @@ async function initLiveMap() {
             maxZoom: 19
         }).addTo(_liveMap);
         _lmMapReady = true;
+        // Force Leaflet to recalculate container size in case the tile was
+        // painted before layout was fully computed (e.g. on first login).
+        _liveMap.invalidateSize();
     } else {
         _liveMap.invalidateSize();
     }
