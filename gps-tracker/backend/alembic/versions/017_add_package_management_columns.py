@@ -80,17 +80,14 @@ def upgrade():
             )
 
     # ── 2. ble_tags.package_id ────────────────────────────────────────────────
+    # No FK: tag_packages.id is UUID but this column is VARCHAR — type mismatch.
+    # The application resolves packages via str() comparisons, not DB-level FK.
     if not _column_exists(conn, "ble_tags", "package_id"):
         op.add_column(
             "ble_tags",
-            sa.Column(
-                "package_id",
-                sa.String(36),
-                sa.ForeignKey("tag_packages.id"),
-                nullable=True,
-                index=True,
-            ),
+            sa.Column("package_id", sa.String(36), nullable=True),
         )
+        op.create_index("ix_ble_tags_package_id", "ble_tags", ["package_id"])
 
     # ── 3. ble_tags.expiry_date ───────────────────────────────────────────────
     if not _column_exists(conn, "ble_tags", "expiry_date"):
@@ -107,15 +104,11 @@ def upgrade():
         )
 
     # ── 5. user_groups.default_package_id ────────────────────────────────────
+    # No FK: same UUID vs VARCHAR mismatch as above.
     if not _column_exists(conn, "user_groups", "default_package_id"):
         op.add_column(
             "user_groups",
-            sa.Column(
-                "default_package_id",
-                sa.String(36),
-                sa.ForeignKey("tag_packages.id"),
-                nullable=True,
-            ),
+            sa.Column("default_package_id", sa.String(36), nullable=True),
         )
 
 
@@ -134,6 +127,10 @@ def downgrade():
         op.drop_column("ble_tags", "expiry_date")
 
     if _column_exists(conn, "ble_tags", "package_id"):
+        try:
+            op.drop_index("ix_ble_tags_package_id", table_name="ble_tags")
+        except Exception:
+            pass
         op.drop_column("ble_tags", "package_id")
 
     # Leave tag_packages in place on downgrade — dropping it could cascade
