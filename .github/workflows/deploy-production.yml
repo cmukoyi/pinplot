@@ -185,8 +185,9 @@ jobs:
             docker compose up -d
             docker compose up -d --force-recreate backend
 
-            echo "━━━ Pruning old images ━━━"
+            echo "━━━ Pruning old images and build cache ━━━"
             docker image prune -f
+            docker builder prune -f --filter "until=24h"
 
             echo "━━━ Container status ━━━"
             docker compose ps

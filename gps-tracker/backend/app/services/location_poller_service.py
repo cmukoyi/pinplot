@@ -10,11 +10,12 @@ of MZone, and their battery level is refreshed at the same interval.
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models import BLETag, User
+from app.models_admin import TagPackage
 from app.services.mzone_service import MZoneService
 from app.services.geofence_service import GeofenceService
 from app.services.device_providers.tracksolid_provider import fetch_all_tracksolid_locations
@@ -50,17 +51,47 @@ class LocationPollerService:
         """Poll all active trackers and check geofences"""
         db = SessionLocal()
         try:
+            now_utc = datetime.utcnow()
+
+            # ── Auto-delete: hard-delete tags whose expiry + auto_delete_days has passed ──
+            expired_tags = (
+                db.query(BLETag)
+                .filter(BLETag.expiry_date.isnot(None), BLETag.package_id.isnot(None))
+                .all()
+            )
+            for tag in expired_tags:
+                if tag.expiry_date is None:
+                    continue
+                pkg = db.query(TagPackage).filter(TagPackage.id == str(tag.package_id)).first()
+                if pkg and pkg.auto_delete_days is not None:
+                    delete_after = tag.expiry_date.replace(tzinfo=None) + timedelta(days=pkg.auto_delete_days)
+                    if delete_after < now_utc:
+                        logger.info("🗑️  Auto-deleting tag IMEI %s (expired %s days ago)", tag.imei, pkg.auto_delete_days)
+                        db.delete(tag)
+            db.commit()
+
             # Get all active trackers across all users
             trackers = db.query(BLETag).filter(BLETag.is_active == True).all()
-            
-            if not trackers:
+
+            # ── Expiry enforcement: skip tags whose package has expired ──
+            def _is_expired(tag: BLETag) -> bool:
+                if tag.expiry_date is None:
+                    return False
+                return tag.expiry_date.replace(tzinfo=None) < now_utc
+
+            live_trackers = [t for t in trackers if not _is_expired(t)]
+            expired_count = len(trackers) - len(live_trackers)
+            if expired_count:
+                logger.info("⏱️  Skipping %d tracker(s) with expired packages", expired_count)
+
+            if not live_trackers:
                 logger.debug("No active trackers to poll")
                 return
-            
+
             # Split by provider type — only known types are routed; unknowns are logged and skipped
-            tracksolid_trackers = [t for t in trackers if (t.tag_type or "").lower() == "tracksolid"]
-            mzone_trackers      = [t for t in trackers if (t.tag_type or "scope").lower() == "scope"]
-            unknown_trackers    = [t for t in trackers
+            tracksolid_trackers = [t for t in live_trackers if (t.tag_type or "").lower() == "tracksolid"]
+            mzone_trackers      = [t for t in live_trackers if (t.tag_type or "scope").lower() == "scope"]
+            unknown_trackers    = [t for t in live_trackers
                                    if (t.tag_type or "scope").lower() not in ("tracksolid", "scope")]
             for t in unknown_trackers:
                 logger.warning("⚠️  Tracker IMEI %s has unrecognised tag_type '%s' — skipping", t.imei, t.tag_type)

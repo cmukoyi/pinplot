@@ -784,11 +784,28 @@ class UserGroupOut(BaseModel):
     slug: str
     is_active: bool
     email_domain: Optional[str] = None
+    default_package_id: Optional[str] = None
+    default_package_name: Optional[str] = None
     created_at: Optional[datetime] = None
     portal_users: List[PortalUserOut] = []
 
     class Config:
         from_attributes = True
+
+    @classmethod
+    def from_group(cls, g, pkg_map: dict):
+        pkg = pkg_map.get(str(g.default_package_id)) if g.default_package_id else None
+        return cls(
+            id=g.id,
+            name=g.name,
+            slug=g.slug,
+            is_active=g.is_active,
+            email_domain=g.email_domain,
+            default_package_id=str(g.default_package_id) if g.default_package_id else None,
+            default_package_name=pkg.name if pkg else None,
+            created_at=g.created_at,
+            portal_users=g.portal_users,
+        )
 
 
 class UserGroupCreateResponse(BaseModel):
@@ -890,7 +907,13 @@ def list_usergroups(
         .order_by(UserGroup.created_at.desc())
         .all()
     )
-    return [UserGroupOut.model_validate(g) for g in groups]
+    # Build package lookup for default packages
+    pkg_ids = {str(g.default_package_id) for g in groups if g.default_package_id}
+    pkg_map = {}
+    if pkg_ids:
+        for p in db.query(_TagPackage).filter(_TagPackage.id.in_(pkg_ids)).all():
+            pkg_map[str(p.id)] = p
+    return [UserGroupOut.from_group(g, pkg_map) for g in groups]
 
 
 @router.put("/usergroups/{group_id}/deactivate")
@@ -947,6 +970,38 @@ def update_usergroup(
     return {"id": str(group.id), "name": group.name, "email_domain": group.email_domain}
 
 
+class UserGroupPackageAssign(BaseModel):
+    package_id: Optional[str] = None  # None clears the default package
+
+
+@router.put("/usergroups/{group_id}/package")
+def assign_group_package(
+    group_id: str,
+    data: UserGroupPackageAssign,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Assign (or clear) the default tag package for a UserGroup (manager+).
+    Tags added to this group will automatically receive this package and have their
+    expiry_date computed from it."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=403, detail="Requires manager role")
+    group = db.query(UserGroup).filter(UserGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="User group not found")
+    if data.package_id:
+        pkg = db.query(_TagPackage).filter(_TagPackage.id == data.package_id, _TagPackage.is_active == True).first()
+        if not pkg:
+            raise HTTPException(status_code=404, detail="Package not found or inactive")
+        group.default_package_id = data.package_id
+    else:
+        group.default_package_id = None
+    db.commit()
+    pkg_name = pkg.name if data.package_id and pkg else None
+    return {"id": str(group.id), "default_package_id": group.default_package_id, "default_package_name": pkg_name}
+
+
 # ---------------------------------------------------------------------------
 # Tag Packages — admin-managed subscription packages for BLE tags
 # ---------------------------------------------------------------------------
@@ -958,6 +1013,7 @@ class PackageCreate(BaseModel):
     name: str
     description: Optional[str] = None
     validity_days: int          # e.g. 80, 120, 300
+    auto_delete_days: Optional[int] = None  # days after expiry to auto-delete tag
     is_default: bool = False
 
 
@@ -965,6 +1021,7 @@ class PackageUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     validity_days: Optional[int] = None
+    auto_delete_days: Optional[int] = None
     is_default: Optional[bool] = None
     is_active: Optional[bool] = None
 
@@ -974,6 +1031,7 @@ class PackageOut(BaseModel):
     name: str
     description: Optional[str]
     validity_days: int
+    auto_delete_days: Optional[int] = None
     is_default: bool
     is_active: bool
     created_at: datetime
@@ -1005,6 +1063,7 @@ def create_package(data: PackageCreate, request: Request, db: Session = Depends(
         name=data.name.strip(),
         description=data.description,
         validity_days=data.validity_days,
+        auto_delete_days=data.auto_delete_days,
         is_default=data.is_default,
         is_active=True,
     )

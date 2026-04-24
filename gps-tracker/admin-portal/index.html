@@ -1206,6 +1206,7 @@
                                             <th>Company Name</th>
                                             <th>Slug</th>
                                             <th>Email Domain</th>
+                                            <th>Default Package</th>
                                             <th>Portal Users</th>
                                             <th>Status</th>
                                             <th>Created</th>
@@ -1213,7 +1214,7 @@
                                         </tr>
                                     </thead>
                                     <tbody id="ugTableBody">
-                                        <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
+                                        <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -1288,6 +1289,13 @@
                                             <input type="text" id="egDomain" class="form-input" placeholder="e.g. acmecorp.com" style="flex:1">
                                         </div>
                                     </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Default Tag Package</label>
+                                        <p style="font-size:13px;color:var(--text-secondary);margin:4px 0 10px">Automatically applied to all tags added or bulk-imported for this group. Tags cannot be added without a package.</p>
+                                        <select id="egPackage" class="form-input">
+                                            <option value="">— No default package —</option>
+                                        </select>
+                                    </div>
                                     <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px">
                                         <button type="button" class="btn btn-secondary" onclick="clearGroupDomain()">Clear Domain</button>
                                         <button type="button" class="btn btn-secondary" onclick="closeModal('editGroupModal')">Cancel</button>
@@ -1317,6 +1325,7 @@
                                             <th>Name</th>
                                             <th>Description</th>
                                             <th>Validity (days)</th>
+                                            <th>Auto-Delete (days)</th>
                                             <th>Default</th>
                                             <th>Status</th>
                                             <th>Created</th>
@@ -1324,7 +1333,7 @@
                                         </tr>
                                     </thead>
                                     <tbody id="pkgTableBody">
-                                        <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
+                                        <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -1351,6 +1360,10 @@
                                     <div class="form-group">
                                         <label class="form-label">Validity (days) *</label>
                                         <input type="number" id="pkgDays" class="form-input" placeholder="e.g. 80" min="1" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Auto-delete (days after expiry)</label>
+                                        <input type="number" id="pkgAutoDelete" class="form-input" placeholder="e.g. 30 — leave blank to never auto-delete" min="1">
                                     </div>
                                     <div class="form-group" style="display:flex;align-items:center;gap:10px">
                                         <input type="checkbox" id="pkgIsDefault" style="width:18px;height:18px;cursor:pointer">
@@ -2206,7 +2219,7 @@
         // USER GROUPS
         async function loadUsergroups() {
             const el = document.getElementById('ugTableBody');
-            el.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
+            el.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
             document.getElementById('ugLoadError').style.display = 'none';
             try {
                 const res = await fetch(`${API_URL}/api/admin/usergroups`, {
@@ -2216,7 +2229,7 @@
                 if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
                 const groups = await res.json();
                 if (groups.length === 0) {
-                    el.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-secondary)">No user groups yet. Click "Create Group" to add one.</td></tr>';
+                    el.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-secondary)">No user groups yet. Click "Create Group" to add one.</td></tr>';
                     return;
                 }
                 el.innerHTML = groups.map(g => {
@@ -2231,15 +2244,19 @@
                     const domainBadge = g.email_domain
                         ? `<code style="font-size:11px;opacity:.8">@${escHtml(g.email_domain)}</code>`
                         : '<span style="color:var(--text-secondary);font-size:11px">—</span>';
+                    const pkgBadge = g.default_package_name
+                        ? `<span class="badge badge-success" style="font-size:11px">${escHtml(g.default_package_name)}</span>`
+                        : '<span style="color:var(--text-secondary);font-size:11px">—</span>';
                     return `<tr>
                         <td><strong>${escHtml(g.name)}</strong></td>
                         <td><code>${escHtml(g.slug)}</code></td>
                         <td>${domainBadge}</td>
+                        <td>${pkgBadge}</td>
                         <td title="${portalUsers.map(u=>u.email).join(', ')}">${portalUsers.length}</td>
                         <td>${badge}</td>
                         <td>${date}</td>
                         <td style="display:flex;gap:6px">
-                            <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openEditGroupModal('${g.id}','${escHtml(g.name)}','${escHtml(g.email_domain||'')}')">Edit</button>
+                            <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openEditGroupModal('${g.id}','${escHtml(g.name)}','${escHtml(g.email_domain||'')}','${g.default_package_id||''}')">Edit</button>
                             ${deactivateBtn}
                         </td>
                     </tr>`;
@@ -2321,13 +2338,28 @@
             }
         }
 
-        function openEditGroupModal(groupId, groupName, emailDomain) {
+        function openEditGroupModal(groupId, groupName, emailDomain, defaultPackageId) {
             document.getElementById('egGroupId').value = groupId;
             document.getElementById('egGroupName').textContent = groupName;
             document.getElementById('egDomain').value = emailDomain || '';
             document.getElementById('egAlert').style.display = 'none';
             document.getElementById('egSubmitBtn').disabled = false;
             document.getElementById('egSubmitBtn').textContent = 'Save';
+            // Populate the package dropdown
+            fetch(`${API_URL}/api/admin/packages`, { headers: { 'Authorization': `Bearer ${authToken}` } })
+                .then(r => r.json())
+                .then(pkgs => {
+                    const sel = document.getElementById('egPackage');
+                    sel.innerHTML = '<option value="">— No default package —</option>';
+                    pkgs.filter(p => p.is_active).forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.id;
+                        opt.textContent = `${p.name} (${p.validity_days}d)`;
+                        if (p.id === defaultPackageId) opt.selected = true;
+                        sel.appendChild(opt);
+                    });
+                })
+                .catch(() => {});
             document.getElementById('editGroupModal').classList.add('active');
         }
 
@@ -2343,7 +2375,9 @@
             document.getElementById('egAlert').style.display = 'none';
             const groupId = document.getElementById('egGroupId').value;
             const domain  = document.getElementById('egDomain').value.trim();
+            const packageId = document.getElementById('egPackage').value || null;
             try {
+                // Save domain
                 const res = await fetch(`${API_URL}/api/admin/usergroups/${groupId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
@@ -2352,6 +2386,17 @@
                 if (res.status === 401) { handle401(); return; }
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Update failed');
+                // Save default package
+                const pkgRes = await fetch(`${API_URL}/api/admin/usergroups/${groupId}/package`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                    body: JSON.stringify({ package_id: packageId })
+                });
+                if (pkgRes.status === 401) { handle401(); return; }
+                if (!pkgRes.ok) {
+                    const pkgData = await pkgRes.json().catch(() => ({}));
+                    throw new Error(pkgData.detail || 'Failed to save package');
+                }
                 closeModal('editGroupModal');
                 loadUsergroups();
             } catch (err) {
@@ -2414,7 +2459,7 @@
         // ─────────────────────────────────────────────────────────────────────
         async function loadPackages() {
             const tb = document.getElementById('pkgTableBody');
-            tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
+            tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
             try {
                 const res = await fetch(`${API_URL}/api/admin/packages`, {
                     headers: { 'Authorization': `Bearer ${authToken}` }
@@ -2422,7 +2467,7 @@
                 if (res.status === 401) { handle401(); return; }
                 const pkgs = await res.json();
                 if (!pkgs.length) {
-                    tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-secondary)">No packages yet. Click "Create Package" to add one.</td></tr>';
+                    tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-secondary)">No packages yet. Click "Create Package" to add one.</td></tr>';
                     return;
                 }
                 tb.innerHTML = pkgs.map(p => `
@@ -2430,6 +2475,7 @@
                         <td><strong>${p.name}</strong></td>
                         <td>${p.description || '<span style="color:var(--text-secondary)">—</span>'}</td>
                         <td style="text-align:center">${p.validity_days}</td>
+                        <td style="text-align:center">${p.auto_delete_days != null ? p.auto_delete_days : '<span style="color:var(--text-secondary)">Never</span>'}</td>
                         <td style="text-align:center">${p.is_default ? '<span class="badge badge-success">Default</span>' : ''}</td>
                         <td style="text-align:center"><span class="badge ${p.is_active ? 'badge-success' : 'badge-danger'}">${p.is_active ? 'Active' : 'Inactive'}</span></td>
                         <td>${p.created_at ? new Date(p.created_at).toLocaleDateString() : '—'}</td>
@@ -2442,7 +2488,7 @@
                         </td>
                     </tr>`).join('');
             } catch (e) {
-                tb.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--danger)">Error: ${e.message}</td></tr>`;
+                tb.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--danger)">Error: ${e.message}</td></tr>`;
             }
         }
 
@@ -2453,6 +2499,7 @@
             document.getElementById('pkgName').value = '';
             document.getElementById('pkgDesc').value = '';
             document.getElementById('pkgDays').value = '';
+            document.getElementById('pkgAutoDelete').value = '';
             document.getElementById('pkgIsDefault').checked = false;
             document.getElementById('pkgModalAlert').style.display = 'none';
             openModal('createPackageModal');
@@ -2473,6 +2520,7 @@
                     document.getElementById('pkgName').value = p.name;
                     document.getElementById('pkgDesc').value = p.description || '';
                     document.getElementById('pkgDays').value = p.validity_days;
+                    document.getElementById('pkgAutoDelete').value = p.auto_delete_days != null ? p.auto_delete_days : '';
                     document.getElementById('pkgIsDefault').checked = p.is_default;
                     document.getElementById('pkgModalAlert').style.display = 'none';
                     openModal('createPackageModal');
@@ -2482,10 +2530,12 @@
         async function submitPackageForm(e) {
             e.preventDefault();
             const editId = document.getElementById('pkgEditId').value;
+            const autoDeleteRaw = document.getElementById('pkgAutoDelete').value.trim();
             const body = {
                 name: document.getElementById('pkgName').value.trim(),
                 description: document.getElementById('pkgDesc').value.trim() || null,
                 validity_days: parseInt(document.getElementById('pkgDays').value),
+                auto_delete_days: autoDeleteRaw ? parseInt(autoDeleteRaw) : null,
                 is_default: document.getElementById('pkgIsDefault').checked,
             };
             const url = editId ? `${API_URL}/api/admin/packages/${editId}` : `${API_URL}/api/admin/packages`;

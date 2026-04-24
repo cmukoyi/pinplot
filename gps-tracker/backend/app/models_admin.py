@@ -154,6 +154,7 @@ class TagPackage(Base):
     name          = Column(String(100), nullable=False, unique=True)
     description   = Column(Text, nullable=True)
     validity_days = Column(Integer, nullable=False)   # e.g. 80, 120, 300
+    auto_delete_days = Column(Integer, nullable=True)  # days after expiry to hard-delete tag; NULL = never
     is_default    = Column(Boolean, nullable=False, default=False)  # applied to self-registered tags
     is_active     = Column(Boolean, nullable=False, default=True)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())

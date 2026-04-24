@@ -23,6 +23,9 @@
     <!-- QR Code generation -->
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
+    <!-- SheetJS — Excel parsing for bulk upload -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
     <!-- New design system CSS -->
     <link rel="stylesheet" href="/customer/css/style.css" />
 
@@ -321,6 +324,9 @@
                     <button class="btn btn-primary btn-sm" onclick="openModal('singleTagModal')">
                         <i class="fa-solid fa-plus"></i> Add Tag
                     </button>
+                    <button class="btn btn-ghost btn-sm" onclick="openModal('bulkUploadModal')">
+                        <i class="fa-solid fa-file-arrow-up"></i> Bulk Upload
+                    </button>
                 </div>
 
                 <div class="view-body">
@@ -465,11 +471,12 @@
                                     <th>Email</th>
                                     <th>Role</th>
                                     <th>Status</th>
+                                    <th>Expiry</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="usersTableBody">
-                                <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--gray)">Loading…</td></tr>
+                                <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray)">Loading…</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -783,11 +790,71 @@
     </div>
 </div>
 
+<!-- ═══ BULK UPLOAD MODAL ═══ -->
+<div id="bulkUploadModal" class="modal">
+    <div class="modal-content" style="max-width:540px">
+        <div class="modal-header">
+            <span class="modal-title"><i class="fa-solid fa-file-arrow-up" style="margin-right:8px"></i>Bulk Upload Tags</span>
+            <button class="modal-close" onclick="closeModal('bulkUploadModal')">×</button>
+        </div>
+        <div id="bulkUploadAlert" class="alert" style="display:none"><span id="bulkUploadAlertText"></span></div>
+        <p style="color:var(--text-2);font-size:13px;margin-bottom:16px">Upload an Excel (.xlsx) or CSV file with your tags. Each row must have <strong>imei</strong> and <strong>owner_email</strong> columns.</p>
+        <div style="margin-bottom:16px">
+            <button class="btn btn-ghost btn-sm" onclick="downloadBulkTemplate()">
+                <i class="fa-solid fa-download"></i> Download Template
+            </button>
+        </div>
+        <div class="form-group">
+            <label>Select File *</label>
+            <input type="file" id="bulkFileInput" accept=".xlsx,.xls,.csv" style="display:block;width:100%;padding:8px;border:2px dashed var(--border);border-radius:8px;cursor:pointer;background:var(--surface-2);color:var(--text)">
+        </div>
+        <div id="bulkPreview" style="display:none">
+            <p style="font-size:13px;color:var(--text-2);margin-bottom:8px" id="bulkPreviewCount"></p>
+            <div style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
+                <table style="width:100%;font-size:12px;border-collapse:collapse" id="bulkPreviewTable">
+                    <thead style="background:var(--surface-2);position:sticky;top:0">
+                        <tr><th style="padding:6px 10px;text-align:left">IMEI</th><th style="padding:6px 10px;text-align:left">Owner Email</th><th style="padding:6px 10px;text-align:left">Description</th><th style="padding:6px 10px;text-align:left">Type</th></tr>
+                    </thead>
+                    <tbody id="bulkPreviewBody"></tbody>
+                </table>
+            </div>
+        </div>
+        <div id="bulkResults" style="display:none;margin-top:12px">
+            <p id="bulkResultSummary" style="font-size:13px;font-weight:600;margin-bottom:8px"></p>
+            <div id="bulkResultDetail" style="max-height:160px;overflow-y:auto;font-size:12px;color:var(--text-2)"></div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+            <button class="btn btn-secondary" onclick="closeModal('bulkUploadModal')">Close</button>
+            <button class="btn btn-primary" id="bulkUploadBtn" onclick="submitBulkUpload()" disabled>
+                <i class="fa-solid fa-upload"></i> Upload
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ USER EXPIRY MODAL ═══ -->
+<div id="userExpiryModal" class="modal">
+    <div class="modal-content" style="max-width:380px">
+        <div class="modal-header">
+            <span class="modal-title">Set User Expiry</span>
+            <button class="modal-close" onclick="closeModal('userExpiryModal')">×</button>
+        </div>
+        <p id="userExpiryName" style="color:var(--text-2);font-size:13px;margin-bottom:16px"></p>
+        <div class="form-group">
+            <label>Expiry Date</label>
+            <input type="date" id="userExpiryDate" style="width:100%">
+            <p style="font-size:12px;color:var(--text-3);margin-top:4px">The user will be automatically deactivated after this date. Leave blank to remove expiry.</p>
+        </div>
+        <input type="hidden" id="userExpiryUserId">
+        <div id="userExpiryAlert" class="alert" style="display:none"><span id="userExpiryAlertText"></span></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+            <button class="btn btn-secondary" onclick="closeModal('userExpiryModal')">Cancel</button>
+            <button class="btn btn-primary" id="userExpiryBtn" onclick="submitUserExpiry()">Save</button>
+        </div>
+    </div>
+</div>
+
 <script>
-// ══════════════════════════════════════════
-// Session
-// ══════════════════════════════════════════
-const TOKEN_KEY  = 'pp_portal_token';
 const USER_KEY   = 'pp_portal_user';
 const GROUP_KEY  = 'pp_portal_group';
 
@@ -2186,30 +2253,97 @@ function gpsSearchAndZoom() {
 // ══════════════════════════════════════════
 async function loadUsers() {
     const tb = document.getElementById('usersTableBody');
-    tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--gray)">Loading…</td></tr>';
+    tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--gray)">Loading…</td></tr>';
     try {
         const res = await fetch('/api/portal/users', { headers: authHeaders() });
         if (res.status === 401) { handleLogout(); return; }
         if (!res.ok) throw new Error('Failed to load users');
         const users = await res.json();
+        const me = getSession().user;
         if (!users.length) {
-            tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--gray)">No users yet.</td></tr>';
+            tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray)">No users yet.</td></tr>';
             return;
         }
         tb.innerHTML = users.map(u => {
-            const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || '—';
-            const role = u.is_group_admin ? '<span class="badge badge-info">Admin</span>' : '<span class="badge badge-success">User</span>';
+            const name   = [u.first_name, u.last_name].filter(Boolean).join(' ') || '—';
+            const role   = u.is_group_admin ? '<span class="badge badge-info">Admin</span>' : '<span class="badge badge-success">User</span>';
             const status = u.is_active ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Inactive</span>';
+            const expiry = u.expires_at ? new Date(u.expires_at).toLocaleDateString() : '—';
+            const isSelf = me && me.id === u.id;
+            const actions = isSelf ? '<span style="color:var(--text-3);font-size:12px">You</span>' : `
+                <button class="btn btn-ghost btn-sm" onclick="toggleUserActive('${esc(u.id)}',${u.is_active},'${esc(name)}')" title="${u.is_active ? 'Deactivate' : 'Activate'} user">
+                    <i class="fa-solid fa-${u.is_active ? 'user-slash' : 'user-check'}"></i> ${u.is_active ? 'Deactivate' : 'Activate'}
+                </button>
+                <button class="btn btn-ghost btn-sm" onclick="openUserExpiryModal('${esc(u.id)}','${esc(name)}','${esc(u.expires_at||'')}')">
+                    <i class="fa-solid fa-clock"></i> Expiry
+                </button>
+            `;
             return `<tr>
                 <td>${esc(name)}</td>
                 <td>${esc(u.email)}</td>
                 <td>${role}</td>
                 <td>${status}</td>
-                <td>—</td>
+                <td>${expiry}</td>
+                <td style="white-space:nowrap">${actions}</td>
             </tr>`;
         }).join('');
     } catch (err) {
-        tb.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--gray)">${esc(err.message)}</td></tr>`;
+        tb.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray)">${esc(err.message)}</td></tr>`;
+    }
+}
+
+async function toggleUserActive(userId, currentlyActive, name) {
+    const action = currentlyActive ? 'deactivate' : 'activate';
+    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} user "${name}"?`)) return;
+    try {
+        const res = await apiFetch(`/api/portal/users/${userId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ is_active: !currentlyActive }),
+        });
+        if (!res.ok) {
+            const d = await res.json().catch(() => ({}));
+            alert(d.detail || 'Failed to update user');
+            return;
+        }
+        loadUsers();
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+function openUserExpiryModal(userId, name, currentExpiry) {
+    document.getElementById('userExpiryUserId').value = userId;
+    document.getElementById('userExpiryName').textContent = `User: ${name}`;
+    document.getElementById('userExpiryDate').value = currentExpiry ? currentExpiry.slice(0, 10) : '';
+    document.getElementById('userExpiryAlert').style.display = 'none';
+    openModal('userExpiryModal');
+}
+
+async function submitUserExpiry() {
+    const userId  = document.getElementById('userExpiryUserId').value;
+    const dateVal = document.getElementById('userExpiryDate').value;
+    const btn     = document.getElementById('userExpiryBtn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    document.getElementById('userExpiryAlert').style.display = 'none';
+    try {
+        const body = dateVal ? { expires_at: new Date(dateVal + 'T23:59:59').toISOString() } : { expires_at: null };
+        const res  = await apiFetch(`/api/portal/users/${userId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+            const d = await res.json().catch(() => ({}));
+            throw new Error(d.detail || 'Failed to update expiry');
+        }
+        closeModal('userExpiryModal');
+        loadUsers();
+    } catch (err) {
+        const al = document.getElementById('userExpiryAlert');
+        document.getElementById('userExpiryAlertText').textContent = err.message;
+        al.className = 'alert alert-error';
+        al.style.display = 'flex';
+    } finally {
+        btn.disabled = false; btn.textContent = 'Save';
     }
 }
 
@@ -2999,9 +3133,120 @@ function amRenderCards() {
                 <button class="btn btn-ghost btn-sm" onclick="switchTab('history');setTimeout(()=>histPreselect('${esc(t.imei)}'),300)">
                     <i class="fa-solid fa-route"></i> History
                 </button>
+                <button class="btn btn-ghost btn-sm btn-danger-ghost" onclick="deleteTag('${esc(t.id)}','${esc(t.imei)}')">
+                    <i class="fa-solid fa-trash"></i> Delete
+                </button>
             </div>
         </div>`;
     }).join('')}</div>`;
+}
+
+async function deleteTag(tagId, imei) {
+    if (!confirm(`Delete tag ${imei}? This cannot be undone.`)) return;
+    try {
+        const res = await apiFetch(`/api/portal/tags/${tagId}`, { method: 'DELETE' });
+        if (res.status === 204 || res.ok) {
+            _lmTags = _lmTags.filter(t => t.id !== tagId);
+            amRenderCards();
+        } else {
+            const d = await res.json().catch(() => ({}));
+            alert(d.detail || 'Failed to delete tag');
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+// ══════════════════════════════════════════
+// BULK UPLOAD
+// ══════════════════════════════════════════
+let _bulkRows = [];
+
+function downloadBulkTemplate() {
+    const csv = 'imei,owner_email,description,tag_type\n867123456789012,user@company.com,Company Van 1,vehicle\n';
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'bulk_tag_template.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+document.addEventListener('change', function(e) {
+    if (e.target.id !== 'bulkFileInput') return;
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        try {
+            const wb = XLSX.read(evt.target.result, { type: 'array' });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+            _bulkRows = data.map(r => ({
+                imei:        String(r['imei'] || r['IMEI'] || '').trim(),
+                owner_email: String(r['owner_email'] || r['Owner Email'] || '').trim(),
+                description: String(r['description'] || r['Description'] || '').trim() || null,
+                tag_type:    String(r['tag_type'] || r['Tag Type'] || '').trim() || null,
+            })).filter(r => r.imei);
+            showBulkPreview();
+        } catch (err) {
+            document.getElementById('bulkUploadAlertText').textContent = 'Could not parse file: ' + err.message;
+            document.getElementById('bulkUploadAlert').className = 'alert alert-error';
+            document.getElementById('bulkUploadAlert').style.display = 'flex';
+        }
+    };
+    reader.readAsArrayBuffer(file);
+});
+
+function showBulkPreview() {
+    const preview = document.getElementById('bulkPreview');
+    const body    = document.getElementById('bulkPreviewBody');
+    document.getElementById('bulkPreviewCount').textContent = `${_bulkRows.length} row(s) detected`;
+    body.innerHTML = _bulkRows.slice(0, 20).map(r =>
+        `<tr style="border-top:1px solid var(--border)">
+            <td style="padding:5px 10px">${esc(r.imei)}</td>
+            <td style="padding:5px 10px">${esc(r.owner_email)}</td>
+            <td style="padding:5px 10px">${esc(r.description||'—')}</td>
+            <td style="padding:5px 10px">${esc(r.tag_type||'—')}</td>
+        </tr>`
+    ).join('');
+    preview.style.display = 'block';
+    document.getElementById('bulkResults').style.display = 'none';
+    document.getElementById('bulkUploadBtn').disabled = _bulkRows.length === 0;
+    document.getElementById('bulkUploadAlert').style.display = 'none';
+}
+
+async function submitBulkUpload() {
+    if (!_bulkRows.length) return;
+    const btn = document.getElementById('bulkUploadBtn');
+    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading…';
+    document.getElementById('bulkUploadAlert').style.display = 'none';
+    try {
+        const res = await apiFetch('/api/portal/tags/bulk', {
+            method: 'POST',
+            body: JSON.stringify(_bulkRows),
+        });
+        const results = await res.json();
+        if (!res.ok) throw new Error(results.detail || 'Upload failed');
+        const ok  = results.filter(r => r.success).length;
+        const bad = results.filter(r => !r.success);
+        document.getElementById('bulkResultSummary').textContent =
+            `${ok} tag(s) created successfully${bad.length ? `, ${bad.length} failed` : ''}.`;
+        document.getElementById('bulkResultDetail').innerHTML = bad.map(r =>
+            `<div style="margin-bottom:4px">❌ <strong>${esc(r.imei)}</strong>: ${esc(r.error)}</div>`
+        ).join('');
+        document.getElementById('bulkResults').style.display = 'block';
+        if (ok > 0) {
+            _lmTags = [];  // force reload
+            initAssetMgmt();
+        }
+    } catch (err) {
+        document.getElementById('bulkUploadAlertText').textContent = err.message;
+        document.getElementById('bulkUploadAlert').className = 'alert alert-error';
+        document.getElementById('bulkUploadAlert').style.display = 'flex';
+    } finally {
+        btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-upload"></i> Upload';
+    }
 }
 
 // ══════════════════════════════════════════

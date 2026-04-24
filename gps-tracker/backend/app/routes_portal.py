@@ -41,7 +41,9 @@ class PortalUserOut(BaseModel):
     email: str
     first_name: Optional[str]
     last_name: Optional[str]
+    is_active: bool
     is_group_admin: bool
+    expires_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -126,6 +128,13 @@ def portal_login(data: PortalLoginRequest, db: Session = Depends(get_db)):
     if not user or not verify_password(user.hashed_password, data.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Invalid email or password")
+
+    # Auto-deactivate if expiry has passed
+    if user.expires_at and user.expires_at < datetime.now(user.expires_at.tzinfo):
+        user.is_active = False
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="This account has expired")
 
     group = db.query(UserGroup).filter(
         UserGroup.id == user.usergroup_id,
@@ -223,6 +232,42 @@ def create_portal_user(
         portal_user=PortalUserOut.model_validate(new_user),
         temp_password=temp_password,
     )
+
+
+class PortalUserPatch(BaseModel):
+    is_active: Optional[bool] = None
+    expires_at: Optional[datetime] = None
+
+
+@router.patch("/users/{user_id}", response_model=PortalUserOut)
+def patch_portal_user(
+    user_id: UUID,
+    data: PortalUserPatch,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Update is_active and/or expires_at for a portal user (group admin only)."""
+    me = get_portal_user_from_request(request, db)
+    if not me.is_group_admin:
+        raise HTTPException(status_code=403, detail="Only group admins can modify users")
+
+    target = db.query(PortalUser).filter(
+        PortalUser.id == str(user_id),
+        PortalUser.usergroup_id == me.usergroup_id,
+    ).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found in your group")
+    if str(target.id) == str(me.id):
+        raise HTTPException(status_code=400, detail="You cannot modify your own account")
+
+    if data.is_active is not None:
+        target.is_active = data.is_active
+    if data.expires_at is not None:
+        target.expires_at = data.expires_at
+
+    db.commit()
+    db.refresh(target)
+    return PortalUserOut.model_validate(target)
 
 
 # ---------------------------------------------------------------------------
@@ -734,6 +779,104 @@ def delete_tags(data: PortalTagDelete, request: Request, db: Session = Depends(g
             db.delete(tag)
 
     db.commit()
+
+
+@router.delete("/tags/{tag_id}", status_code=204)
+def delete_tag_single(tag_id: str, request: Request, db: Session = Depends(get_db)):
+    """Permanently delete a single BLE tag by its ID (group admin only)."""
+    me = get_portal_user_from_request(request, db)
+    if not me.is_group_admin:
+        raise HTTPException(status_code=403, detail="Only group admins can delete tags")
+    group = _get_group_and_assert_domain(me, db)
+
+    tag = (
+        db.query(BLETag)
+        .join(User, User.id == BLETag.user_id)
+        .filter(BLETag.id == tag_id, User.email.ilike(f"%@{group.email_domain.lower()}"))
+        .first()
+    )
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found in your group")
+    db.delete(tag)
+    db.commit()
+
+
+class BulkTagRow(BaseModel):
+    imei: str
+    description: Optional[str] = None
+    tag_type: Optional[str] = None
+    owner_email: str
+
+
+class BulkTagResult(BaseModel):
+    imei: str
+    success: bool
+    error: Optional[str] = None
+
+
+@router.post("/tags/bulk", response_model=List[BulkTagResult])
+def bulk_create_tags(rows: List[BulkTagRow], request: Request, db: Session = Depends(get_db)):
+    """Create multiple BLE tags from a list (group admin only).
+    Each row must include imei and owner_email belonging to the group's domain.
+    The group's default_package_id is applied automatically; tags are rejected
+    if the group has no default package configured."""
+    import uuid as _uuid
+    me = get_portal_user_from_request(request, db)
+    if not me.is_group_admin:
+        raise HTTPException(status_code=403, detail="Only group admins can add tags")
+    group = _get_group_and_assert_domain(me, db)
+
+    # Require a default package on the group
+    if not group.default_package_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No default package configured for this group. "
+                   "Ask an admin to assign one before importing tags.",
+        )
+    pkg = db.query(TagPackage).filter(TagPackage.id == str(group.default_package_id), TagPackage.is_active == True).first()
+    if not pkg:
+        raise HTTPException(status_code=400, detail="The group's default package is no longer active")
+
+    now = datetime.utcnow()
+    expiry_date = now + timedelta(days=pkg.validity_days)
+
+    results: List[BulkTagResult] = []
+    for row in rows:
+        try:
+            imei = row.imei.strip()
+            if not imei:
+                results.append(BulkTagResult(imei=imei, success=False, error="IMEI is required"))
+                continue
+            if db.query(BLETag).filter(BLETag.imei == imei).first():
+                results.append(BulkTagResult(imei=imei, success=False, error="IMEI already exists"))
+                continue
+            owner_email = row.owner_email.strip().lower()
+            if not owner_email.endswith(f"@{group.email_domain.lower()}"):
+                results.append(BulkTagResult(imei=imei, success=False,
+                                             error=f"Email must be @{group.email_domain}"))
+                continue
+            owner = db.query(User).filter(User.email == owner_email).first()
+            if not owner:
+                results.append(BulkTagResult(imei=imei, success=False, error="Owner email not found"))
+                continue
+            tag = BLETag(
+                id=str(_uuid.uuid4()),
+                imei=imei,
+                description=row.description or None,
+                tag_type=row.tag_type or None,
+                user_id=str(owner.id),
+                is_active=True,
+                package_id=str(pkg.id),
+                expiry_date=expiry_date,
+            )
+            db.add(tag)
+            db.flush()
+            results.append(BulkTagResult(imei=imei, success=True))
+        except Exception as exc:
+            results.append(BulkTagResult(imei=row.imei, success=False, error=str(exc)))
+
+    db.commit()
+    return results
 
 
 # ---------------------------------------------------------------------------

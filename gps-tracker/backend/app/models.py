@@ -233,6 +233,7 @@ class UserGroup(Base):
     name         = Column(String(200), nullable=False, unique=True)
     slug         = Column(String(100), nullable=False, unique=True)  # URL-safe identifier
     email_domain = Column(String(255), nullable=True, index=True)   # e.g. "gmail.com" — auto-assigns mobile users
+    default_package_id = Column(String(36), ForeignKey("tag_packages.id"), nullable=True)  # auto-applied when adding tags
     is_active    = Column(Boolean, nullable=False, default=True)
     created_at   = Column(DateTime(timezone=True), server_default=func.now())
     updated_at   = Column(DateTime(timezone=True), onupdate=func.now())
@@ -286,6 +287,7 @@ class PortalUser(Base):
     last_name       = Column(String(100))
     is_active       = Column(Boolean, nullable=False, default=True)
     is_group_admin  = Column(Boolean, nullable=False, default=False)
+    expires_at      = Column(DateTime(timezone=True), nullable=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
 
