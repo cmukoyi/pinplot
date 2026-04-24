@@ -335,7 +335,7 @@
             </div>
 
             <!-- ═══ FLOORPLAN SKETCH TAB ═══ -->
-            <div id="tab-building" class="tab-content" style="padding:0;overflow:hidden;display:flex;flex-direction:column">
+            <div id="tab-building" class="tab-content" style="padding:0;overflow:hidden;flex-direction:column">
                 <iframe
                     id="sketchFrame"
                     src="sketch/index.html"
@@ -969,7 +969,10 @@ function switchTab(name) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     // Support both old .sidebar-link and new .nav-item patterns
     document.querySelectorAll('.sidebar-link, .nav-item').forEach(el => el.classList.remove('active'));
-    document.getElementById('tab-' + name).classList.add('active');
+    const activeTab = document.getElementById('tab-' + name);
+    activeTab.classList.add('active');
+    // Sketch tab needs flex layout to make the iframe fill the container
+    activeTab.style.display = (name === 'building') ? 'flex' : '';
     const btn = document.querySelector(`.nav-item[data-tab="${name}"], .sidebar-link[onclick*="'${name}'"]`);
     if (btn) btn.classList.add('active');
     const pageTitleEl = document.getElementById('pageTitle');
