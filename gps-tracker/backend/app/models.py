@@ -241,6 +241,32 @@ class UserGroup(Base):
                                 cascade="all, delete-orphan")
     buildings    = relationship("Building", back_populates="usergroup",
                                 cascade="all, delete-orphan")
+    tag_categories = relationship("TagCategory", back_populates="usergroup",
+                                  cascade="all, delete-orphan")
+
+
+class TagCategory(Base):
+    """A user-defined asset category scoped to a UserGroup.
+
+    Admins create categories (e.g. 'Vehicles', 'Equipment', 'Containers') from
+    the Settings tab.  The category name is stored on BLETag.attributes as
+    {'category': {'value': '<name>', ...}} so no schema migration is needed
+    on the ble_tags table itself.
+    """
+    __tablename__ = "tag_categories"
+
+    id           = get_uuid_column()
+    usergroup_id = get_uuid_fk("user_groups.id")
+    name         = Column(String(100), nullable=False)
+    icon         = Column(String(50), nullable=True)   # font-awesome icon name, e.g. 'fa-car'
+    color        = Column(String(20), nullable=True)   # hex color, e.g. '#3b82f6'
+    is_active    = Column(Boolean, nullable=False, default=True)
+    created_at   = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at   = Column(DateTime(timezone=True), onupdate=func.now())
+
+    usergroup = relationship("UserGroup", back_populates="tag_categories")
+
+
 
 
 class PortalUser(Base):

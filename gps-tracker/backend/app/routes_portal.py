@@ -15,7 +15,7 @@ import os
 import logging
 
 from app.database import get_db
-from app.models import UserGroup, PortalUser, Building, Floor, IndoorGateway, BLETag, User
+from app.models import UserGroup, PortalUser, Building, Floor, IndoorGateway, BLETag, User, TagCategory
 from app.models_admin import TagPackage
 from app.admin_auth import hash_password, verify_password
 
@@ -553,6 +553,7 @@ class PortalTagCreate(BaseModel):
     tag_type: Optional[str] = "scope"
     user_id: UUID
     package_id: UUID  # mandatory — must select a package when adding a tag
+    category: Optional[str] = None  # category name to store in attributes
 
 
 class PortalTagAssign(BaseModel):
@@ -608,6 +609,7 @@ class PortalTagUpdate(BaseModel):
     description: Optional[str] = None
     tag_type: Optional[str] = None
     user_id: Optional[str] = None
+    category: Optional[str] = None  # category name; empty string clears it
 
 
 @router.put("/tags/{tag_id}", response_model=PortalTagOut)
@@ -635,6 +637,13 @@ def update_tag(tag_id: str, data: PortalTagUpdate, request: Request, db: Session
         target_user = db.query(User).filter(User.id == str(data.user_id)).first()
         _assert_user_in_domain(target_user, group.email_domain)
         tag.user_id = str(data.user_id)
+    if data.category is not None:
+        attrs = dict(tag.attributes or {})
+        if data.category:
+            attrs['category'] = {'value': data.category}
+        else:
+            attrs.pop('category', None)
+        tag.attributes = attrs
 
     db.commit()
     db.refresh(tag)
@@ -670,6 +679,7 @@ def create_tag(data: PortalTagCreate, request: Request, db: Session = Depends(ge
         is_active=True,
         package_id=str(data.package_id),
         expiry_date=now + timedelta(days=pkg.validity_days),
+        attributes={'category': {'value': data.category}} if data.category else None,
     )
     db.add(tag)
     db.commit()
@@ -916,3 +926,113 @@ async def portal_get_trip_events(
     print(f"✅ MZone trip events: {len(events)} waypoints")
     return {"success": True, "count": len(events), "events": events}
 
+
+# ---------------------------------------------------------------------------
+# Tag Categories — group-scoped user-defined categories
+# ---------------------------------------------------------------------------
+
+class CategoryOut(BaseModel):
+    id: str
+    name: str
+    icon: Optional[str] = None
+    color: Optional[str] = None
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class CategoryCreate(BaseModel):
+    name: str
+    icon: Optional[str] = None
+    color: Optional[str] = None
+
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    icon: Optional[str] = None
+    color: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+@router.get("/categories", response_model=List[CategoryOut])
+def list_categories(request: Request, db: Session = Depends(get_db)):
+    """Return all active categories for the caller's user-group."""
+    me = get_portal_user_from_request(request, db)
+    return (
+        db.query(TagCategory)
+        .filter(TagCategory.usergroup_id == str(me.usergroup_id), TagCategory.is_active == True)
+        .order_by(TagCategory.name)
+        .all()
+    )
+
+
+@router.post("/categories", response_model=CategoryOut, status_code=201)
+def create_category(data: CategoryCreate, request: Request, db: Session = Depends(get_db)):
+    """Create a new category (group admin only)."""
+    me = get_portal_user_from_request(request, db)
+    if not me.is_group_admin:
+        raise HTTPException(status_code=403, detail="Only group admins can manage categories")
+    name = data.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Category name is required")
+    exists = db.query(TagCategory).filter(
+        TagCategory.usergroup_id == str(me.usergroup_id),
+        TagCategory.name.ilike(name),
+    ).first()
+    if exists:
+        raise HTTPException(status_code=409, detail=f"Category '{name}' already exists")
+    cat = TagCategory(
+        usergroup_id=str(me.usergroup_id),
+        name=name,
+        icon=data.icon,
+        color=data.color,
+    )
+    db.add(cat)
+    db.commit()
+    db.refresh(cat)
+    return cat
+
+
+@router.put("/categories/{cat_id}", response_model=CategoryOut)
+def update_category(cat_id: str, data: CategoryUpdate, request: Request, db: Session = Depends(get_db)):
+    """Rename or deactivate a category (group admin only)."""
+    me = get_portal_user_from_request(request, db)
+    if not me.is_group_admin:
+        raise HTTPException(status_code=403, detail="Only group admins can manage categories")
+    cat = db.query(TagCategory).filter(
+        TagCategory.id == cat_id,
+        TagCategory.usergroup_id == str(me.usergroup_id),
+    ).first()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Category not found")
+    if data.name is not None:
+        name = data.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Category name cannot be empty")
+        cat.name = name
+    if data.icon is not None:
+        cat.icon = data.icon or None
+    if data.color is not None:
+        cat.color = data.color or None
+    if data.is_active is not None:
+        cat.is_active = data.is_active
+    db.commit()
+    db.refresh(cat)
+    return cat
+
+
+@router.delete("/categories/{cat_id}", status_code=204)
+def delete_category(cat_id: str, request: Request, db: Session = Depends(get_db)):
+    """Soft-delete a category by marking it inactive (group admin only)."""
+    me = get_portal_user_from_request(request, db)
+    if not me.is_group_admin:
+        raise HTTPException(status_code=403, detail="Only group admins can manage categories")
+    cat = db.query(TagCategory).filter(
+        TagCategory.id == cat_id,
+        TagCategory.usergroup_id == str(me.usergroup_id),
+    ).first()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Category not found")
+    cat.is_active = False
+    db.commit()

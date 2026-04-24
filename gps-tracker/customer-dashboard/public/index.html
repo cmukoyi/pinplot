@@ -126,9 +126,19 @@
                 <span class="nav-label">User Accounts</span>
             </button>
 
+            <button class="nav-item" data-tab="qr" onclick="switchTab('qr')">
+                <span class="nav-icon"><i class="fa-solid fa-qrcode"></i></span>
+                <span class="nav-label">QR / NFC Tags</span>
+            </button>
+
             <button class="nav-item" data-tab="building" onclick="switchTab('building')">
                 <span class="nav-icon"><i class="fa-solid fa-layer-group"></i></span>
-                <span class="nav-label">Floor Plan</span>
+                <span class="nav-label">Floorplan Sketch</span>
+            </button>
+
+            <button class="nav-item" data-tab="settings" onclick="switchTab('settings')">
+                <span class="nav-icon"><i class="fa-solid fa-gear"></i></span>
+                <span class="nav-label">Settings</span>
             </button>
         </div>
 
@@ -402,6 +412,7 @@
 
             <!-- ═══ SETTINGS TAB ═══ -->
             <div id="tab-settings" class="tab-content">
+                <!-- ─── Group Settings card ─── -->
                 <div class="card">
                     <div class="card-header">
                         <span class="card-title">Group Settings</span>
@@ -420,6 +431,21 @@
                             <button class="btn btn-primary" onclick="saveDomainSetting()">Save</button>
                             <button class="btn btn-secondary" onclick="clearDomainSetting()">Clear Domain</button>
                         </div>
+                    </div>
+                </div>
+
+                <!-- ─── Asset Categories card ─── -->
+                <div class="card" style="margin-top:20px">
+                    <div class="card-header">
+                        <span class="card-title"><i class="fa-solid fa-layer-group" style="color:var(--primary);margin-right:8px"></i>Asset Categories</span>
+                        <button class="btn btn-primary btn-small" onclick="openAddCategoryModal()">
+                            <i class="fa-solid fa-plus"></i> Add Category
+                        </button>
+                    </div>
+                    <p style="font-size:13px;color:var(--gray);margin:0 0 16px">Define categories (e.g. Vehicles, Equipment, Containers) that can be assigned to assets when adding or editing tags.</p>
+                    <div id="categoriesAlert" class="alert" style="display:none"><span id="categoriesAlertText"></span></div>
+                    <div id="categoriesList">
+                        <div style="padding:32px;text-align:center;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>
                     </div>
                 </div>
             </div>
@@ -658,6 +684,12 @@
                     <option value="tracksolid">TrackSolid</option>
                 </select>
             </div>
+            <div id="tagMgmtCategoryGroup" class="form-group">
+                <label>Category</label>
+                <select id="tagMgmtCategory">
+                    <option value="">— None —</option>
+                </select>
+            </div>
             <div class="form-group">
                 <label>Assign to User *</label>
                 <select id="tagMgmtUser" required>
@@ -716,6 +748,39 @@
             <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
                 <button type="button" class="btn btn-secondary" onclick="closeModal('addUserModal')">Cancel</button>
                 <button type="submit" class="btn btn-primary" id="addUserBtn">Create User</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ═══ CATEGORY MODAL ═══ -->
+<div id="categoryModal" class="modal">
+    <div class="modal-content" style="max-width:440px">
+        <div class="modal-header">
+            <span class="modal-title" id="categoryModalTitle">Add Category</span>
+            <button class="modal-close" onclick="closeModal('categoryModal')">×</button>
+        </div>
+        <div id="categoryModalAlert" class="alert" style="display:none"><span id="categoryModalAlertText"></span></div>
+        <form id="categoryForm" onsubmit="submitCategoryForm(event)">
+            <div class="form-group">
+                <label>Category Name *</label>
+                <input type="text" id="catName" placeholder="e.g. Vehicles" required maxlength="100">
+            </div>
+            <div style="display:flex;gap:12px">
+                <div class="form-group" style="flex:1">
+                    <label>Icon <span style="color:var(--gray);font-weight:400">(FA class)</span></label>
+                    <input type="text" id="catIcon" placeholder="fa-car">
+                    <p style="font-size:12px;color:var(--gray);margin-top:4px">e.g. fa-car, fa-truck, fa-box, fa-person</p>
+                </div>
+                <div class="form-group" style="flex:0 0 100px">
+                    <label>Colour</label>
+                    <input type="color" id="catColor" value="#3b82f6" style="height:40px;width:100%;padding:4px;border-radius:8px;border:2px solid var(--border);cursor:pointer">
+                </div>
+            </div>
+            <input type="hidden" id="catId">
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('categoryModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="catSubmitBtn">Add Category</button>
             </div>
         </form>
     </div>
@@ -817,7 +882,7 @@ function showDashboard(user, group) {
 // ══════════════════════════════════════════
 // Tab switching
 // ══════════════════════════════════════════
-const TAB_TITLES = { livemap: 'Live Map', assets: 'Asset List', history: 'Movement History', 'asset-mgmt': 'Asset Management', users: 'User Accounts', building: 'Floor Plan', settings: 'Settings', qr: 'QR Codes' };
+const TAB_TITLES = { livemap: 'Live Map', assets: 'Asset List', history: 'Movement History', 'asset-mgmt': 'Asset Management', users: 'User Accounts', building: 'Floorplan Sketch', settings: 'Settings', qr: 'QR / NFC Tags' };
 let _mapInitialized = false;
 
 function switchTab(name) {
@@ -1072,11 +1137,13 @@ async function openAddTagModal() {
     document.getElementById('tagMgmtImeiGroup').style.display = '';
     document.getElementById('tagMgmtDescGroup').style.display = '';
     document.getElementById('tagMgmtTypeGroup').style.display = '';
+    document.getElementById('tagMgmtCategoryGroup').style.display = '';
     document.getElementById('tagMgmtPackageGroup').style.display = '';
     document.getElementById('tagMgmtPackage').setAttribute('required', '');
     document.getElementById('tagMgmtAlert').style.display = 'none';
     openModal('tagMgmtModal');
-    await Promise.all([_loadMobileUsersIntoSelect(), _loadPackagesIntoSelect()]);
+    await Promise.all([_loadMobileUsersIntoSelect(), _loadPackagesIntoSelect(), _loadCategoriesIntoSelect()]);
+    document.getElementById('tagMgmtCategory').value = '';
 }
 
 async function openAssignTagModal(tagId, currentOwner) {
@@ -1124,15 +1191,24 @@ async function openTagMgmtModal(mode, imei) {
     document.getElementById('tagMgmtType').value = tag.tag_type || 'scope';
     document.getElementById('tagMgmtTypeGroup').style.display = '';
 
+    // Category
+    document.getElementById('tagMgmtCategoryGroup').style.display = '';
+
     // Package — hide in edit mode (package changes require a separate flow)
     document.getElementById('tagMgmtPackageGroup').style.display = 'none';
     document.getElementById('tagMgmtPackage').removeAttribute('required');
 
     openModal('tagMgmtModal');
-    await _loadMobileUsersIntoSelect();
+    await Promise.all([_loadMobileUsersIntoSelect(), _loadCategoriesIntoSelect()]);
     if (_mobileUsersCache) {
         const match = _mobileUsersCache.find(u => u.email === tag.owner_email);
         if (match) document.getElementById('tagMgmtUser').value = String(match.id);
+    }
+    // Pre-select existing category from tag attributes
+    const existingCat = tag.attributes?.category?.value || '';
+    if (existingCat) {
+        const catOpt = _categoriesCache.find(c => c.name === existingCat);
+        if (catOpt) document.getElementById('tagMgmtCategory').value = catOpt.id;
     }
 }
 
@@ -1146,10 +1222,14 @@ async function submitTagForm(e) {
     btn.disabled = true;
     const alertEl = document.getElementById('tagMgmtAlert');
     alertEl.style.display = 'none';
+    // Resolve selected category name
+    const catId = document.getElementById('tagMgmtCategory')?.value || '';
+    const catObj = catId ? _categoriesCache.find(c => c.id === catId) : null;
+    const categoryName = catObj ? catObj.name : null;
     try {
         let res;
         if (tagId && mode === 'edit') {
-            // Full edit — description, tag_type, user reassignment
+            // Full edit — description, tag_type, category, user reassignment
             res = await apiFetch(`/api/portal/tags/${tagId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -1157,6 +1237,7 @@ async function submitTagForm(e) {
                     description: document.getElementById('tagMgmtDesc').value.trim() || null,
                     tag_type: document.getElementById('tagMgmtType').value,
                     user_id: userId,
+                    category: categoryName,
                 }),
             });
         } else if (tagId) {
@@ -1181,6 +1262,7 @@ async function submitTagForm(e) {
                     tag_type: document.getElementById('tagMgmtType').value,
                     user_id: userId,
                     package_id: packageId,
+                    category: categoryName,
                 }),
             });
         }
@@ -1215,6 +1297,7 @@ async function loadSettings() {
     } catch (err) {
         showTabAlert('settings', 'Failed to load settings: ' + err.message, 'error');
     }
+    loadCategories();
 }
 
 async function saveDomainSetting() {
@@ -1236,6 +1319,138 @@ async function clearDomainSetting() {
     document.getElementById('emailDomainInput').value = '';
     await saveDomainSetting();
 }
+
+// ══════════════════════════════════════════
+// ASSET CATEGORIES
+// ══════════════════════════════════════════
+let _categoriesCache = [];
+
+async function loadCategories() {
+    const el = document.getElementById('categoriesList');
+    if (!el) return;
+    el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
+    try {
+        const res = await apiFetch('/api/portal/categories');
+        if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+        _categoriesCache = await res.json();
+    } catch (err) {
+        el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--danger)">${esc(err.message)}</div>`;
+        return;
+    }
+    renderCategoriesList();
+}
+
+function renderCategoriesList() {
+    const el = document.getElementById('categoriesList');
+    if (!el) return;
+    if (!_categoriesCache.length) {
+        el.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">
+            <i class="fa-solid fa-layer-group" style="font-size:40px;opacity:.2;display:block;margin-bottom:12px"></i>
+            <p>No categories yet. Click <strong>Add Category</strong> to get started.</p></div>`;
+        return;
+    }
+    el.innerHTML = `<div class="cat-grid">${_categoriesCache.map(c => {
+        const color = c.color || '#6b7280';
+        const icon  = c.icon  || 'fa-tag';
+        return `<div class="cat-chip" style="--cat-color:${esc(color)}">
+            <span class="cat-chip-icon" style="background:${esc(color)}20;color:${esc(color)}">
+                <i class="fa-solid ${esc(icon)}"></i>
+            </span>
+            <span class="cat-chip-name">${esc(c.name)}</span>
+            <div class="cat-chip-actions">
+                <button class="btn-icon-xs" title="Edit" onclick="openEditCategoryModal('${esc(c.id)}')"><i class="fa-solid fa-pen"></i></button>
+                <button class="btn-icon-xs danger" title="Delete" onclick="deleteCategory('${esc(c.id)}','${esc(c.name)}')"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        </div>`;
+    }).join('')}</div>`;
+}
+
+function openAddCategoryModal() {
+    document.getElementById('categoryModalTitle').textContent = 'Add Category';
+    document.getElementById('catSubmitBtn').textContent = 'Add Category';
+    document.getElementById('catId').value = '';
+    document.getElementById('catName').value = '';
+    document.getElementById('catIcon').value = '';
+    document.getElementById('catColor').value = '#3b82f6';
+    document.getElementById('categoryModalAlert').style.display = 'none';
+    openModal('categoryModal');
+}
+
+function openEditCategoryModal(id) {
+    const cat = _categoriesCache.find(c => c.id === id);
+    if (!cat) return;
+    document.getElementById('categoryModalTitle').textContent = 'Edit Category';
+    document.getElementById('catSubmitBtn').textContent = 'Save Changes';
+    document.getElementById('catId').value = cat.id;
+    document.getElementById('catName').value = cat.name;
+    document.getElementById('catIcon').value = cat.icon || '';
+    document.getElementById('catColor').value = cat.color || '#3b82f6';
+    document.getElementById('categoryModalAlert').style.display = 'none';
+    openModal('categoryModal');
+}
+
+async function submitCategoryForm(e) {
+    e.preventDefault();
+    const id    = document.getElementById('catId').value;
+    const name  = document.getElementById('catName').value.trim();
+    const icon  = document.getElementById('catIcon').value.trim() || null;
+    const color = document.getElementById('catColor').value || null;
+    const btn   = document.getElementById('catSubmitBtn');
+    const alertEl = document.getElementById('categoryModalAlert');
+    alertEl.style.display = 'none';
+    btn.disabled = true;
+    try {
+        const url    = id ? `/api/portal/categories/${id}` : '/api/portal/categories';
+        const method = id ? 'PUT' : 'POST';
+        const res = await apiFetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, icon, color }),
+        });
+        if (!res.ok) throw new Error((await res.json()).detail || 'Request failed');
+        closeModal('categoryModal');
+        await loadCategories();
+        await _loadCategoriesIntoSelect();  // refresh tag modal dropdown
+    } catch (err) {
+        document.getElementById('categoryModalAlertText').textContent = err.message;
+        alertEl.className = 'alert alert-error';
+        alertEl.style.display = 'flex';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function deleteCategory(id, name) {
+    if (!confirm(`Delete category "${name}"? Tags assigned to this category will not be affected.`)) return;
+    try {
+        const res = await apiFetch(`/api/portal/categories/${id}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 204) throw new Error((await res.json()).detail || 'Delete failed');
+        _categoriesCache = _categoriesCache.filter(c => c.id !== id);
+        renderCategoriesList();
+        await _loadCategoriesIntoSelect();
+    } catch (err) {
+        showTabAlert('settings', err.message, 'error');
+    }
+}
+
+async function _loadCategoriesIntoSelect() {
+    const sel = document.getElementById('tagMgmtCategory');
+    if (!sel) return;
+    try {
+        if (!_categoriesCache.length) {
+            const res = await apiFetch('/api/portal/categories');
+            if (res.ok) _categoriesCache = await res.json();
+        }
+        const current = sel.value;
+        sel.innerHTML = '<option value="">— None —</option>' +
+            _categoriesCache.map(c =>
+                `<option value="${esc(c.id)}">${esc(c.name)}</option>`
+            ).join('');
+        if (current) sel.value = current;
+    } catch (_) { /* non-critical */ }
+}
+
+
 
 // ══════════════════════════════════════════
 // BUILDING — API-driven multi-floor Pareto Anywhere / Leaflet indoor tracker
