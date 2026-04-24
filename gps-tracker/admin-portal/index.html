@@ -1143,6 +1143,7 @@
                                         <tr>
                                             <th>Company Name</th>
                                             <th>Slug</th>
+                                            <th>Email Domain</th>
                                             <th>Portal Users</th>
                                             <th>Status</th>
                                             <th>Created</th>
@@ -1150,7 +1151,7 @@
                                         </tr>
                                     </thead>
                                     <tbody id="ugTableBody">
-                                        <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
+                                        <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -1206,6 +1207,33 @@
                     </div>
                     </div>
                     </div>
+
+                        <!-- Edit Group Modal -->
+                        <div id="editGroupModal" class="modal">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h3 class="modal-title">Edit Group — <span id="egGroupName"></span></h3>
+                                    <button class="modal-close" onclick="closeModal('editGroupModal')">×</button>
+                                </div>
+                                <div id="egAlert" class="alert" style="display:none"><span id="egAlertText"></span></div>
+                                <form id="editGroupForm" onsubmit="submitEditGroup(event)">
+                                    <input type="hidden" id="egGroupId">
+                                    <div class="form-group">
+                                        <label class="form-label">Email Domain Auto-Assignment</label>
+                                        <p style="font-size:13px;color:var(--text-secondary);margin:4px 0 10px">All mobile-app users who register with an email matching this domain will automatically have their tags visible in this group's portal. Example: <code>acmecorp.com</code></p>
+                                        <div style="display:flex;gap:8px;align-items:center">
+                                            <span style="font-size:14px;color:var(--text-secondary)">@</span>
+                                            <input type="text" id="egDomain" class="form-input" placeholder="e.g. acmecorp.com" style="flex:1">
+                                        </div>
+                                    </div>
+                                    <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px">
+                                        <button type="button" class="btn btn-secondary" onclick="clearGroupDomain()">Clear Domain</button>
+                                        <button type="button" class="btn btn-secondary" onclick="closeModal('editGroupModal')">Cancel</button>
+                                        <button type="submit" class="btn btn-primary" id="egSubmitBtn">Save</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
 
                     <!-- ═══════════════════════════════════════════════════ -->
                     <!-- PACKAGES TAB                                        -->
@@ -2112,7 +2140,7 @@
                 if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
                 const groups = await res.json();
                 if (groups.length === 0) {
-                    el.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">No user groups yet. Click "Create Group" to add one.</td></tr>';
+                    el.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-secondary)">No user groups yet. Click "Create Group" to add one.</td></tr>';
                     return;
                 }
                 el.innerHTML = groups.map(g => {
@@ -2124,14 +2152,20 @@
                         ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="deactivateGroup('${g.id}','${escHtml(g.name)}')">Deactivate</button>`
                         : '';
                     const portalUsers = g.portal_users || [];
-                    const userList = portalUsers.map(u => u.email).join('<br>') || '<em>none</em>';
+                    const domainBadge = g.email_domain
+                        ? `<code style="font-size:11px;opacity:.8">@${escHtml(g.email_domain)}</code>`
+                        : '<span style="color:var(--text-secondary);font-size:11px">—</span>';
                     return `<tr>
                         <td><strong>${escHtml(g.name)}</strong></td>
                         <td><code>${escHtml(g.slug)}</code></td>
+                        <td>${domainBadge}</td>
                         <td title="${portalUsers.map(u=>u.email).join(', ')}">${portalUsers.length}</td>
                         <td>${badge}</td>
                         <td>${date}</td>
-                        <td>${deactivateBtn}</td>
+                        <td style="display:flex;gap:6px">
+                            <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openEditGroupModal('${g.id}','${escHtml(g.name)}','${escHtml(g.email_domain||'')}')">Edit</button>
+                            ${deactivateBtn}
+                        </td>
                     </tr>`;
                 }).join('');
             } catch (err) {
@@ -2208,6 +2242,49 @@
                 loadUsergroups();
             } catch (err) {
                 alert('Error: ' + err.message);
+            }
+        }
+
+        function openEditGroupModal(groupId, groupName, emailDomain) {
+            document.getElementById('egGroupId').value = groupId;
+            document.getElementById('egGroupName').textContent = groupName;
+            document.getElementById('egDomain').value = emailDomain || '';
+            document.getElementById('egAlert').style.display = 'none';
+            document.getElementById('egSubmitBtn').disabled = false;
+            document.getElementById('egSubmitBtn').textContent = 'Save';
+            document.getElementById('editGroupModal').classList.add('active');
+        }
+
+        function clearGroupDomain() {
+            document.getElementById('egDomain').value = '';
+        }
+
+        async function submitEditGroup(e) {
+            e.preventDefault();
+            const btn = document.getElementById('egSubmitBtn');
+            btn.disabled = true;
+            btn.textContent = 'Saving…';
+            document.getElementById('egAlert').style.display = 'none';
+            const groupId = document.getElementById('egGroupId').value;
+            const domain  = document.getElementById('egDomain').value.trim();
+            try {
+                const res = await fetch(`${API_URL}/api/admin/usergroups/${groupId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                    body: JSON.stringify({ email_domain: domain })
+                });
+                if (res.status === 401) { handle401(); return; }
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Update failed');
+                closeModal('editGroupModal');
+                loadUsergroups();
+            } catch (err) {
+                const al = document.getElementById('egAlert');
+                document.getElementById('egAlertText').textContent = err.message;
+                al.className = 'alert alert-error';
+                al.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Save';
             }
         }
 

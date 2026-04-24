@@ -783,6 +783,7 @@ class UserGroupOut(BaseModel):
     name: str
     slug: str
     is_active: bool
+    email_domain: Optional[str] = None
     created_at: Optional[datetime] = None
     portal_users: List[PortalUserOut] = []
 
@@ -910,6 +911,40 @@ def deactivate_usergroup(
         pu.is_active = False
     db.commit()
     return {"detail": "User group deactivated"}
+
+
+class UserGroupUpdate(BaseModel):
+    email_domain: Optional[str] = None   # empty string clears it
+
+
+@router.put("/usergroups/{group_id}")
+def update_usergroup(
+    group_id: str,
+    data: UserGroupUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Update UserGroup settings (manager+). Currently supports email_domain."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires manager role")
+    group = db.query(UserGroup).filter(UserGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="User group not found")
+    if data.email_domain is not None:
+        domain = data.email_domain.strip().lower().lstrip("@") or None
+        # Ensure no other group claims this domain
+        if domain:
+            conflict = (
+                db.query(UserGroup)
+                .filter(UserGroup.email_domain == domain, UserGroup.id != group_id)
+                .first()
+            )
+            if conflict:
+                raise HTTPException(status_code=409, detail=f"Domain '{domain}' is already used by another group")
+        group.email_domain = domain
+    db.commit()
+    return {"id": str(group.id), "name": group.name, "email_domain": group.email_domain}
 
 
 # ---------------------------------------------------------------------------
