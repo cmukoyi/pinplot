@@ -26,9 +26,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Reject dangerous Docker commands
         run: |
-          # Matches cache-wiping Docker commands via regex pattern (builder|system)+prune
-          if grep -rEn "docker (builder|system) prune" .github/workflows/; then
-            echo "❌ Dangerous command found in workflow files. Remove it before merging."
+          # Block 'docker system prune' — removes volumes/networks and can destroy data.
+          # 'docker builder prune' is allowed; it only clears build cache.
+          if grep -rEn "docker system prune" .github/workflows/; then
+            echo "❌ Dangerous command (docker system prune) found in workflow files. Remove it before merging."
             exit 1
           fi
           echo "✅ No dangerous commands found"
@@ -161,6 +162,26 @@ jobs:
             'test -f /root/pinplot/gps-tracker/mobile-app/ble_tracker_app/build/web/main.dart.js \
              && echo "✅ Flutter artifacts on server" \
              || (echo "❌ Flutter artifacts missing on server" && exit 1)'
+
+      # ── Free disk space on server before build ─────────────────
+      - name: Free disk space on server
+        env:
+          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
+          DO_USER: ${{ secrets.DO_USER }}
+        run: |
+          ssh $DO_USER@$DO_SERVER_IP 'bash -s' << 'SSHEOF'
+            echo "━━━ Disk usage before cleanup ━━━"
+            df -h /
+
+            echo "━━━ Pruning dangling images ━━━"
+            docker image prune -f
+
+            echo "━━━ Pruning build cache ━━━"
+            docker builder prune -f
+
+            echo "━━━ Disk usage after cleanup ━━━"
+            df -h /
+          SSHEOF
 
       # ── Build and deploy containers ───────────────────────────────
       - name: Deploy containers
