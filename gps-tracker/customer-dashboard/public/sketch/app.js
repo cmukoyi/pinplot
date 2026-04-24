@@ -1148,11 +1148,21 @@ document.getElementById('snapToggle').addEventListener('change', e => {
 });
 
 // ─── Theme Toggle ─────────────────────────────────────────────────────────────
-document.getElementById('themeToggle').addEventListener('click', () => {
-  const html = document.documentElement;
-  html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
-  render();
-});
+// When integrated in the portal the #themeToggle button is removed; guard
+// against null.  If the portal's toggleTheme() is available (integrated mode)
+// delegate to it so localStorage is kept in sync.
+const _themeToggleBtn = document.getElementById('themeToggle');
+if (_themeToggleBtn) {
+  _themeToggleBtn.addEventListener('click', () => {
+    if (typeof toggleTheme === 'function') {
+      toggleTheme(); // portal's function — also persists to localStorage
+    } else {
+      const html = document.documentElement;
+      html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    }
+    render();
+  });
+}
 
 // ─── Overlay Image ────────────────────────────────────────────────────────────
 document.getElementById('overlayOpacity').addEventListener('input', e => {
