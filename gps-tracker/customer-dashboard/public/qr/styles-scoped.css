@@ -46,16 +46,16 @@ html[data-theme="light"] #qr-root {
 #qr-root {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   color: var(--qrg-text-pri);
-  padding: 16px;
+  padding: 20px 24px;
   overflow-y: auto;
   height: 100%;
 }
 
 #qr-root .qrg-app {
   display: grid;
-  grid-template-columns: 1fr 1fr 260px;
-  gap: 12px;
-  max-width: 1100px;
+  grid-template-columns: 1fr 1fr 340px;
+  gap: 16px;
+  max-width: 1400px;
   margin: 0 auto;
   align-items: start;
 }
@@ -63,8 +63,8 @@ html[data-theme="light"] #qr-root {
 #qr-root .qrg-panel {
   background: var(--qrg-bg-panel);
   border: 1px solid var(--qrg-border);
-  border-radius: 12px;
-  padding: 14px;
+  border-radius: 14px;
+  padding: 20px;
 }
 
 #qr-root .qrg-preview-col .qrg-panel {
@@ -74,12 +74,12 @@ html[data-theme="light"] #qr-root {
 
 /* ── Utility ───────────────────────────────────────────────── */
 #qr-root .qrg-slabel {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--qrg-primary-mid);
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  margin: 0 0 8px;
+  margin: 0 0 10px;
 }
 
 #qr-root .qrg-section-gap {
@@ -95,19 +95,19 @@ html[data-theme="light"] #qr-root {
 
 #qr-root .qrg-field label {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--qrg-text-sec);
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }
 
 #qr-root .qrg-field input[type=text],
 #qr-root .qrg-field input[type=url],
 #qr-root .qrg-field select {
   width: 100%;
-  padding: 6px 9px;
+  padding: 8px 10px;
   border: 1px solid var(--qrg-border-ui);
-  border-radius: 7px;
-  font-size: 12px;
+  border-radius: 8px;
+  font-size: 13px;
   font-family: inherit;
   background: var(--qrg-bg-input);
   color: var(--qrg-text-pri);
@@ -129,11 +129,11 @@ html[data-theme="light"] #qr-root {
 
 #qr-root .qrg-tab {
   flex: 1;
-  padding: 7px 4px;
-  font-size: 12px;
+  padding: 9px 6px;
+  font-size: 13px;
   font-weight: 500;
   border: 1px solid var(--qrg-border-ui);
-  border-radius: 7px;
+  border-radius: 8px;
   cursor: pointer;
   background: var(--qrg-bg-input);
   color: var(--qrg-text-sec);
@@ -196,11 +196,11 @@ html[data-theme="light"] #qr-root {
 
 #qr-root .qrg-btn {
   flex: 1;
-  padding: 8px 0;
-  font-size: 12px;
+  padding: 10px 0;
+  font-size: 13px;
   font-weight: 500;
   border: 1px solid var(--qrg-primary-border);
-  border-radius: 7px;
+  border-radius: 8px;
   cursor: pointer;
   background: var(--qrg-bg-input);
   color: var(--qrg-primary);
@@ -211,11 +211,11 @@ html[data-theme="light"] #qr-root {
 
 #qr-root .qrg-btn-copy {
   width: 100%;
-  padding: 9px 0;
-  font-size: 12px;
+  padding: 11px 0;
+  font-size: 13px;
   font-weight: 500;
   border: 1px solid var(--qrg-primary-border);
-  border-radius: 7px;
+  border-radius: 8px;
   cursor: pointer;
   background: var(--qrg-bg-input);
   color: var(--qrg-primary);
@@ -354,9 +354,9 @@ html[data-theme="light"] #qr-root {
 /* ── Canvas / preview ──────────────────────────────────────── */
 #qr-root #qrg-qr-canvas { display: none; }
 #qr-root #qrg-composite-canvas {
-  border-radius: 8px;
+  border-radius: 10px;
   width: 100% !important; height: auto !important;
-  max-width: 232px; display: block;
+  max-width: 300px; display: block;
 }
 #qr-root #qrg-preview-wrap { width: 100%; display: flex; justify-content: center; }
 #qr-root .qrg-qr-preview { display: flex; flex-direction: column; align-items: center; gap: 10px; }
@@ -383,7 +383,10 @@ html[data-theme="light"] #qr-root {
 #qr-root .qrg-id-value  { font-size: 12px; font-family: monospace; font-weight: 600; color: var(--qrg-primary); flex: 1; }
 
 /* ── Responsive ─────────────────────────────────────────────── */
-@media (max-width: 880px) {
+@media (max-width: 1050px) {
+  #qr-root .qrg-app { grid-template-columns: 1fr 340px; }
+}
+@media (max-width: 760px) {
   #qr-root .qrg-app { grid-template-columns: 1fr; }
   #qr-root .qrg-preview-col .qrg-panel { position: static; }
 }
