@@ -24,8 +24,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check workflow files
-        run: echo "✅ Workflow lint skipped — prunes are run manually on the server"
+      - name: Block dangerous commands and .env changes
+        run: |
+          # Uses character-class patterns (e.g. s[y]stem) so the grep pattern
+          # does not literally contain the forbidden string and cannot match itself.
+          FAIL=0
+
+          # docker s[y]stem prune — destroys ALL containers, volumes and networks
+          if grep -rEn "docker s[y]stem prune" .github/workflows/; then
+            echo "❌ docker system prune found — destroys running containers, volumes and networks"
+            FAIL=1
+          fi
+
+          # docker v[o]lume prune — destroys database volumes and persistent data
+          if grep -rEn "docker v[o]lume prune" .github/workflows/; then
+            echo "❌ docker volume prune found — destroys database volumes and persistent data"
+            FAIL=1
+          fi
+
+          # .env file changes — secrets must never be committed to the repo
+          if git diff --name-only HEAD~1 HEAD | grep -E '(^|/)\.env($|\.)'; then
+            echo "❌ .env file change detected — secrets must never be committed"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" -eq 1 ]; then exit 1; fi
+          echo "✅ No dangerous commands or .env changes found"
 
   # ─────────────────────────────────────────────────────────────────
   # JOB 1 — Test Backend
