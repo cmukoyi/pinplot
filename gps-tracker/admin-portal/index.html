@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BeaconTelematics Admin Portal</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         * {
@@ -23,7 +24,65 @@
             --light: #f9fafb;
             --gray: #6b7280;
             --border: #e5e7eb;
+            /* surface tokens used by dark mode */
+            --surface:       #ffffff;
+            --surface-2:     #f9fafb;
+            --text-main:     #1f2937;
+            --text-muted:    #6b7280;
+            --border-color:  #e5e7eb;
         }
+
+        /* ── Dark Mode ── */
+        html[data-theme="dark"] {
+            --dark:          #e8edf8;
+            --light:         #0f1117;
+            --gray:          #9ba8c0;
+            --border:        #2a3347;
+            --surface:       #161b26;
+            --surface-2:     #1e2535;
+            --text-main:     #e8edf8;
+            --text-muted:    #9ba8c0;
+            --border-color:  #2a3347;
+        }
+        html[data-theme="dark"] body                     { background: #0f1117; color: #e8edf8; }
+        html[data-theme="dark"] .sidebar                 { background: #161b26; border-color: #2a3347; }
+        html[data-theme="dark"] .sidebar-header          { background: #161b26; border-color: #2a3347; }
+        html[data-theme="dark"] .sidebar-link            { color: #9ba8c0; }
+        html[data-theme="dark"] .sidebar-link:hover,
+        html[data-theme="dark"] .sidebar-link.active     { background: #1e2535; color: #e8edf8; }
+        html[data-theme="dark"] .top-bar                 { background: #161b26; border-color: #2a3347; }
+        html[data-theme="dark"] .content                 { background: #0f1117; }
+        html[data-theme="dark"] .card,
+        html[data-theme="dark"] .stat-card               { background: #161b26; border-color: #2a3347; color: #e8edf8; }
+        html[data-theme="dark"] .stat-label              { color: #9ba8c0; }
+        html[data-theme="dark"] table                    { background: #161b26; color: #e8edf8; }
+        html[data-theme="dark"] th                       { background: #1e2535; color: #9ba8c0; border-color: #2a3347; }
+        html[data-theme="dark"] td                       { border-color: #2a3347; }
+        html[data-theme="dark"] tr:hover td              { background: #1e2535; }
+        html[data-theme="dark"] input[type="text"],
+        html[data-theme="dark"] input[type="password"],
+        html[data-theme="dark"] input[type="email"],
+        html[data-theme="dark"] select,
+        html[data-theme="dark"] textarea                 { background: #1e2535; border-color: #2a3347; color: #e8edf8; }
+        html[data-theme="dark"] .modal-overlay           { background: rgba(0,0,0,.7); }
+        html[data-theme="dark"] .modal                   { background: #161b26; border-color: #2a3347; color: #e8edf8; }
+        html[data-theme="dark"] label                    { color: #9ba8c0; }
+        html[data-theme="dark"] .page-title              { color: #e8edf8; }
+        html[data-theme="dark"] .page-subtitle           { color: #9ba8c0; }
+
+        /* theme toggle button */
+        #admin-theme-toggle {
+            width: 34px; height: 34px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--gray);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            font-size: 15px;
+            transition: background .2s, color .2s;
+        }
+        #admin-theme-toggle:hover { background: var(--surface-2); color: var(--dark); }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -822,6 +881,9 @@
                         <p class="page-subtitle" id="pageSubtitle">Welcome to BeaconTelematics Admin</p>
                     </div>
                     <div class="user-info">
+                        <button id="admin-theme-toggle" title="Toggle light / dark mode" onclick="toggleAdminTheme()">
+                            <i id="adminThemeIcon" class="fa-solid fa-moon"></i>
+                        </button>
                         <div>
                             <div style="font-weight: 600; color: var(--dark);" id="currentUser">Admin</div>
                             <div style="font-size: 12px; color: var(--gray);" id="currentRole">Administrator</div>
@@ -1677,6 +1739,20 @@
                 document.getElementById('loginError').style.display = 'block';
             }
         }
+
+        // THEME TOGGLE
+        function applyAdminTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('ap-theme', theme);
+            const icon = document.getElementById('adminThemeIcon');
+            if (icon) icon.className = theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+        }
+        function toggleAdminTheme() {
+            const current = document.documentElement.getAttribute('data-theme') || 'light';
+            applyAdminTheme(current === 'dark' ? 'light' : 'dark');
+        }
+        // Apply saved theme immediately
+        applyAdminTheme(localStorage.getItem('ap-theme') || 'light');
 
         // LOGOUT
         function handleLogout() {

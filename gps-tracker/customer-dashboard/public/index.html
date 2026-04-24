@@ -83,6 +83,9 @@
         <span id="pageTitle" style="font-size:1rem;font-weight:600;color:var(--text);flex:1;padding-left:16px"></span>
 
         <div class="header-right">
+            <button id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()">
+                <i id="themeIcon" class="fa-solid fa-sun"></i>
+            </button>
             <div style="font-size:13px;color:var(--text-3);text-align:right">
                 <strong id="sidebarUserName" style="display:block;color:var(--text-2)">—</strong>
                 <small id="sidebarCompany">—</small>
@@ -132,8 +135,13 @@
             </button>
 
             <button class="nav-item" data-tab="building" onclick="switchTab('building')">
-                <span class="nav-icon"><i class="fa-solid fa-layer-group"></i></span>
+                <span class="nav-icon"><i class="fa-solid fa-pencil-ruler"></i></span>
                 <span class="nav-label">Floorplan Sketch</span>
+            </button>
+
+            <button class="nav-item" data-tab="floorplan" onclick="switchTab('floorplan')">
+                <span class="nav-icon"><i class="fa-solid fa-layer-group"></i></span>
+                <span class="nav-label">Floorplan</span>
             </button>
 
             <button class="nav-item" data-tab="settings" onclick="switchTab('settings')">
@@ -320,8 +328,19 @@
                 </div>
             </div>
 
-            <!-- ═══ FLOOR PLAN (BUILDING) TAB ═══ -->
-            <div id="tab-building" class="tab-content">
+            <!-- ═══ FLOORPLAN SKETCH TAB ═══ -->
+            <div id="tab-building" class="tab-content" style="padding:0;overflow:hidden;display:flex;flex-direction:column">
+                <iframe
+                    id="sketchFrame"
+                    src="sketch/index.html"
+                    style="flex:1;border:none;width:100%;height:100%;min-height:600px"
+                    allow="clipboard-read; clipboard-write"
+                    title="Floor Plan Sketch Tool">
+                </iframe>
+            </div>
+
+            <!-- ═══ FLOORPLAN (LIVE BLE VIEW) TAB ═══ -->
+            <div id="tab-floorplan" class="tab-content">
 
                 <!-- Building selector row -->
                 <div class="card" style="padding:16px 24px">
@@ -374,7 +393,7 @@
                     <div id="bldgPlaceholder" class="floor-plan-area">
                         <span class="fp-icon">🏗️</span>
                         <p style="font-weight:600;color:var(--dark)">No building selected</p>
-                        <p style="font-size:13px">Create a building, upload a floor plan, then connect to your Pareto Anywhere broker to see live BLE tags.</p>
+                        <p style="font-size:13px">Select a floor plan created with the Floorplan Sketch tool, then connect to your Pareto Anywhere broker to see live BLE tags.</p>
                     </div>
 
                     <!-- Map container (hidden until building selected) -->
@@ -858,9 +877,25 @@ function showDashboard(user, group) {
 }
 
 // ══════════════════════════════════════════
+// Theme (light / dark)
+// ══════════════════════════════════════════
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('pp-theme', theme);
+    const icon = document.getElementById('themeIcon');
+    if (icon) icon.className = theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+}
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+// Apply saved theme immediately (before login check)
+applyTheme(localStorage.getItem('pp-theme') || 'dark');
+
+// ══════════════════════════════════════════
 // Tab switching
 // ══════════════════════════════════════════
-const TAB_TITLES = { livemap: 'Live Map', assets: 'Asset List', history: 'Movement History', 'asset-mgmt': 'Asset Management', users: 'User Accounts', building: 'Floorplan Sketch', settings: 'Settings', qr: 'QR / NFC Tags' };
+const TAB_TITLES = { livemap: 'Live Map', assets: 'Asset List', history: 'Movement History', 'asset-mgmt': 'Asset Management', users: 'User Accounts', building: 'Floorplan Sketch', floorplan: 'Floorplan', settings: 'Settings', qr: 'QR / NFC Tags' };
 let _mapInitialized = false;
 
 function switchTab(name) {
@@ -881,7 +916,7 @@ function switchTab(name) {
     if (name === 'assets')     initAssetList();
     if (name === 'history')    initHistoryTab();
     if (name === 'asset-mgmt') initAssetMgmt();
-    if (name === 'building')   loadBuildings();
+    if (name === 'floorplan')  loadBuildings();
     if (name === 'users')      loadUsers();
     if (name === 'settings')   loadSettings();
     if (name === 'qr')         loadQRTagList();

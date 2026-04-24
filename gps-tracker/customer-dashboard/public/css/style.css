@@ -32,6 +32,24 @@
   --font:        'Inter', system-ui, -apple-system, sans-serif;
 }
 
+/* ── Light Mode overrides ──────────────────────────────────── */
+html[data-theme="light"] {
+  --bg:          #F8FAFC;
+  --bg-2:        #FFFFFF;
+  --bg-3:        #F1F5F9;
+  --bg-4:        #E2E8F0;
+  --border:      #CBD5E1;
+  --border-2:    #94A3B8;
+  --text:        #0F172A;
+  --text-2:      #334155;
+  --text-3:      #64748B;
+  --primary:     #2563EB;
+  --primary-d:   #1D4ED8;
+  --primary-glow:#2563EB20;
+  --shadow:      0 4px 20px rgba(0,0,0,.08);
+  --shadow-sm:   0 2px 8px rgba(0,0,0,.06);
+}
+
 html, body {
   height: 100%;
   font-family: var(--font);
@@ -131,6 +149,19 @@ input, select, textarea { font-family: var(--font); }
   position: relative;
 }
 #notif-btn:hover { background: var(--bg-4); color: var(--text); }
+
+/* theme toggle button */
+#theme-toggle {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-3);
+  color: var(--text-2);
+  display: flex; align-items: center; justify-content: center;
+  transition: var(--transition);
+  font-size: 15px;
+}
+#theme-toggle:hover { background: var(--bg-4); color: var(--text); }
 
 #notif-badge {
   position: absolute;
@@ -1226,6 +1257,10 @@ tbody tr:hover { background: var(--bg-3); }
 /* ── Tab pane containers ── */
 .tab-content { display: none; flex: 1; flex-direction: column; overflow: hidden; }
 .tab-content.active { display: flex; }
+
+/* ── Floorplan Sketch tab — iframe fills all available space ── */
+#tab-building.active { padding: 0; overflow: hidden; }
+#tab-building iframe { flex: 1; min-height: 0; }
 
 /* ── Live Map tab — full-bleed flex-row (no padding) ── */
 .content.live-map-active {
