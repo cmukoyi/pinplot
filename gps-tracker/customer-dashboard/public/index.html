@@ -200,12 +200,9 @@
                         </div>
                     </div>
 
-                    <!-- Category filter -->
+                    <!-- Category filter — populated dynamically from DB categories -->
                     <div class="cat-filter" id="lm-cat-filter">
                         <button class="cat-btn active" onclick="lmFilterCat('all', this)">All</button>
-                        <button class="cat-btn" onclick="lmFilterCat('vehicle', this)"><i class="fa-solid fa-car"></i> Vehicles</button>
-                        <button class="cat-btn" onclick="lmFilterCat('equipment', this)"><i class="fa-solid fa-toolbox"></i> Equipment</button>
-                        <button class="cat-btn" onclick="lmFilterCat('container', this)"><i class="fa-solid fa-box"></i> Containers</button>
                     </div>
 
                     <!-- Asset list -->
@@ -1330,6 +1327,8 @@ function showDashboard(user, group) {
         switchTab('livemap');
         loadBuildings();
     }));
+    // Pre-load categories so filter bars are populated before user opens Settings
+    _fetchCategories();
 }
 
 // ══════════════════════════════════════════
@@ -1779,6 +1778,18 @@ function loadSettings() {
 // ══════════════════════════════════════════
 let _categoriesCache = [];
 
+// Lightweight fetch that just populates _categoriesCache (no UI side-effects).
+// Called on login so filter bars are ready before the user opens Settings.
+async function _fetchCategories() {
+    try {
+        const res = await apiFetch('/api/portal/categories');
+        if (!res.ok) return;
+        _categoriesCache = await res.json();
+        renderLmCategoryFilters();
+        alRenderCategoryChips();
+    } catch (_) { /* non-critical — filters will update when Settings tab opens */ }
+}
+
 async function loadCategories() {
     const el = document.getElementById('categoriesList');
     if (!el) return;
@@ -1792,6 +1803,9 @@ async function loadCategories() {
         return;
     }
     renderCategoriesList();
+    // Refresh dynamic filter bars everywhere
+    renderLmCategoryFilters();
+    alRenderCategoryChips();
 }
 
 function renderCategoriesList() {
@@ -1881,6 +1895,8 @@ async function deleteCategory(id, name) {
         if (!res.ok && res.status !== 204) throw new Error((await res.json()).detail || 'Delete failed');
         _categoriesCache = _categoriesCache.filter(c => c.id !== id);
         renderCategoriesList();
+        renderLmCategoryFilters();
+        alRenderCategoryChips();
         await _loadCategoriesIntoSelect();
     } catch (err) {
         showTabAlert('settings', err.message, 'error');
@@ -2808,7 +2824,7 @@ let _lmMapReady     = false;
 let _lmTags         = [];        // all tags from API
 let _lmMarkers      = {};        // imei → L.marker
 let _lmSelected     = null;      // currently selected imei
-let _lmCatFilter    = 'all';      // all | vehicle | equipment | container
+let _lmCatFilter    = 'all';     // 'all' | category UUID from _categoriesCache
 
 function _lmStatusClass(tag) {
     if (!tag.is_active) return 'offline';
@@ -2864,6 +2880,7 @@ async function _lmLoadTags() {
         return;
     }
     _lmPlaceMarkers();
+    renderLmCategoryFilters();  // refresh filter bar with categories now tags are loaded
     _lmRenderList();
     _lmUpdateStats();
 }
@@ -2905,7 +2922,7 @@ function _lmPlaceMarkers() {
 function _lmRenderList(query) {
     query = (query || document.getElementById('lm-search')?.value || '').toLowerCase();
     const list = _lmTags.filter(t => {
-        if (_lmCatFilter !== 'all' && (t.tag_type || '').toLowerCase() !== _lmCatFilter) return false;
+        if (_lmCatFilter !== 'all' && t.category_id !== _lmCatFilter) return false;
         if (!query) return true;
         const haystack = [t.imei, t.description, t.device_name, t.owner_email].join(' ').toLowerCase();
         return haystack.includes(query);
@@ -2958,11 +2975,28 @@ function lmFilterList() {
     _lmRenderList(document.getElementById('lm-search').value);
 }
 
-function lmFilterCat(cat, btn) {
-    _lmCatFilter = cat;
+function lmFilterCat(catId, btn) {
+    _lmCatFilter = catId;
     document.querySelectorAll('#lm-cat-filter .cat-btn').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
     _lmRenderList();
+}
+
+// Build Live Map category filter bar from _categoriesCache
+function renderLmCategoryFilters() {
+    const bar = document.getElementById('lm-cat-filter');
+    if (!bar) return;
+    // Keep "All" button active state, reset filter if selected category no longer exists
+    if (_lmCatFilter !== 'all' && !_categoriesCache.find(c => c.id === _lmCatFilter)) {
+        _lmCatFilter = 'all';
+    }
+    bar.innerHTML = `<button class="cat-btn ${_lmCatFilter === 'all' ? 'active' : ''}" onclick="lmFilterCat('all', this)">All</button>` +
+        _categoriesCache.map(c => {
+            const icon  = c.icon  ? `<i class="fa-solid ${esc(c.icon)}"></i> ` : '';
+            const color = c.color ? ` style="--cat-accent:${esc(c.color)}"` : '';
+            const active = _lmCatFilter === c.id ? ' active' : '';
+            return `<button class="cat-btn${active}"${color} onclick="lmFilterCat('${esc(c.id)}', this)">${icon}${esc(c.name)}</button>`;
+        }).join('');
 }
 
 function lmSelectFromList(imei) {
@@ -3029,14 +3063,7 @@ function _lmRenderDetail(t) {
 // ══════════════════════════════════════════
 let _alLoaded = false;
 
-let _alCatFilter = 'all'; // all | vehicle | equipment | container | personal
-
-const _AL_CATS = [
-    { id: 'vehicle',   label: 'Vehicles',   icon: 'fa-car',      color: '#3b82f6' },
-    { id: 'equipment', label: 'Equipment',  icon: 'fa-toolbox',  color: '#f59e0b' },
-    { id: 'container', label: 'Containers', icon: 'fa-box',      color: '#8b5cf6' },
-    { id: 'personal',  label: 'Personal',   icon: 'fa-user',     color: '#10b981' },
-];
+let _alCatFilter = 'all'; // 'all' | category UUID from _categoriesCache
 
 async function initAssetList() {
     // Reuse tags from Live Map if already loaded, otherwise fetch fresh
@@ -3062,24 +3089,35 @@ async function initAssetList() {
     }
 }
 
-function alCatLabel(tag_type) {
-    const t = (tag_type || '').toLowerCase();
-    const c = _AL_CATS.find(c => c.id === t);
-    return c ? c : { id: t || 'other', label: tag_type || 'Other', icon: 'fa-tag', color: 'var(--text-3)' };
+function alCatLabel(tag) {
+    if (tag.category_id) {
+        const c = _categoriesCache.find(c => c.id === tag.category_id);
+        if (c) return { id: c.id, label: c.name, icon: c.icon || 'fa-tag', color: c.color || 'var(--text-3)' };
+    }
+    // Fallback for tags with category_name but no matching active category
+    const name = tag.category_name;
+    if (name) return { id: name, label: name, icon: 'fa-tag', color: 'var(--text-3)' };
+    return { id: 'other', label: 'Uncategorised', icon: 'fa-tag', color: 'var(--text-3)' };
 }
 
 function alRenderCategoryChips() {
     const wrap = document.getElementById('al-category-chips');
     if (!wrap) return;
+    // Reset filter if the selected category no longer exists
+    if (_alCatFilter !== 'all' && !_categoriesCache.find(c => c.id === _alCatFilter)) {
+        _alCatFilter = 'all';
+    }
     const tags = _lmTags;
     const chips = [
         `<button class="chip ${_alCatFilter === 'all' ? 'chip-active' : ''}" onclick="alFilterCat('all')">
             All <span class="chip-count">${tags.length}</span>
         </button>`
-    ].concat(_AL_CATS.map(c => {
-        const count = tags.filter(t => (t.tag_type || '').toLowerCase() === c.id).length;
-        return `<button class="chip ${_alCatFilter === c.id ? 'chip-active' : ''}" onclick="alFilterCat('${c.id}')" style="--chip-color:${c.color}">
-            <i class="fa-solid ${c.icon}"></i> ${c.label} <span class="chip-count">${count}</span>
+    ].concat(_categoriesCache.map(c => {
+        const count = tags.filter(t => t.category_id === c.id).length;
+        const icon  = c.icon  ? `<i class="fa-solid ${esc(c.icon)}"></i> ` : '';
+        const color = c.color ? ` style="--chip-color:${esc(c.color)}"` : '';
+        return `<button class="chip ${_alCatFilter === c.id ? 'chip-active' : ''}" onclick="alFilterCat('${esc(c.id)}')"${color}>
+            ${icon}${esc(c.name)} <span class="chip-count">${count}</span>
         </button>`;
     }));
     wrap.innerHTML = chips.join('');
@@ -3094,7 +3132,7 @@ function alFilterCat(cat) {
 function alRenderTable() {
     const query = (document.getElementById('al-search')?.value || '').toLowerCase();
     const list  = _lmTags.filter(t => {
-        const inCat = _alCatFilter === 'all' || (t.tag_type || '').toLowerCase() === _alCatFilter;
+        const inCat = _alCatFilter === 'all' || t.category_id === _alCatFilter;
         if (!inCat) return false;
         if (!query) return true;
         return [t.imei, t.description, t.device_name, t.owner_email].join(' ').toLowerCase().includes(query);
@@ -3128,8 +3166,8 @@ function alRenderTable() {
         return `<tr>
             <td>
                 <div class="table-asset-name">
-                    <div class="tbl-icon" style="background:${alCatLabel(t.tag_type).color}20;color:${alCatLabel(t.tag_type).color}">
-                        <i class="fa-solid ${alCatLabel(t.tag_type).icon}"></i>
+                    <div class="tbl-icon" style="background:${alCatLabel(t).color}20;color:${alCatLabel(t).color}">
+                        <i class="fa-solid ${alCatLabel(t).icon}"></i>
                     </div>
                     <div>
                         <strong>${label}</strong>
@@ -3137,7 +3175,7 @@ function alRenderTable() {
                     </div>
                 </div>
             </td>
-            <td style="font-size:.78rem;color:var(--text-2)">${alCatLabel(t.tag_type).label}</td>
+            <td style="font-size:.78rem;color:var(--text-2)">${alCatLabel(t).label}</td>
             <td>
                 <div style="display:flex;align-items:center;gap:5px">
                     <span class="status-dot status-${status}"></span>

@@ -467,6 +467,9 @@ class PortalTagOut(BaseModel):
     added_at: Optional[datetime] = None
     expiry_date: Optional[datetime] = None
     days_remaining: Optional[int] = None  # None = no package; negative = expired
+    # Category (from attributes.category.value)
+    category_id: Optional[str] = None
+    category_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -504,12 +507,30 @@ def list_group_tags(request: Request, db: Session = Depends(get_db)):
         for p in db.query(TagPackage).filter(TagPackage.id.in_(pkg_ids)).all():
             pkg_map[str(p.id)] = p
 
+    # Build category name → id lookup for this group
+    cat_name_map: dict = {}  # name.lower() → (id, name)
+    for cat in db.query(TagCategory).filter(
+        TagCategory.usergroup_id == str(me.usergroup_id),
+        TagCategory.is_active == True,
+    ).all():
+        cat_name_map[cat.name.lower()] = (str(cat.id), cat.name)
+
     result = []
     for tag, owner_email in tags:
         pkg = pkg_map.get(str(tag.package_id)) if tag.package_id else None
         days_remaining = None
         if tag.expiry_date:
             days_remaining = (tag.expiry_date.replace(tzinfo=None) - datetime.utcnow()).days
+        # Resolve category from attributes
+        attrs = tag.attributes or {}
+        raw_cat_name = (attrs.get('category') or {}).get('value') or None
+        cat_id, cat_name = (None, None)
+        if raw_cat_name:
+            match = cat_name_map.get(raw_cat_name.lower())
+            if match:
+                cat_id, cat_name = match
+            else:
+                cat_name = raw_cat_name  # preserve even if category was deleted
         result.append(PortalTagOut(
             id=tag.id,
             imei=tag.imei,
@@ -529,6 +550,8 @@ def list_group_tags(request: Request, db: Session = Depends(get_db)):
             added_at=tag.added_at,
             expiry_date=tag.expiry_date,
             days_remaining=days_remaining,
+            category_id=cat_id,
+            category_name=cat_name,
         ))
     return result
 
