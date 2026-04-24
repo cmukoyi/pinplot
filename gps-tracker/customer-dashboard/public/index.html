@@ -250,8 +250,8 @@
                         <input type="date" id="hist-to">
                         <input type="time" id="hist-to-t" value="18:00">
                     </div>
-                    <button class="btn btn-primary btn-sm" onclick="histLoadTrack()">
-                        <i class="fa-solid fa-magnifying-glass"></i> Load Track
+                    <button class="btn btn-primary btn-sm" onclick="histLoadTrips()">
+                        <i class="fa-solid fa-magnifying-glass"></i> Load Trips
                     </button>
                     <button class="btn btn-ghost btn-sm" id="hist-export-btn" style="display:none" onclick="histExport()">
                         <i class="fa-solid fa-download"></i> Export CSV
@@ -263,22 +263,31 @@
 
                     <aside class="hist-timeline-panel">
                         <div class="hist-timeline-header">
-                            <i class="fa-solid fa-timeline" style="color:var(--primary)"></i>
-                            Position Timeline
-                        </div>
-
-                        <div class="hist-legend">
-                            <span><span class="legend-dot" style="background:#10B981"></span>Start</span>
-                            <span><span class="legend-dot" style="background:#3B82F6"></span>Waypoint</span>
-                            <span><span class="legend-dot" style="background:#EF4444"></span>End</span>
+                            <i class="fa-solid fa-route" style="color:var(--primary)"></i>
+                            Trips
+                            <span id="hist-trip-count" style="margin-left:auto;font-size:.75rem;color:var(--text-3)"></span>
                         </div>
 
                         <div style="padding:8px 16px;border-bottom:1px solid var(--border);font-size:.78rem;color:var(--text-3)">
                             <strong id="hist-asset-name" style="color:var(--text)">—</strong><br>
-                            <span id="hist-track-summary">Select an asset and click Load Track</span>
+                            <span id="hist-track-summary">Select an asset and date range, then Load Trips</span>
                         </div>
 
-                        <div id="hist-timeline"></div>
+                        <div id="hist-trips-list"></div>
+
+                        <!-- waypoint timeline shown when a trip is selected -->
+                        <div id="hist-timeline" style="display:none">
+                            <div class="hist-timeline-header" style="font-size:.78rem;cursor:pointer" onclick="histBackToTrips()">
+                                <i class="fa-solid fa-arrow-left" style="color:var(--primary)"></i>
+                                Back to trips
+                            </div>
+                            <div class="hist-legend">
+                                <span><span class="legend-dot" style="background:#10B981"></span>Start</span>
+                                <span><span class="legend-dot" style="background:#3B82F6"></span>Waypoint</span>
+                                <span><span class="legend-dot" style="background:#EF4444"></span>End</span>
+                            </div>
+                            <div id="hist-waypoints"></div>
+                        </div>
                     </aside>
                 </div>
             </div>
@@ -2362,6 +2371,8 @@ let _histMapReady  = false;
 let _histMarkers   = [];
 let _histPolyline  = null;
 let _histTrack     = [];
+let _histTrips     = [];
+let _histSelectedTripId = null;
 
 async function initHistoryTab() {
     // Populate asset selector from live tags (load if needed)
@@ -2395,7 +2406,10 @@ async function initHistoryTab() {
     } else {
         _histMap.invalidateSize();
     }
-    if (sel && sel.value) histChangeAsset(sel.value);
+    if (sel && sel.value) {
+        histChangeAsset(sel.value);
+        histLoadTrips();  // auto-load trips on tab open
+    }
 }
 
 function histChangeAsset(imei) {
@@ -2410,63 +2424,167 @@ function histPreselect(imei) {
     if (sel) { sel.value = imei; histChangeAsset(imei); }
 }
 
-async function histLoadTrack() {
+/* ── Load trips list for selected asset + date range ─────────────────────── */
+async function histLoadTrips() {
     const imei  = document.getElementById('hist-asset-select')?.value;
     const from  = document.getElementById('hist-from')?.value;
     const fromT = document.getElementById('hist-from-t')?.value || '00:00';
     const to    = document.getElementById('hist-to')?.value;
     const toT   = document.getElementById('hist-to-t')?.value   || '23:59';
-    if (!imei) { return; }
+    if (!imei) return;
 
-    document.getElementById('hist-track-summary').textContent = 'Loading…';
-    document.getElementById('hist-timeline').innerHTML =
+    // Find tag id (UUID) – needed by backend /api/trips
+    const tag = _lmTags.find(t => t.imei === imei);
+    if (!tag) return;
+    histChangeAsset(imei);
+
+    // Show trips panel, hide waypoints
+    document.getElementById('hist-trips-list').style.display = '';
+    document.getElementById('hist-timeline').style.display  = 'none';
+    document.getElementById('hist-track-summary').textContent = 'Loading trips…';
+    document.getElementById('hist-trip-count').textContent = '';
+    document.getElementById('hist-trips-list').innerHTML =
         '<div style="padding:24px;text-align:center;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+    document.getElementById('hist-export-btn').style.display = 'none';
+
+    // Clear map
+    _histClearMap();
 
     try {
-        const url = `/api/portal/tags/${encodeURIComponent(imei)}/history?from=${from}T${fromT}&to=${to}T${toT}`;
-        const res = await apiFetch(url);
-        if (res.status === 404 || res.status === 501) {
-            _histRenderEmpty('Track history API not yet enabled.');
-            return;
-        }
-        if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+        const res = await apiFetch('/api/trips', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                vehicleId: tag.id,
+                startDate: `${from}T${fromT}:00Z`,
+                endDate:   `${to}T${toT}:59Z`
+            })
+        });
         const data = await res.json();
-        _histTrack = data.points || data;
-        _histRenderAll();
+        if (!data.success) throw new Error(data.error || 'API error');
+        _histTrips = data.trips || [];
+        _histRenderTripsList();
     } catch (err) {
-        _histRenderEmpty('Could not load track: ' + err.message);
+        document.getElementById('hist-trips-list').innerHTML =
+            `<div style="padding:32px;text-align:center;color:var(--text-3)">
+                <i class="fa-solid fa-triangle-exclamation" style="font-size:28px;opacity:.3;display:block;margin-bottom:10px"></i>
+                <p style="font-size:.83rem">${esc(err.message)}</p>
+             </div>`;
+        document.getElementById('hist-track-summary').textContent = 'Failed to load trips';
     }
 }
 
-function _histRenderEmpty(msg) {
-    document.getElementById('hist-track-summary').textContent = msg;
-    document.getElementById('hist-timeline').innerHTML =
-        `<div style="padding:32px;text-align:center;color:var(--text-3)">
-            <i class="fa-solid fa-route" style="font-size:36px;opacity:.2;display:block;margin-bottom:12px"></i>
-            <p style="font-size:.85rem">${esc(msg)}</p>
+/* ── Keep as alias so any existing calls still work ── */
+function histLoadTrack() { histLoadTrips(); }
+
+function _histRenderTripsList() {
+    const trips = _histTrips;
+    const count = trips.length;
+    document.getElementById('hist-trip-count').textContent = count ? `${count} trip${count > 1 ? 's' : ''}` : '';
+    document.getElementById('hist-track-summary').textContent =
+        count ? `${count} trip${count > 1 ? 's' : ''} found — click one to view route` : 'No trips found for this date range.';
+
+    if (!count) {
+        document.getElementById('hist-trips-list').innerHTML =
+            `<div style="padding:40px;text-align:center;color:var(--text-3)">
+                <i class="fa-solid fa-route" style="font-size:36px;opacity:.2;display:block;margin-bottom:12px"></i>
+                <p style="font-size:.83rem">No trips recorded in this date range.</p>
+             </div>`;
+        return;
+    }
+
+    document.getElementById('hist-trips-list').innerHTML = trips.map((trip, i) => {
+        const start  = trip.startUtcTimestamp ? new Date(trip.startUtcTimestamp) : null;
+        const end    = trip.endUtcTimestamp   ? new Date(trip.endUtcTimestamp)   : null;
+        const startStr = start ? start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+        const endStr   = end   ? end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })   : '—';
+        const dateStr  = start ? start.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+        const distKm   = trip.distance ? (trip.distance * 1.60934).toFixed(1) : null;  // miles → km
+        const durMins  = trip.duration ? Math.round(trip.duration / 60) : null;
+        const from = trip.startLocationDescription || '—';
+        const to   = trip.endLocationDescription   || '—';
+        return `<div class="hist-trip-row" id="htrip-${i}" onclick="histSelectTrip('${esc(trip.id)}', ${i})">
+            <div class="htrip-index">${i + 1}</div>
+            <div class="htrip-body">
+                <div class="htrip-date">${dateStr}</div>
+                <div class="htrip-time">${startStr} → ${endStr}</div>
+                <div class="htrip-route"><i class="fa-solid fa-location-dot" style="color:#10B981"></i> ${esc(from)}</div>
+                <div class="htrip-route"><i class="fa-solid fa-flag-checkered" style="color:#EF4444"></i> ${esc(to)}</div>
+                <div class="htrip-meta">
+                    ${distKm  ? `<span><i class="fa-solid fa-road"></i> ${distKm} km</span>` : ''}
+                    ${durMins ? `<span><i class="fa-regular fa-clock"></i> ${durMins} min</span>` : ''}
+                </div>
+            </div>
+            <div class="htrip-chevron"><i class="fa-solid fa-chevron-right"></i></div>
         </div>`;
+    }).join('');
 }
 
-function _histRenderAll() {
+/* ── Select a trip: load events + draw on map ─────────────────────────────── */
+async function histSelectTrip(tripId, idx) {
+    _histSelectedTripId = tripId;
+
+    // Highlight selected row
+    document.querySelectorAll('.hist-trip-row').forEach(r => r.classList.remove('htrip-active'));
+    const row = document.getElementById(`htrip-${idx}`);
+    if (row) { row.classList.add('htrip-active'); row.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+
+    // Show waypoints panel
+    document.getElementById('hist-trips-list').style.display = 'none';
+    document.getElementById('hist-timeline').style.display   = '';
+    document.getElementById('hist-waypoints').innerHTML =
+        '<div style="padding:24px;text-align:center;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+
+    _histClearMap();
+
+    try {
+        const res = await apiFetch(`/api/trips/${encodeURIComponent(tripId)}/events`);
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'API error');
+        _histTrack = (data.events || []).map(e => ({
+            lat: e.latitude, lng: e.longitude,
+            timestamp: e.utcTimestamp,
+            speed: e.speed,
+            event: e.eventType_Description
+        }));
+        _histRenderWaypoints();
+        document.getElementById('hist-export-btn').style.display = _histTrack.length ? '' : 'none';
+    } catch (err) {
+        document.getElementById('hist-waypoints').innerHTML =
+            `<div style="padding:24px;text-align:center;color:var(--text-3)"><p style="font-size:.83rem">${esc(err.message)}</p></div>`;
+    }
+}
+
+/* ── Back to trips list ──────────────────────────────────────────────────── */
+function histBackToTrips() {
+    document.getElementById('hist-timeline').style.display  = 'none';
+    document.getElementById('hist-trips-list').style.display = '';
+    document.getElementById('hist-export-btn').style.display = 'none';
+    _histClearMap();
+}
+
+/* ── Clear map layers ──────────────────────────────────────────────────── */
+function _histClearMap() {
+    _histMarkers.forEach(m => _histMap && _histMap.removeLayer(m));
+    if (_histPolyline && _histMap) _histMap.removeLayer(_histPolyline);
+    _histMarkers  = [];
+    _histPolyline = null;
+}
+
+/* ── Render waypoints for selected trip ─────────────────────────────────── */
+function _histRenderWaypoints() {
     const pts = _histTrack;
-    document.getElementById('hist-track-summary').textContent = `${pts.length} position${pts.length !== 1 ? 's' : ''} recorded`;
-    document.getElementById('hist-export-btn').style.display = pts.length ? '' : 'none';
-
-    // Clear old map layers
-    _histMarkers.forEach(m => _histMap.removeLayer(m));
-    if (_histPolyline) _histMap.removeLayer(_histPolyline);
-    _histMarkers = [];
-
     if (!pts.length) {
-        _histRenderEmpty('No GPS positions found for this date range.');
+        document.getElementById('hist-waypoints').innerHTML =
+            `<div style="padding:32px;text-align:center;color:var(--text-3)"><p style="font-size:.83rem">No GPS waypoints for this trip.</p></div>`;
         return;
     }
 
     // Polyline
-    const latlngs = pts.map(p => [parseFloat(p.lat || p.latitude), parseFloat(p.lng || p.longitude)]);
+    const latlngs = pts.map(p => [parseFloat(p.lat), parseFloat(p.lng)]);
     _histPolyline = L.polyline(latlngs, { color: '#3B82F6', weight: 3, opacity: .7, dashArray: '8 4' }).addTo(_histMap);
 
-    // Numbered markers
+    // Markers
     pts.forEach((p, i) => {
         const isFirst = i === 0, isLast = i === pts.length - 1;
         const color = isFirst ? '#10B981' : isLast ? '#EF4444' : '#3B82F6';
@@ -2474,13 +2592,12 @@ function _histRenderAll() {
             html: `<div class="hist-marker" style="background:${color}"><span>${i + 1}</span></div>`,
             className: '', iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -18]
         });
-        const lat = parseFloat(p.lat || p.latitude), lng = parseFloat(p.lng || p.longitude);
-        const m = L.marker([lat, lng], { icon }).addTo(_histMap);
-        const ts = p.timestamp || p.gps_time || p.gpsTime || '';
+        const m = L.marker([parseFloat(p.lat), parseFloat(p.lng)], { icon }).addTo(_histMap);
+        const ts = p.timestamp || '';
         m.bindPopup(`<div class="hist-popup">
             <div class="hist-popup-seq" style="background:${color}">${i + 1}</div>
             <div>
-                <strong>${esc(p.event || 'Position ' + (i + 1))}</strong><br>
+                <strong>${esc(p.event || (isFirst ? 'Start' : isLast ? 'End' : 'Waypoint'))}</strong><br>
                 <small>${ts ? new Date(ts).toLocaleString() : ''}</small><br>
                 ${p.speed != null ? `<small><i class='fa-solid fa-gauge'></i> ${p.speed} km/h</small>` : ''}
             </div>
@@ -2490,13 +2607,12 @@ function _histRenderAll() {
     });
     _histMap.fitBounds(_histPolyline.getBounds(), { padding: [40, 40] });
 
-    // Timeline
-    const container = document.getElementById('hist-timeline');
-    container.innerHTML = pts.map((p, i) => {
+    // Waypoint list
+    document.getElementById('hist-waypoints').innerHTML = pts.map((p, i) => {
         const isFirst = i === 0, isLast = i === pts.length - 1;
         const color = isFirst ? '#10B981' : isLast ? '#EF4444' : '#3B82F6';
-        const ts    = p.timestamp || p.gps_time || p.gpsTime || '';
-        const label = p.event || (isFirst ? 'Start' : isLast ? 'End' : 'Waypoint ' + i);
+        const ts    = p.timestamp || '';
+        const label = p.event || (isFirst ? 'Start' : isLast ? 'End' : `Waypoint ${i}`);
         return `<div class="timeline-item" id="tl-${i+1}" onclick="_histHighlight(${i+1})">
             <div class="tl-left">
                 <div class="tl-circle" style="border-color:${color};color:${color}">${i + 1}</div>
@@ -2524,9 +2640,9 @@ function histExport() {
     const rows = [['seq','lat','lng','timestamp','speed','event']];
     _histTrack.forEach((p, i) => rows.push([
         i + 1,
-        p.lat || p.latitude || '',
-        p.lng || p.longitude || '',
-        p.timestamp || p.gps_time || p.gpsTime || '',
+        p.lat || '',
+        p.lng || '',
+        p.timestamp || '',
         p.speed || '',
         p.event || ''
     ]));
