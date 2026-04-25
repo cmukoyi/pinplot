@@ -764,6 +764,8 @@ class UserGroupCreate(BaseModel):
     admin_email: str             # portal admin email
     admin_first_name: str = ""
     admin_last_name: str = ""
+    email_domain: Optional[str] = None   # comma-separated e.g. "acme.com,acme.co.za"
+    package_id: Optional[str] = None     # default package UUID (optional)
 
 
 class PortalUserOut(BaseModel):
@@ -885,6 +887,12 @@ def create_usergroup(
         slug = f"{base_slug}-{counter}"
         counter += 1
 
+    # Normalise email_domain (strip spaces, lowercase, remove leading @)
+    domain_value = None
+    if data.email_domain:
+        raw_domains = [d.strip().lower().lstrip("@") for d in data.email_domain.split(",") if d.strip()]
+        domain_value = ",".join(raw_domains) if raw_domains else None
+
     # Create group
     import uuid as _uuid
     group = UserGroup(
@@ -892,6 +900,7 @@ def create_usergroup(
         name=data.name,
         slug=slug,
         is_active=True,
+        email_domain=domain_value,
     )
     db.add(group)
     db.flush()   # get group.id without committing
@@ -911,6 +920,21 @@ def create_usergroup(
         is_group_admin=True,
     )
     db.add(portal_admin)
+
+    # Optionally link a default package
+    if data.package_id:
+        pkg = db.query(_TagPackage).filter(
+            _TagPackage.id == data.package_id,
+            _TagPackage.is_active == True,
+        ).first()
+        if pkg:
+            gp = UserGroupPackage(
+                usergroup_id=group.id,
+                package_id=pkg.id,
+                is_default=True,
+            )
+            db.add(gp)
+
     db.commit()
 
     # Re-query with relationships loaded so Pydantic serialization doesn't

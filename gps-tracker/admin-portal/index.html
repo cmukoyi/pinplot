@@ -1247,6 +1247,18 @@
                                             <input type="text" id="cgLast" class="form-input" placeholder="Smith">
                                         </div>
                                     </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Email Domain Auto-Assignment</label>
+                                        <p style="font-size:13px;color:var(--text-secondary);margin:4px 0 10px">Mobile-app users with matching email domains are auto-linked to this group. Separate multiple domains with a comma. Example: <code>acme.com, acme.co.za</code></p>
+                                        <input type="text" id="cgDomain" class="form-input" placeholder="e.g. acme.com or acme.com, acme.co.za">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Default Package <span style="font-weight:normal;color:var(--text-secondary)">(optional)</span></label>
+                                        <p style="font-size:13px;color:var(--text-secondary);margin:4px 0 10px">Auto-applied when tags are imported. Can be changed after creation.</p>
+                                        <select id="cgPackage" class="form-input">
+                                            <option value="">— No package —</option>
+                                        </select>
+                                    </div>
                                     <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px">
                                         <button type="button" class="btn btn-secondary" onclick="closeModal('createGroupModal')">Cancel</button>
                                         <button type="submit" class="btn btn-primary" id="cgSubmitBtn">Create Group</button>
@@ -2291,13 +2303,28 @@
             return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
 
-        function openCreateGroupModal() {
+        async function openCreateGroupModal() {
             document.getElementById('createGroupForm').reset();
             document.getElementById('cgAlert').style.display = 'none';
             document.getElementById('cgResult').style.display = 'none';
             document.getElementById('createGroupForm').style.display = 'block';
             document.getElementById('cgSubmitBtn').disabled = false;
             document.getElementById('createGroupModal').classList.add('active');
+            // Populate package dropdown
+            const sel = document.getElementById('cgPackage');
+            sel.innerHTML = '<option value="">— No package —</option>';
+            try {
+                const res = await fetch(`${API_URL}/api/admin/packages`, { headers: { 'Authorization': `Bearer ${authToken}` } });
+                if (res.ok) {
+                    const pkgs = await res.json();
+                    pkgs.filter(p => p.is_active).forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.id;
+                        opt.textContent = `${p.name} (${p.validity_days} days)`;
+                        sel.appendChild(opt);
+                    });
+                }
+            } catch (_) {}
         }
 
         async function submitCreateGroup(e) {
@@ -2311,6 +2338,8 @@
                 admin_email: document.getElementById('cgEmail').value.trim(),
                 admin_first_name: document.getElementById('cgFirst').value.trim(),
                 admin_last_name: document.getElementById('cgLast').value.trim(),
+                email_domain: document.getElementById('cgDomain').value.trim() || null,
+                package_id: document.getElementById('cgPackage').value || null,
             };
             try {
                 const res = await fetch(`${API_URL}/api/admin/usergroups`, {
