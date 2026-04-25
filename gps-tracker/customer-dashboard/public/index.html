@@ -133,6 +133,11 @@
                 <span class="nav-label">Live Map</span>
             </button>
 
+            <button class="nav-item" data-tab="floorplan" onclick="switchTab('floorplan')">
+                <span class="nav-icon"><i class="fa-solid fa-layer-group"></i></span>
+                <span class="nav-label">Floorplan</span>
+            </button>
+
             <button class="nav-item" data-tab="assets" onclick="switchTab('assets')">
                 <span class="nav-icon"><i class="fa-solid fa-list"></i></span>
                 <span class="nav-label">Asset List</span>
@@ -165,11 +170,6 @@
             <button class="nav-item" data-tab="building" onclick="switchTab('building')">
                 <span class="nav-icon"><i class="fa-solid fa-pencil-ruler"></i></span>
                 <span class="nav-label">Floorplan Sketch</span>
-            </button>
-
-            <button class="nav-item" data-tab="floorplan" onclick="switchTab('floorplan')">
-                <span class="nav-icon"><i class="fa-solid fa-layer-group"></i></span>
-                <span class="nav-label">Floorplan</span>
             </button>
 
             <button class="nav-item" data-tab="settings" onclick="switchTab('settings')">
@@ -2663,14 +2663,22 @@ async function submitTagForm(e) {
                 }),
             });
         }
+        const resData = await res.json();
         if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || 'Request failed');
+            throw new Error(resData.detail || 'Request failed');
         }
         closeModal('tagMgmtModal');
-        // Refresh the tags cache so cards reflect the change
-        _lmTags = [];
-        loadGroupTags();
+        // Update cache in-place for edits so description shows immediately;
+        // force full reload for add/reassign so new tag appears in the list
+        if (mode === 'edit' && tagId && resData) {
+            const idx = _lmTags.findIndex(t => String(t.id) === String(tagId));
+            if (idx !== -1) _lmTags[idx] = { ..._lmTags[idx], ...resData };
+            else _lmTags = [];
+        } else {
+            _lmTags = [];
+        }
+        amRenderCards();   // immediately refresh asset management grid
+        loadGroupTags();   // keep tags tab table in sync
     } catch (err) {
         const span = document.getElementById('tagMgmtAlertText');
         span.textContent = err.message;
@@ -5580,10 +5588,6 @@ function histExport() {
 // ASSET MANAGEMENT
 // ══════════════════════════════════════════
 async function initAssetMgmt() {
-    if (_lmTags.length) {
-        amRenderCards();
-        return;
-    }
     document.getElementById('am-grid').innerHTML =
         '<div style="padding:40px;text-align:center;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
     try {
