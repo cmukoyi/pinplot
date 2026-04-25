@@ -2041,7 +2041,7 @@
         <div class="form-group">
             <label>Expiry Date</label>
             <input type="date" id="userExpiryDate" style="width:100%">
-            <p style="font-size:12px;color:var(--text-3);margin-top:4px">The user will be automatically deactivated after this date. Leave blank to remove expiry.</p>
+            <p style="font-size:12px;color:var(--text-3);margin-top:4px">Must be a future date. Leave blank to remove any existing expiry.</p>
         </div>
         <input type="hidden" id="userExpiryUserId">
         <div id="userExpiryAlert" class="alert" style="display:none"><span id="userExpiryAlertText"></span></div>
@@ -4794,9 +4794,12 @@ async function toggleUserActive(userId, currentlyActive, name) {
     const action = currentlyActive ? 'deactivate' : 'activate';
     if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} user "${name}"?`)) return;
     try {
+        // When re-activating, also clear any existing expiry date
+        const body = { is_active: !currentlyActive };
+        if (currentlyActive === false) body.expires_at = null;  // activating → clear expiry
         const res = await apiFetch(`/api/portal/users/${userId}`, {
             method: 'PATCH',
-            body: JSON.stringify({ is_active: !currentlyActive }),
+            body: JSON.stringify(body),
         });
         if (!res.ok) {
             const d = await res.json().catch(() => ({}));
@@ -4813,6 +4816,9 @@ function openUserExpiryModal(userId, name, currentExpiry) {
     document.getElementById('userExpiryUserId').value = userId;
     document.getElementById('userExpiryName').textContent = `User: ${name}`;
     document.getElementById('userExpiryDate').value = currentExpiry ? currentExpiry.slice(0, 10) : '';
+    // Prevent selecting today or past dates in the date picker
+    const todayStr = new Date().toISOString().slice(0, 10);
+    document.getElementById('userExpiryDate').min = todayStr;
     document.getElementById('userExpiryAlert').style.display = 'none';
     openModal('userExpiryModal');
 }
@@ -4821,8 +4827,22 @@ async function submitUserExpiry() {
     const userId  = document.getElementById('userExpiryUserId').value;
     const dateVal = document.getElementById('userExpiryDate').value;
     const btn     = document.getElementById('userExpiryBtn');
+    const alertEl = document.getElementById('userExpiryAlert');
+
+    // Client-side: reject past dates
+    if (dateVal) {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const picked = new Date(dateVal + 'T00:00:00');
+        if (picked < today) {
+            document.getElementById('userExpiryAlertText').textContent = 'Expiry date cannot be in the past.';
+            alertEl.className = 'alert alert-error';
+            alertEl.style.display = 'flex';
+            return;
+        }
+    }
+
     btn.disabled = true; btn.textContent = 'Saving…';
-    document.getElementById('userExpiryAlert').style.display = 'none';
+    alertEl.style.display = 'none';
     try {
         const body = dateVal ? { expires_at: new Date(dateVal + 'T23:59:59').toISOString() } : { expires_at: null };
         const res  = await apiFetch(`/api/portal/users/${userId}`, {

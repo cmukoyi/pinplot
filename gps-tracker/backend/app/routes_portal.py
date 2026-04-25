@@ -263,8 +263,19 @@ def patch_portal_user(
 
     if data.is_active is not None:
         target.is_active = data.is_active
-    if data.expires_at is not None:
-        target.expires_at = data.expires_at
+        # Re-activating a user clears any expiry so it doesn't immediately lapse again
+        if data.is_active:
+            target.expires_at = None
+
+    # Use model_fields_set to detect explicit null (clearing expiry) vs field omitted
+    if "expires_at" in data.model_fields_set:
+        new_expiry = data.expires_at
+        if new_expiry is not None:
+            # Reject dates in the past (compare naive UTC)
+            expiry_naive = new_expiry.replace(tzinfo=None)
+            if expiry_naive < datetime.utcnow():
+                raise HTTPException(status_code=400, detail="Expiry date cannot be in the past")
+        target.expires_at = new_expiry
 
     db.commit()
     db.refresh(target)
