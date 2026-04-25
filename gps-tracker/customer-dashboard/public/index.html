@@ -62,6 +62,16 @@
                 <label for="loginPassword">Password</label>
                 <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
             </div>
+            <div class="login-row">
+                <label class="login-remember">
+                    <input type="checkbox" id="loginRememberMe">
+                    Remember me
+                </label>
+            </div>
+            <div class="form-group">
+                <label for="loginCaptcha">Human check — <span id="captchaQuestion" style="font-weight:600"></span></label>
+                <input type="number" id="loginCaptcha" placeholder="Answer" required autocomplete="off" style="max-width:100px">
+            </div>
             <button type="submit" class="btn btn-primary btn-full" id="loginBtn">
                 <i class="fa-solid fa-right-to-bracket"></i> Sign In
             </button>
@@ -181,7 +191,7 @@
             </button>
 
             <button class="nav-item" data-tab="reports-battery" onclick="switchTab('reports-battery')">
-                <span class="nav-icon"><i class="fa-solid fa-battery-low"></i></span>
+                <span class="nav-icon"><i class="fa-solid fa-battery-quarter"></i></span>
                 <span class="nav-label">Battery &amp; Offline</span>
             </button>
         </div>
@@ -2016,15 +2026,36 @@ function authHeaders() {
     return { 'Authorization': `Bearer ${getSession().token}`, 'Content-Type': 'application/json' };
 }
 
-function apiFetch(path, options = {}) {
-    return fetch(path, { ...options, headers: { ...authHeaders(), ...(options.headers || {}) } });
+async function apiFetch(path, options = {}) {
+    const res = await fetch(path, { ...options, headers: { ...authHeaders(), ...(options.headers || {}) } });
+    if (res.status === 401) {
+        _sessionExpiredLogout();
+    }
+    return res;
+}
+
+// Show session-expired notice and return to login
+function _sessionExpiredLogout() {
+    clearSession();
+    document.getElementById('dashboardPage').style.display = 'none';
+    document.getElementById('loginPage').style.display = 'flex';
+    const errEl = document.getElementById('loginError');
+    errEl.textContent = 'Your session has expired. Please sign in again.';
+    errEl.style.display = 'block';
+    _generateCaptcha();
 }
 
 // Safely extract a detail message from a non-2xx response.
 // Falls back to `fallback` if the body is not valid JSON (e.g. 502, 500 HTML).
 async function safeJsonDetail(res, fallback) {
     try {
-        const data = await res.clone().json();
+        const text = await res.clone().text();
+        if (text.trim().startsWith('<')) {
+            // Server returned HTML (502 gateway, nginx error page, etc.)
+            if (res.status >= 500) return 'Server error. Please try again shortly.';
+            return fallback;
+        }
+        const data = JSON.parse(text);
         return data.detail || fallback;
     } catch (_) {
         return fallback;
@@ -2034,29 +2065,59 @@ async function safeJsonDetail(res, fallback) {
 // ══════════════════════════════════════════
 // Login / Logout
 // ══════════════════════════════════════════
+// ── CAPTCHA helpers ────────────────────────────────────────────
+let _captchaAnswer = null;
+function _generateCaptcha() {
+    const a = Math.floor(Math.random() * 9) + 1;
+    const b = Math.floor(Math.random() * 9) + 1;
+    _captchaAnswer = a + b;
+    const el = document.getElementById('captchaQuestion');
+    if (el) el.textContent = `${a} + ${b} = ?`;
+    const inp = document.getElementById('loginCaptcha');
+    if (inp) inp.value = '';
+}
+
 async function handleLogin(e) {
     e.preventDefault();
     const errEl = document.getElementById('loginError');
     const btn   = document.getElementById('loginBtn');
     errEl.style.display = 'none';
+
+    // CAPTCHA check
+    const captchaVal = parseInt(document.getElementById('loginCaptcha')?.value, 10);
+    if (captchaVal !== _captchaAnswer) {
+        errEl.textContent = 'Verification answer is incorrect. Please try again.';
+        errEl.style.display = 'block';
+        _generateCaptcha();
+        return;
+    }
+
     btn.disabled = true; btn.textContent = 'Signing in…';
 
     try {
+        const email = document.getElementById('loginEmail').value.trim();
         const res  = await fetch('/api/portal/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                email:    document.getElementById('loginEmail').value.trim(),
+                email,
                 password: document.getElementById('loginPassword').value,
             }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Login failed');
+        // Remember me
+        if (document.getElementById('loginRememberMe')?.checked) {
+            localStorage.setItem('portal_remembered_email', email);
+        } else {
+            localStorage.removeItem('portal_remembered_email');
+        }
         saveSession(data.access_token, data.portal_user, data.usergroup);
         showDashboard(data.portal_user, data.usergroup);
     } catch (err) {
         errEl.textContent = err.message;
         errEl.style.display = 'block';
+        _generateCaptcha();
     } finally {
         btn.disabled = false; btn.textContent = 'Sign In';
     }
@@ -2066,6 +2127,8 @@ function handleLogout() {
     clearSession();
     document.getElementById('dashboardPage').style.display = 'none';
     document.getElementById('loginPage').style.display     = 'flex';
+    _generateCaptcha();
+    document.getElementById('loginError').style.display = 'none';
 }
 
 // ══════════════════════════════════════════
@@ -4686,7 +4749,17 @@ async function submitAddUser(e) {
         showDashboard(user, group);
     } else {
         document.getElementById('loginPage').style.display = 'flex';
+        // Pre-fill remembered email
+        const remembered = localStorage.getItem('portal_remembered_email');
+        if (remembered) {
+            const emailEl = document.getElementById('loginEmail');
+            const remEl   = document.getElementById('loginRememberMe');
+            if (emailEl) emailEl.value = remembered;
+            if (remEl)   remEl.checked = true;
+        }
     }
+    // Generate captcha on every page load
+    _generateCaptcha();
 })();
 
 // ══════════════════════════════════════════

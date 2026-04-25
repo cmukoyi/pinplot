@@ -1292,7 +1292,7 @@ def list_categories(request: Request, db: Session = Depends(get_db)):
     me = get_portal_user_from_request(request, db)
     return (
         db.query(TagCategory)
-        .filter(TagCategory.usergroup_id == me.usergroup_id, TagCategory.is_active == True)
+        .filter(TagCategory.usergroup_id == str(me.usergroup_id), TagCategory.is_active == True)
         .order_by(TagCategory.name)
         .all()
     )
