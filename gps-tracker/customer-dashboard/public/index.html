@@ -821,80 +821,246 @@
                 <div id="settingsGlobalAlert" class="alert" style="display:none"><span id="settingsGlobalAlertText"></span></div>
                 <div class="settings-cards">
 
-                    <!-- ─── Group Profile (read-only) ─── -->
-                    <div class="card" id="settings-profile-card">
+                    <!-- ─── Account & Security ─── -->
+                    <div class="card">
                         <div class="settings-section-header">
-                            <i class="fa-solid fa-building" style="color:var(--primary)"></i>
+                            <i class="fa-solid fa-lock" style="color:var(--primary)"></i>
                             <div>
-                                <h3>Group Profile</h3>
-                                <p>Your organisation's account details on Pinplot.</p>
+                                <h3>Account &amp; Security</h3>
+                                <p>Change your login password.</p>
                             </div>
                         </div>
-                        <div id="settings-profile-loading" style="padding:24px;text-align:center;color:var(--text-3)">
-                            <i class="fa-solid fa-spinner fa-spin"></i> Loading…
+                        <div class="settings-row">
+                            <div>
+                                <div class="settings-row-label">Password</div>
+                                <div class="settings-row-hint">Keep your account secure with a strong password.</div>
+                            </div>
+                            <button class="btn btn-secondary btn-small" onclick="settingsToggleForm('pwForm')">
+                                <i class="fa-solid fa-key"></i> Change Password
+                            </button>
                         </div>
-                        <div id="settings-profile-body" style="display:none">
-                            <div class="settings-row">
-                                <div>
-                                    <div class="settings-row-label">Group Name</div>
-                                </div>
-                                <span class="settings-row-value" id="settings-val-name">—</span>
+                        <div class="settings-inline-edit" id="pwForm" style="display:none">
+                            <div>
+                                <label style="font-size:12px;font-weight:600;color:var(--text-3);display:block;margin-bottom:4px">Current password</label>
+                                <input type="password" id="pw-current" placeholder="••••••••" autocomplete="current-password">
                             </div>
-                            <div class="settings-row">
-                                <div>
-                                    <div class="settings-row-label">Group Slug</div>
-                                    <div class="settings-row-hint">Used in URLs and references.</div>
-                                </div>
-                                <span class="settings-row-value" id="settings-val-slug">—</span>
+                            <div>
+                                <label style="font-size:12px;font-weight:600;color:var(--text-3);display:block;margin-bottom:4px">New password <span style="color:var(--text-3)">(min 8 characters)</span></label>
+                                <input type="password" id="pw-new" placeholder="••••••••" autocomplete="new-password">
                             </div>
+                            <div>
+                                <label style="font-size:12px;font-weight:600;color:var(--text-3);display:block;margin-bottom:4px">Confirm new password</label>
+                                <input type="password" id="pw-confirm" placeholder="••••••••" autocomplete="new-password">
+                            </div>
+                            <div class="actions">
+                                <button class="btn btn-primary btn-small" id="pw-save-btn" onclick="settingsSavePassword()">Save Password</button>
+                                <button class="btn btn-secondary btn-small" onclick="settingsToggleForm('pwForm')">Cancel</button>
+                            </div>
+                            <div class="alert" id="pw-alert" style="display:none"><span id="pw-alert-text"></span></div>
                         </div>
                     </div>
 
-                    <!-- ─── Auto-Registration ─── -->
-                    <div class="card" id="settings-domain-card">
+                    <!-- ─── Appearance ─── -->
+                    <div class="card" id="settings-appearance-card">
                         <div class="settings-section-header">
-                            <i class="fa-solid fa-at" style="color:var(--primary)"></i>
+                            <i class="fa-solid fa-palette" style="color:var(--primary)"></i>
                             <div>
-                                <h3>Tag Auto-Registration</h3>
-                                <p>Mobile app users whose email matches this domain are automatically included in your asset list.</p>
+                                <h3>Appearance</h3>
+                                <p>Customise the portal colours and upload your company logo. Changes apply to all users in your group.</p>
                             </div>
+                            <span id="appearance-admin-badge" class="badge badge-info header-action" style="display:none">Admin only</span>
                         </div>
-                        <div id="settings-domain-loading" style="padding:24px;text-align:center;color:var(--text-3)">
+                        <div id="appearance-loading" style="padding:24px;text-align:center;color:var(--text-3)">
                             <i class="fa-solid fa-spinner fa-spin"></i> Loading…
                         </div>
-                        <div id="settings-domain-body" style="display:none">
+                        <div id="appearance-body" style="display:none">
+                            <!-- Logo -->
+                            <div class="settings-row" style="align-items:flex-start;gap:20px;flex-wrap:wrap">
+                                <div>
+                                    <div class="settings-row-label">Company Logo</div>
+                                    <div class="settings-row-hint">Shown in the header and on the login page.</div>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                                    <div class="logo-preview-box" id="logo-preview-box">
+                                        <img id="logo-preview-img" src="" alt="" style="display:none;max-height:48px;max-width:140px">
+                                        <span id="logo-preview-none" style="font-size:12px;color:var(--text-3)">No logo</span>
+                                    </div>
+                                    <div id="appearance-logo-controls" style="display:none;flex-direction:column;gap:6px">
+                                        <label class="btn btn-secondary btn-small" style="cursor:pointer">
+                                            <i class="fa-solid fa-upload"></i> Upload
+                                            <input type="file" id="logo-file-input" accept="image/*" style="display:none" onchange="settingsLogoFileChange(event)">
+                                        </label>
+                                        <button class="btn btn-secondary btn-small" id="logo-remove-btn" style="display:none" onclick="settingsLogoRemove()">
+                                            <i class="fa-solid fa-trash"></i> Remove
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Colors -->
                             <div class="settings-row">
                                 <div>
-                                    <div class="settings-row-label">Email Domain</div>
-                                    <div class="settings-row-hint">e.g. <em>yourcompany.com</em></div>
+                                    <div class="settings-row-label">Primary Colour</div>
+                                    <div class="settings-row-hint">Buttons, links, active states.</div>
+                                </div>
+                                <div class="settings-row-control" id="color-primary-control" style="display:none">
+                                    <input type="color" id="color-primary" value="#3b82f6" class="color-swatch-input"
+                                           oninput="settingsColorPreview()">
+                                    <button class="btn btn-secondary btn-small" onclick="settingsResetColor('primary')">Reset</button>
+                                </div>
+                                <span id="color-primary-view" class="settings-row-value" style="display:flex;align-items:center;gap:8px">
+                                    <span id="color-primary-dot" class="color-dot"></span>
+                                    <span id="color-primary-val">—</span>
+                                </span>
+                            </div>
+                            <div class="settings-row">
+                                <div>
+                                    <div class="settings-row-label">Accent Colour</div>
+                                    <div class="settings-row-hint">Secondary highlights.</div>
+                                </div>
+                                <div class="settings-row-control" id="color-accent-control" style="display:none">
+                                    <input type="color" id="color-accent" value="#10b981" class="color-swatch-input"
+                                           oninput="settingsColorPreview()">
+                                    <button class="btn btn-secondary btn-small" onclick="settingsResetColor('accent')">Reset</button>
+                                </div>
+                                <span id="color-accent-view" class="settings-row-value" style="display:flex;align-items:center;gap:8px">
+                                    <span id="color-accent-dot" class="color-dot"></span>
+                                    <span id="color-accent-val">—</span>
+                                </span>
+                            </div>
+                            <!-- Admin save row -->
+                            <div id="appearance-save-row" style="display:none;margin-top:16px;display:flex;gap:8px">
+                                <button class="btn btn-primary btn-small" id="appearance-save-btn" onclick="settingsSaveAppearance()">
+                                    <i class="fa-solid fa-floppy-disk"></i> Save Appearance
+                                </button>
+                                <button class="btn btn-secondary btn-small" onclick="settingsCancelAppearance()">Discard</button>
+                            </div>
+                            <div class="alert" id="appearance-alert" style="display:none"><span id="appearance-alert-text"></span></div>
+                        </div>
+                    </div>
+
+                    <!-- ─── Data Retention ─── -->
+                    <div class="card" id="settings-retention-card">
+                        <div class="settings-section-header">
+                            <i class="fa-solid fa-clock-rotate-left" style="color:var(--primary)"></i>
+                            <div>
+                                <h3>Data Retention</h3>
+                                <p>How long movement history is stored for your assets. Older data is automatically purged.</p>
+                            </div>
+                        </div>
+                        <div id="retention-loading" style="padding:24px;text-align:center;color:var(--text-3)">
+                            <i class="fa-solid fa-spinner fa-spin"></i> Loading…
+                        </div>
+                        <div id="retention-body" style="display:none">
+                            <div class="settings-row">
+                                <div>
+                                    <div class="settings-row-label">History Retention</div>
+                                    <div class="settings-row-hint">Tag location history older than this will be removed.</div>
                                 </div>
                                 <div class="settings-row-control">
-                                    <span class="settings-row-value" id="settings-val-domain">Not configured</span>
-                                    <button class="btn btn-secondary btn-small" id="settings-domain-edit-btn"
-                                            style="display:none" onclick="settingsDomainEdit()">
+                                    <span id="retention-view" class="settings-row-value">365 days</span>
+                                    <button class="btn btn-secondary btn-small" id="retention-edit-btn" style="display:none"
+                                            onclick="settingsToggleForm('retentionForm')">
                                         <i class="fa-solid fa-pen"></i> Edit
                                     </button>
                                 </div>
                             </div>
-                            <!-- inline edit form (hidden until Edit clicked) -->
-                            <div class="settings-inline-edit" id="settings-domain-form" style="display:none">
-                                <div class="input-prefix-row">
-                                    <span>@</span>
-                                    <input type="text" id="settings-domain-input"
-                                           placeholder="e.g. yourcompany.com"
-                                           onkeydown="if(event.key==='Enter')settingsDomainSave()">
+                            <div class="settings-inline-edit" id="retentionForm" style="display:none">
+                                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                                    <select id="retention-days-select" style="width:auto">
+                                        <option value="30">30 days</option>
+                                        <option value="60">60 days</option>
+                                        <option value="90">90 days</option>
+                                        <option value="180">6 months</option>
+                                        <option value="365" selected>1 year</option>
+                                        <option value="730">2 years</option>
+                                        <option value="1095">3 years</option>
+                                    </select>
                                 </div>
-                                <p class="hint">Leave blank to disable auto-registration.</p>
+                                <p class="hint">Data beyond this period is automatically deleted to save storage.</p>
                                 <div class="actions">
-                                    <button class="btn btn-primary btn-small" id="settings-domain-save-btn"
-                                            onclick="settingsDomainSave()">Save</button>
-                                    <button class="btn btn-secondary btn-small"
-                                            onclick="settingsDomainCancel()">Cancel</button>
+                                    <button class="btn btn-primary btn-small" id="retention-save-btn" onclick="settingsSaveRetention()">Save</button>
+                                    <button class="btn btn-secondary btn-small" onclick="settingsToggleForm('retentionForm')">Cancel</button>
                                 </div>
-                                <div class="alert" id="settings-domain-alert" style="display:none">
-                                    <span id="settings-domain-alert-text"></span>
+                                <div class="alert" id="retention-alert" style="display:none"><span id="retention-alert-text"></span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ─── Alerts & Notifications ─── -->
+                    <div class="card">
+                        <div class="settings-section-header">
+                            <i class="fa-solid fa-bell" style="color:var(--primary)"></i>
+                            <div>
+                                <h3>Alerts &amp; Notifications</h3>
+                                <p>Control when you are notified about your assets.</p>
+                            </div>
+                        </div>
+                        <div id="notif-loading" style="padding:24px;text-align:center;color:var(--text-3)">
+                            <i class="fa-solid fa-spinner fa-spin"></i> Loading…
+                        </div>
+                        <div id="notif-body" style="display:none">
+                            <!-- Master toggle -->
+                            <div class="settings-row">
+                                <div>
+                                    <div class="settings-row-label">Enable Alerts</div>
+                                    <div class="settings-row-hint">Master switch — turns all notifications on or off.</div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="notif-enabled" onchange="settingsSaveNotifications()">
+                                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                </label>
+                            </div>
+                            <!-- Trigger types -->
+                            <div id="notif-triggers" style="transition:opacity .2s">
+                                <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);padding:14px 0 8px">
+                                    Notify me when a tag…
+                                </p>
+                                <div class="settings-row">
+                                    <div>
+                                        <div class="settings-row-label"><i class="fa-solid fa-draw-polygon" style="margin-right:6px;color:var(--warning)"></i>Leaves a zone (geofence)</div>
+                                        <div class="settings-row-hint">Alert when an asset exits a defined geofence area.</div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="notif-geofence" onchange="settingsSaveNotifications()">
+                                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                    </label>
+                                </div>
+                                <div class="settings-row">
+                                    <div>
+                                        <div class="settings-row-label"><i class="fa-solid fa-battery-low" style="margin-right:6px;color:var(--danger)"></i>Battery is low</div>
+                                        <div class="settings-row-hint">Alert when a tag's battery drops below 20%.</div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="notif-battery" onchange="settingsSaveNotifications()">
+                                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                    </label>
+                                </div>
+                                <div class="settings-row">
+                                    <div>
+                                        <div class="settings-row-label"><i class="fa-solid fa-signal-slash" style="margin-right:6px;color:var(--text-3)"></i>Goes offline / not seen</div>
+                                        <div class="settings-row-hint">Alert when a tag hasn't been detected for an extended period.</div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="notif-offline" onchange="settingsSaveNotifications()">
+                                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                    </label>
+                                </div>
+                                <!-- Delivery method -->
+                                <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);padding:14px 0 8px">
+                                    How to notify me
+                                </p>
+                                <div class="settings-row">
+                                    <div>
+                                        <div class="settings-row-label"><i class="fa-solid fa-envelope" style="margin-right:6px;color:var(--info)"></i>Email notifications</div>
+                                        <div class="settings-row-hint">Send an email to <span id="notif-email-address" style="color:var(--text-2);font-style:italic"></span>.</div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="notif-email" onchange="settingsSaveNotifications()">
+                                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                    </label>
                                 </div>
                             </div>
+                            <div class="alert" id="notif-alert" style="display:none"><span id="notif-alert-text"></span></div>
                         </div>
                     </div>
 
@@ -1621,6 +1787,8 @@ function showDashboard(user, group) {
     }));
     // Pre-load categories so filter bars are populated before user opens Settings
     _fetchCategories();
+    // Load and apply branding (theme colours + logo) for this group
+    apiFetch('/api/portal/theme').then(r => r.ok ? r.json() : null).then(t => { if (t) applyBranding(t); }).catch(() => {});
 }
 
 // ══════════════════════════════════════════
@@ -2063,106 +2231,383 @@ async function submitTagForm(e) {
 // SETTINGS
 // ══════════════════════════════════════════
 
-let _settingsCache = null;  // last loaded GroupSettingsOut
+let _settingsCache   = null;   // /api/portal/settings (email_domain etc.)
+let _themeCache      = null;   // /api/portal/theme
+let _notifCache      = null;   // /api/portal/notifications
+let _logoDataPending = undefined; // undefined = unchanged; null = remove; string = new data-URL
 
 async function loadSettings() {
-    // Reset loading states
-    ['settings-profile-loading', 'settings-domain-loading'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) { el.style.display = ''; }
-    });
-    ['settings-profile-body', 'settings-domain-body'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) { el.style.display = 'none'; }
-    });
+    const isAdmin = getSession().user?.is_group_admin;
 
-    try {
-        const res = await apiFetch('/api/portal/settings');
-        if (!res.ok) {
-            const msg = await safeJsonDetail(res, 'Failed to load settings');
-            throw new Error(msg);
-        }
-        _settingsCache = await res.json();
-        _renderSettingsProfile(_settingsCache);
-        _renderSettingsDomain(_settingsCache);
-    } catch (err) {
-        ['settings-profile-loading', 'settings-domain-loading'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.innerHTML = `<span style="color:var(--danger)">${esc(err.message)}</span>`;
-        });
-    }
-
+    // Load in parallel — non-critical sections show their own spinners
+    await Promise.allSettled([
+        _loadSettingsTheme(isAdmin),
+        _loadSettingsRetention(isAdmin),
+        _loadSettingsNotifications(),
+    ]);
     loadCategories();
 }
 
-function _renderSettingsProfile(s) {
-    const loading = document.getElementById('settings-profile-loading');
-    const body    = document.getElementById('settings-profile-body');
+// ─── Appearance ──────────────────────────────────────────────────────────────
+
+async function _loadSettingsTheme(isAdmin) {
+    try {
+        const res = await apiFetch('/api/portal/theme');
+        if (!res.ok) throw new Error(await safeJsonDetail(res, 'Failed'));
+        _themeCache = await res.json();
+        _logoDataPending = undefined;
+    } catch (_) {
+        _themeCache = {};
+    }
+    const loading = document.getElementById('appearance-loading');
+    const body    = document.getElementById('appearance-body');
     if (loading) loading.style.display = 'none';
     if (body)    body.style.display    = '';
-    const nameEl = document.getElementById('settings-val-name');
-    const slugEl = document.getElementById('settings-val-slug');
-    if (nameEl) nameEl.textContent = s.name || '—';
-    if (slugEl) slugEl.textContent = s.slug || '—';
+
+    // Logo preview
+    const img      = document.getElementById('logo-preview-img');
+    const none     = document.getElementById('logo-preview-none');
+    const removeBtn= document.getElementById('logo-remove-btn');
+    if (img && none) {
+        if (_themeCache?.logo_data) {
+            img.src = _themeCache.logo_data;
+            img.style.display = '';
+            none.style.display = 'none';
+            if (removeBtn) removeBtn.style.display = '';
+        } else {
+            img.style.display = 'none';
+            none.style.display = '';
+            if (removeBtn) removeBtn.style.display = 'none';
+        }
+    }
+
+    // Color swatches
+    const primary = _themeCache?.theme_primary || '';
+    const accent  = _themeCache?.theme_accent  || '';
+    _setColorDisplayRow('primary', primary);
+    _setColorDisplayRow('accent',  accent);
+
+    // Admin-only controls
+    const controls   = document.querySelectorAll('#appearance-logo-controls, #color-primary-control, #color-accent-control, #appearance-save-row');
+    const viewPrimary = document.getElementById('color-primary-view');
+    const viewAccent  = document.getElementById('color-accent-view');
+    controls.forEach(el => { if (el) el.style.display = isAdmin ? 'flex' : 'none'; });
+    if (viewPrimary) viewPrimary.style.display = isAdmin ? 'none' : '';
+    if (viewAccent)  viewAccent.style.display  = isAdmin ? 'none' : '';
+    if (isAdmin) {
+        const cpInput = document.getElementById('color-primary');
+        const caInput = document.getElementById('color-accent');
+        if (cpInput) cpInput.value = primary || '#3b82f6';
+        if (caInput) caInput.value = accent  || '#10b981';
+    }
+    const badge = document.getElementById('appearance-admin-badge');
+    if (badge) badge.style.display = isAdmin ? '' : 'none';
 }
 
-function _renderSettingsDomain(s) {
-    const loading  = document.getElementById('settings-domain-loading');
-    const body     = document.getElementById('settings-domain-body');
-    const valEl    = document.getElementById('settings-val-domain');
-    const editBtn  = document.getElementById('settings-domain-edit-btn');
+function _setColorDisplayRow(key, hex) {
+    const dot = document.getElementById(`color-${key}-dot`);
+    const val = document.getElementById(`color-${key}-val`);
+    if (dot) dot.style.background = hex || 'var(--border)';
+    if (val) val.textContent      = hex || 'Default';
+}
+
+function settingsColorPreview() {
+    // Live-preview colours while the admin is choosing
+    const primary = document.getElementById('color-primary')?.value;
+    const accent  = document.getElementById('color-accent')?.value;
+    if (primary) document.documentElement.style.setProperty('--primary', primary);
+    if (accent)  document.documentElement.style.setProperty('--success', accent);
+}
+
+function settingsResetColor(key) {
+    const defaults = { primary: '#3b82f6', accent: '#10b981' };
+    const input = document.getElementById(`color-${key}`);
+    if (input) { input.value = defaults[key]; settingsColorPreview(); }
+}
+
+function settingsLogoFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 512 * 1024) {
+        alert('Logo must be under 512 KB.');
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = ev => {
+        _logoDataPending = ev.target.result;
+        const img  = document.getElementById('logo-preview-img');
+        const none = document.getElementById('logo-preview-none');
+        const removeBtn = document.getElementById('logo-remove-btn');
+        if (img)  { img.src = _logoDataPending; img.style.display = ''; }
+        if (none) none.style.display = 'none';
+        if (removeBtn) removeBtn.style.display = '';
+    };
+    reader.readAsDataURL(file);
+}
+
+function settingsLogoRemove() {
+    _logoDataPending = null;
+    const img  = document.getElementById('logo-preview-img');
+    const none = document.getElementById('logo-preview-none');
+    const removeBtn = document.getElementById('logo-remove-btn');
+    if (img)  { img.src = ''; img.style.display = 'none'; }
+    if (none) none.style.display = '';
+    if (removeBtn) removeBtn.style.display = 'none';
+}
+
+async function settingsSaveAppearance() {
+    const btn     = document.getElementById('appearance-save-btn');
+    const alertEl = document.getElementById('appearance-alert');
+    const alertTx = document.getElementById('appearance-alert-text');
+    alertEl.style.display = 'none';
+    btn.disabled = true;
+
+    const payload = {
+        theme_primary: document.getElementById('color-primary')?.value || null,
+        theme_accent:  document.getElementById('color-accent')?.value  || null,
+    };
+    if (_logoDataPending !== undefined) {
+        payload.logo_data = _logoDataPending;  // null = clear, string = new logo
+    }
+
+    try {
+        const res = await apiFetch('/api/portal/theme', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(await safeJsonDetail(res, 'Save failed'));
+        _themeCache = await res.json();
+        _logoDataPending = undefined;
+        applyBranding(_themeCache);
+        alertTx.textContent   = 'Appearance saved.';
+        alertEl.className     = 'alert alert-success';
+        alertEl.style.display = 'flex';
+        setTimeout(() => { alertEl.style.display = 'none'; }, 3000);
+    } catch (err) {
+        alertTx.textContent   = err.message;
+        alertEl.className     = 'alert alert-error';
+        alertEl.style.display = 'flex';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function settingsCancelAppearance() {
+    // Revert live preview
+    applyBranding(_themeCache || {});
+    _loadSettingsTheme(getSession().user?.is_group_admin);
+}
+
+// Apply branding to document — called after login and after save
+function applyBranding(theme) {
+    if (!theme) return;
+    const root = document.documentElement;
+    if (theme.theme_primary) {
+        root.style.setProperty('--primary', theme.theme_primary);
+        root.style.setProperty('--primary-d', theme.theme_primary);
+    } else {
+        root.style.removeProperty('--primary');
+        root.style.removeProperty('--primary-d');
+    }
+    if (theme.theme_accent) {
+        root.style.setProperty('--success', theme.theme_accent);
+    } else {
+        root.style.removeProperty('--success');
+    }
+    // Logo in header
+    const logoWrap = document.querySelector('.logo-wrap');
+    if (logoWrap) {
+        if (theme.logo_data) {
+            logoWrap.innerHTML = `<img src="${theme.logo_data}" alt="Logo" style="height:32px;max-width:140px;object-fit:contain">`;
+        } else {
+            logoWrap.innerHTML = `<div class="logo-icon"><i class="fa-solid fa-location-dot"></i></div><div>PinPlot<span class="logo-sub">Customer Portal</span></div>`;
+        }
+    }
+    // Persist to localStorage for next page load
+    try { localStorage.setItem('pinplot_branding', JSON.stringify({ theme_primary: theme.theme_primary, theme_accent: theme.theme_accent, logo_data: theme.logo_data })); } catch (_) {}
+}
+
+// Apply any persisted branding immediately (before API call) to avoid flash
+(function applyStoredBranding() {
+    try {
+        const stored = JSON.parse(localStorage.getItem('pinplot_branding') || 'null');
+        if (stored) applyBranding(stored);
+    } catch (_) {}
+})();
+
+// ─── Data Retention ───────────────────────────────────────────────────────────
+
+async function _loadSettingsRetention(isAdmin) {
+    const loading  = document.getElementById('retention-loading');
+    const body     = document.getElementById('retention-body');
+    const editBtn  = document.getElementById('retention-edit-btn');
+    try {
+        if (!_themeCache) {
+            const res = await apiFetch('/api/portal/theme');
+            if (res.ok) _themeCache = await res.json();
+        }
+        _renderRetention(_themeCache?.history_retention_days ?? 365);
+    } catch (_) {
+        _renderRetention(365);
+    }
     if (loading) loading.style.display = 'none';
     if (body)    body.style.display    = '';
-    if (valEl)   valEl.textContent = s.email_domain ? `@${s.email_domain}` : 'Not configured';
-    const isAdmin = getSession().user?.is_group_admin;
     if (editBtn) editBtn.style.display = isAdmin ? '' : 'none';
-    // Collapse form if it was open
-    settingsDomainCancel();
 }
 
-function settingsDomainEdit() {
-    const form  = document.getElementById('settings-domain-form');
-    const input = document.getElementById('settings-domain-input');
-    const alert = document.getElementById('settings-domain-alert');
-    if (!form) return;
-    input.value = (_settingsCache?.email_domain) || '';
-    alert.style.display = 'none';
-    form.style.display  = '';
-    input.focus();
+function _renderRetention(days) {
+    const view = document.getElementById('retention-view');
+    const sel  = document.getElementById('retention-days-select');
+    const label = days >= 365 ? (days % 365 === 0 ? `${days/365} year${days/365>1?'s':''}` : `${days} days`) : `${days} days`;
+    if (view) view.textContent = label;
+    if (sel)  sel.value        = String(days);
 }
 
-function settingsDomainCancel() {
-    const form = document.getElementById('settings-domain-form');
-    if (form) form.style.display = 'none';
-}
-
-async function settingsDomainSave() {
-    const input   = document.getElementById('settings-domain-input');
-    const saveBtn = document.getElementById('settings-domain-save-btn');
-    const alertEl = document.getElementById('settings-domain-alert');
-    const alertTx = document.getElementById('settings-domain-alert-text');
+async function settingsSaveRetention() {
+    const sel     = document.getElementById('retention-days-select');
+    const saveBtn = document.getElementById('retention-save-btn');
+    const alertEl = document.getElementById('retention-alert');
+    const alertTx = document.getElementById('retention-alert-text');
     alertEl.style.display = 'none';
     saveBtn.disabled = true;
     try {
-        const res = await apiFetch('/api/portal/settings', {
+        const days = parseInt(sel.value, 10);
+        const res = await apiFetch('/api/portal/theme', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email_domain: input.value.trim() || null }),
+            body: JSON.stringify({ history_retention_days: days }),
         });
         if (!res.ok) throw new Error(await safeJsonDetail(res, 'Save failed'));
-        _settingsCache = await res.json();
-        _renderSettingsDomain(_settingsCache);
-        // Refresh tag list domain hint if assets tab is visible
-        if (document.getElementById('tab-assets')?.classList.contains('active')) {
-            initAssetMgmt();
-        }
+        _themeCache = await res.json();
+        _renderRetention(_themeCache.history_retention_days ?? 365);
+        settingsToggleForm('retentionForm');
     } catch (err) {
-        alertTx.textContent    = err.message;
-        alertEl.className      = 'alert alert-error';
-        alertEl.style.display  = 'flex';
+        alertTx.textContent   = err.message;
+        alertEl.className     = 'alert alert-error';
+        alertEl.style.display = 'flex';
     } finally {
         saveBtn.disabled = false;
     }
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+async function _loadSettingsNotifications() {
+    const loading = document.getElementById('notif-loading');
+    const body    = document.getElementById('notif-body');
+    try {
+        const res = await apiFetch('/api/portal/notifications');
+        if (!res.ok) throw new Error(await safeJsonDetail(res, 'Failed'));
+        _notifCache = await res.json();
+    } catch (_) {
+        _notifCache = { alerts_enabled: true, notify_geofence_exit: true, notify_battery_low: true, notify_offline: true, notify_via_email: true };
+    }
+    if (loading) loading.style.display = 'none';
+    if (body)    body.style.display    = '';
+
+    // Populate email hint
+    const emailSpan = document.getElementById('notif-email-address');
+    if (emailSpan) emailSpan.textContent = getSession().user?.email || '';
+
+    _renderNotifications(_notifCache);
+}
+
+function _renderNotifications(p) {
+    const setChk = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
+    setChk('notif-enabled',  p.alerts_enabled);
+    setChk('notif-geofence', p.notify_geofence_exit);
+    setChk('notif-battery',  p.notify_battery_low);
+    setChk('notif-offline',  p.notify_offline);
+    setChk('notif-email',    p.notify_via_email);
+    const triggers = document.getElementById('notif-triggers');
+    if (triggers) triggers.style.opacity = p.alerts_enabled ? '1' : '0.4';
+    triggers?.querySelectorAll('input[type=checkbox]:not(#notif-enabled)').forEach(cb => cb.disabled = !p.alerts_enabled);
+}
+
+async function settingsSaveNotifications() {
+    const alertEl = document.getElementById('notif-alert');
+    const alertTx = document.getElementById('notif-alert-text');
+    const getChk = id => document.getElementById(id)?.checked ?? true;
+
+    const enabled = getChk('notif-enabled');
+    const triggers = document.getElementById('notif-triggers');
+    if (triggers) triggers.style.opacity = enabled ? '1' : '0.4';
+    triggers?.querySelectorAll('input[type=checkbox]:not(#notif-enabled)').forEach(cb => cb.disabled = !enabled);
+
+    try {
+        const res = await apiFetch('/api/portal/notifications', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                alerts_enabled:       enabled,
+                notify_geofence_exit: getChk('notif-geofence'),
+                notify_battery_low:   getChk('notif-battery'),
+                notify_offline:       getChk('notif-offline'),
+                notify_via_email:     getChk('notif-email'),
+            }),
+        });
+        if (!res.ok) throw new Error(await safeJsonDetail(res, 'Save failed'));
+        _notifCache = await res.json();
+        // Brief success flash
+        alertTx.textContent   = 'Preferences saved.';
+        alertEl.className     = 'alert alert-success';
+        alertEl.style.display = 'flex';
+        setTimeout(() => { alertEl.style.display = 'none'; }, 2000);
+    } catch (err) {
+        alertTx.textContent   = err.message;
+        alertEl.className     = 'alert alert-error';
+        alertEl.style.display = 'flex';
+    }
+}
+
+// ─── Change Password ──────────────────────────────────────────────────────────
+
+async function settingsSavePassword() {
+    const current  = document.getElementById('pw-current')?.value;
+    const newPw    = document.getElementById('pw-new')?.value;
+    const confirm  = document.getElementById('pw-confirm')?.value;
+    const btn      = document.getElementById('pw-save-btn');
+    const alertEl  = document.getElementById('pw-alert');
+    const alertTx  = document.getElementById('pw-alert-text');
+    alertEl.style.display = 'none';
+
+    if (!current || !newPw) { _showSettingsAlert(alertEl, alertTx, 'Please fill in all fields.'); return; }
+    if (newPw !== confirm)  { _showSettingsAlert(alertEl, alertTx, 'New passwords do not match.'); return; }
+    if (newPw.length < 8)   { _showSettingsAlert(alertEl, alertTx, 'Password must be at least 8 characters.'); return; }
+
+    btn.disabled = true;
+    try {
+        const res = await apiFetch('/api/portal/account/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ current_password: current, new_password: newPw }),
+        });
+        if (!res.ok) throw new Error(await safeJsonDetail(res, 'Password change failed'));
+        document.getElementById('pw-current').value = '';
+        document.getElementById('pw-new').value     = '';
+        document.getElementById('pw-confirm').value = '';
+        settingsToggleForm('pwForm');
+        showTabAlert('settings', 'Password changed successfully.', 'success');
+    } catch (err) {
+        _showSettingsAlert(alertEl, alertTx, err.message);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function settingsToggleForm(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+function _showSettingsAlert(alertEl, alertTx, msg) {
+    alertTx.textContent   = msg;
+    alertEl.className     = 'alert alert-error';
+    alertEl.style.display = 'flex';
 }
 
 // ══════════════════════════════════════════

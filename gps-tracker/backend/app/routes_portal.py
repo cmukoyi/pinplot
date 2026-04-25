@@ -443,6 +443,159 @@ def update_settings(
 
 
 # ---------------------------------------------------------------------------
+# Theme / Branding
+# ---------------------------------------------------------------------------
+
+class ThemeOut(BaseModel):
+    logo_data: Optional[str] = None
+    theme_primary: Optional[str] = None
+    theme_accent: Optional[str] = None
+    history_retention_days: Optional[int] = 365
+
+    class Config:
+        from_attributes = True
+
+
+class ThemeUpdate(BaseModel):
+    logo_data: Optional[str] = None          # base64 data-URL or None to clear
+    theme_primary: Optional[str] = None      # hex e.g. '#3b82f6' or None to reset
+    theme_accent: Optional[str] = None
+    history_retention_days: Optional[int] = None
+
+
+@router.get("/theme", response_model=ThemeOut)
+def get_theme(request: Request, db: Session = Depends(get_db)):
+    """Return the group's branding/theme settings."""
+    me = get_portal_user_from_request(request, db)
+    group = db.query(UserGroup).filter(UserGroup.id == me.usergroup_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="User group not found")
+    return ThemeOut.model_validate(group)
+
+
+@router.put("/theme", response_model=ThemeOut)
+def update_theme(
+    data: ThemeUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Update branding/theme (group admin only)."""
+    me = get_portal_user_from_request(request, db)
+    if not me.is_group_admin:
+        raise HTTPException(status_code=403, detail="Only group admins can update branding")
+    group = db.query(UserGroup).filter(UserGroup.id == me.usergroup_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="User group not found")
+
+    if data.logo_data is not None:
+        # Validate it's a data URL (or empty string to clear)
+        if data.logo_data and not data.logo_data.startswith("data:image/"):
+            raise HTTPException(status_code=400, detail="logo_data must be a data: URL")
+        group.logo_data = data.logo_data or None
+
+    if data.theme_primary is not None:
+        val = data.theme_primary.strip()
+        if val and not val.startswith("#"):
+            raise HTTPException(status_code=400, detail="theme_primary must be a hex color like #3b82f6")
+        group.theme_primary = val or None
+
+    if data.theme_accent is not None:
+        val = data.theme_accent.strip()
+        if val and not val.startswith("#"):
+            raise HTTPException(status_code=400, detail="theme_accent must be a hex color like #10b981")
+        group.theme_accent = val or None
+
+    if data.history_retention_days is not None:
+        days = data.history_retention_days
+        if days < 7 or days > 3650:
+            raise HTTPException(status_code=400, detail="Retention must be between 7 and 3650 days")
+        group.history_retention_days = days
+
+    db.commit()
+    db.refresh(group)
+    return ThemeOut.model_validate(group)
+
+
+# ---------------------------------------------------------------------------
+# Notification Preferences (per-user)
+# ---------------------------------------------------------------------------
+
+class NotificationPrefsOut(BaseModel):
+    alerts_enabled: bool
+    notify_geofence_exit: bool
+    notify_battery_low: bool
+    notify_offline: bool
+    notify_via_email: bool
+
+    class Config:
+        from_attributes = True
+
+
+class NotificationPrefsUpdate(BaseModel):
+    alerts_enabled: Optional[bool] = None
+    notify_geofence_exit: Optional[bool] = None
+    notify_battery_low: Optional[bool] = None
+    notify_offline: Optional[bool] = None
+    notify_via_email: Optional[bool] = None
+
+
+@router.get("/notifications", response_model=NotificationPrefsOut)
+def get_notification_prefs(request: Request, db: Session = Depends(get_db)):
+    """Return the current user's notification preferences."""
+    me = get_portal_user_from_request(request, db)
+    return NotificationPrefsOut.model_validate(me)
+
+
+@router.put("/notifications", response_model=NotificationPrefsOut)
+def update_notification_prefs(
+    data: NotificationPrefsUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Update the current user's notification preferences."""
+    me = get_portal_user_from_request(request, db)
+    if data.alerts_enabled is not None:
+        me.alerts_enabled = data.alerts_enabled
+    if data.notify_geofence_exit is not None:
+        me.notify_geofence_exit = data.notify_geofence_exit
+    if data.notify_battery_low is not None:
+        me.notify_battery_low = data.notify_battery_low
+    if data.notify_offline is not None:
+        me.notify_offline = data.notify_offline
+    if data.notify_via_email is not None:
+        me.notify_via_email = data.notify_via_email
+    db.commit()
+    db.refresh(me)
+    return NotificationPrefsOut.model_validate(me)
+
+
+# ---------------------------------------------------------------------------
+# Account — Change Password
+# ---------------------------------------------------------------------------
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/account/change-password", status_code=200)
+def change_password(
+    data: ChangePasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Let the logged-in portal user change their own password."""
+    me = get_portal_user_from_request(request, db)
+    if not verify_password(me.hashed_password, data.current_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    me.hashed_password = hash_password(data.new_password)
+    db.commit()
+    return {"detail": "Password updated successfully"}
+
+
+# ---------------------------------------------------------------------------
 # Tags — all BLE tags belonging to mobile-app users whose email domain
 #         matches the group's configured email_domain
 # ---------------------------------------------------------------------------
@@ -1139,7 +1292,7 @@ def list_categories(request: Request, db: Session = Depends(get_db)):
     me = get_portal_user_from_request(request, db)
     return (
         db.query(TagCategory)
-        .filter(TagCategory.usergroup_id == str(me.usergroup_id), TagCategory.is_active == True)
+        .filter(TagCategory.usergroup_id == me.usergroup_id, TagCategory.is_active == True)
         .order_by(TagCategory.name)
         .all()
     )

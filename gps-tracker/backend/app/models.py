@@ -253,6 +253,12 @@ class UserGroup(Base):
     is_active    = Column(Boolean, nullable=False, default=True)
     created_at   = Column(DateTime(timezone=True), server_default=func.now())
     updated_at   = Column(DateTime(timezone=True), onupdate=func.now())
+    # Branding / appearance (group admin configurable)
+    logo_data             = Column(Text, nullable=True)          # base64 data-URL
+    theme_primary         = Column(String(20), nullable=True)    # hex e.g. '#3b82f6'
+    theme_accent          = Column(String(20), nullable=True)    # secondary hex
+    # Data retention
+    history_retention_days = Column(Integer, nullable=True, default=365)  # days to keep tag history
 
     portal_users = relationship("PortalUser", back_populates="usergroup",
                                 cascade="all, delete-orphan")
@@ -308,6 +314,12 @@ class PortalUser(Base):
     expires_at      = Column(DateTime(timezone=True), nullable=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
+    # Notification preferences (per-user)
+    alerts_enabled       = Column(Boolean, nullable=False, default=True)
+    notify_geofence_exit = Column(Boolean, nullable=False, default=True)
+    notify_battery_low   = Column(Boolean, nullable=False, default=True)
+    notify_offline       = Column(Boolean, nullable=False, default=True)
+    notify_via_email     = Column(Boolean, nullable=False, default=True)
 
     usergroup = relationship("UserGroup", back_populates="portal_users")
 
