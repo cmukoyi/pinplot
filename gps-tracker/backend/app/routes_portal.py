@@ -15,7 +15,7 @@ import os
 import logging
 
 from app.database import get_db
-from app.models import UserGroup, UserGroupPackage, PortalUser, Building, Floor, IndoorGateway, BLETag, User, TagCategory
+from app.models import UserGroup, UserGroupPackage, PortalUser, Building, Floor, IndoorGateway, BLETag, User, TagCategory, GeofenceAlert, POI
 from app.models_admin import TagPackage
 from app.admin_auth import hash_password, verify_password
 
@@ -1367,3 +1367,64 @@ def delete_category(cat_id: str, request: Request, db: Session = Depends(get_db)
         raise HTTPException(status_code=404, detail="Category not found")
     cat.is_active = False
     db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Reports — Geofence Events
+# ---------------------------------------------------------------------------
+
+@router.get("/reports/geofence-events")
+def report_geofence_events(
+    request: Request,
+    days: int = 30,
+    tag_id: Optional[str] = None,
+    poi_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Return geofence entry/exit events for all tags in the caller's group.
+
+    Scoped by joining GeofenceAlert → BLETag → User whose email domain
+    matches the UserGroup's configured email_domain.
+    Returns newest-first, capped at 1000 rows.
+    """
+    me = get_portal_user_from_request(request, db)
+    group = db.query(UserGroup).filter(UserGroup.id == me.usergroup_id).first()
+    if not group or not group.email_domain:
+        return []
+
+    since = datetime.utcnow() - timedelta(days=max(1, min(days, 365)))
+
+    q = (
+        db.query(GeofenceAlert)
+        .join(BLETag, BLETag.id == GeofenceAlert.tracker_id)
+        .join(User, User.id == BLETag.user_id)
+        .join(POI, POI.id == GeofenceAlert.poi_id)
+        .filter(
+            User.email.ilike(f"%@{group.email_domain.lower()}"),
+            GeofenceAlert.created_at >= since,
+        )
+    )
+    if tag_id:
+        q = q.filter(GeofenceAlert.tracker_id == tag_id)
+    if poi_id:
+        q = q.filter(GeofenceAlert.poi_id == poi_id)
+
+    alerts = q.order_by(GeofenceAlert.created_at.desc()).limit(1000).all()
+
+    result = []
+    for a in alerts:
+        tag = a.tracker
+        poi = a.poi
+        result.append({
+            "id":          str(a.id),
+            "event_type":  a.event_type.value if hasattr(a.event_type, "value") else str(a.event_type),
+            "created_at":  a.created_at.isoformat() if a.created_at else None,
+            "tag_id":      str(tag.id)  if tag else str(a.tracker_id),
+            "tag_label":   (tag.description or tag.device_name or tag.imei) if tag else str(a.tracker_id),
+            "tag_imei":    tag.imei if tag else "",
+            "poi_id":      str(a.poi_id),
+            "poi_name":    poi.name if poi else str(a.poi_id),
+            "latitude":    a.latitude,
+            "longitude":   a.longitude,
+        })
+    return result

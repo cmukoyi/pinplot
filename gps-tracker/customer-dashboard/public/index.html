@@ -164,6 +164,26 @@
                 <span class="nav-icon"><i class="fa-solid fa-file-invoice"></i></span>
                 <span class="nav-label">Tag Subscriptions</span>
             </button>
+
+            <button class="nav-item" data-tab="reports-activity" onclick="switchTab('reports-activity')">
+                <span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span>
+                <span class="nav-label">Asset Activity</span>
+            </button>
+
+            <button class="nav-item" data-tab="reports-trips" onclick="switchTab('reports-trips')">
+                <span class="nav-icon"><i class="fa-solid fa-route"></i></span>
+                <span class="nav-label">Trip Log</span>
+            </button>
+
+            <button class="nav-item" data-tab="reports-geofence" onclick="switchTab('reports-geofence')">
+                <span class="nav-icon"><i class="fa-solid fa-draw-polygon"></i></span>
+                <span class="nav-label">Geofence Events</span>
+            </button>
+
+            <button class="nav-item" data-tab="reports-battery" onclick="switchTab('reports-battery')">
+                <span class="nav-icon"><i class="fa-solid fa-battery-low"></i></span>
+                <span class="nav-label">Battery &amp; Offline</span>
+            </button>
         </div>
 
         <div class="sidebar-footer">
@@ -1431,6 +1451,218 @@
                 </div>
             </div>
 
+            <!-- ═══ REPORTS — Asset Activity Summary ═══ -->
+            <div id="tab-reports-activity" class="tab-content">
+                <div class="rpt-toolbar">
+                    <div class="search-input-wrap" style="flex:1;max-width:280px">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="rpt-act-search" placeholder="Search tag, user, category…" oninput="rptActFilter()">
+                    </div>
+                    <select id="rpt-act-cat-filter" onchange="rptActFilter()" style="min-width:160px">
+                        <option value="">All categories</option>
+                    </select>
+                    <select id="rpt-act-status-filter" onchange="rptActFilter()" style="min-width:150px">
+                        <option value="">All assets</option>
+                        <option value="active">Seen ≤ 24 h</option>
+                        <option value="idle">Seen 1–7 days</option>
+                        <option value="offline">Seen &gt; 7 days</option>
+                    </select>
+                    <button class="btn btn-secondary btn-small" onclick="rptActRefresh()">
+                        <i class="fa-solid fa-rotate-right"></i> Refresh
+                    </button>
+                    <button class="btn btn-primary btn-small" id="rpt-act-export-btn" onclick="rptActExportCSV()" disabled>
+                        <i class="fa-solid fa-file-csv"></i> Export CSV
+                    </button>
+                </div>
+                <div id="rpt-act-summary" class="rpt-summary-bar" style="display:none">
+                    <span id="rpt-act-count-total"><strong>—</strong> assets</span>
+                    <span class="rpt-sep">·</span>
+                    <span id="rpt-act-count-active" style="color:var(--success)"><strong>—</strong> active</span>
+                    <span class="rpt-sep">·</span>
+                    <span id="rpt-act-count-idle" style="color:var(--warning)"><strong>—</strong> idle</span>
+                    <span class="rpt-sep">·</span>
+                    <span id="rpt-act-count-offline" style="color:var(--danger)"><strong>—</strong> offline</span>
+                </div>
+                <div id="rpt-act-alert" class="alert" style="display:none"><span id="rpt-act-alert-text"></span></div>
+                <div class="rpt-table-wrap">
+                    <table class="rpt-table" id="rpt-act-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" onclick="rptActSort('description')">Tag / Device <span class="sort-arrow" data-col="description"></span></th>
+                                <th class="sortable" onclick="rptActSort('owner_email')">User <span class="sort-arrow" data-col="owner_email"></span></th>
+                                <th class="sortable" onclick="rptActSort('category_name')">Category <span class="sort-arrow" data-col="category_name"></span></th>
+                                <th class="sortable" onclick="rptActSort('last_seen')">Last Seen <span class="sort-arrow" data-col="last_seen"></span></th>
+                                <th class="sortable" onclick="rptActSort('hours_silent')">Hrs Silent <span class="sort-arrow" data-col="hours_silent"></span></th>
+                                <th class="sortable" onclick="rptActSort('battery_level')">Battery <span class="sort-arrow" data-col="battery_level"></span></th>
+                                <th>Location</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rpt-act-tbody">
+                            <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ═══ REPORTS — Movement / Trip Log ═══ -->
+            <div id="tab-reports-trips" class="tab-content">
+                <div class="rpt-toolbar" style="flex-wrap:wrap">
+                    <select id="rpt-trips-tag" style="min-width:220px;max-width:320px">
+                        <option value="">— Select a tag —</option>
+                    </select>
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <label style="font-size:12px;color:var(--text-3);white-space:nowrap">From</label>
+                        <input type="date" id="rpt-trips-from" style="width:145px">
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <label style="font-size:12px;color:var(--text-3);white-space:nowrap">To</label>
+                        <input type="date" id="rpt-trips-to" style="width:145px">
+                    </div>
+                    <button class="btn btn-primary btn-small" id="rpt-trips-load-btn" onclick="rptTripsLoad()">
+                        <i class="fa-solid fa-magnifying-glass"></i> Load Trips
+                    </button>
+                    <button class="btn btn-secondary btn-small" id="rpt-trips-export-btn" onclick="rptTripsExportCSV()" disabled>
+                        <i class="fa-solid fa-file-csv"></i> Export CSV
+                    </button>
+                </div>
+                <div id="rpt-trips-summary" class="rpt-summary-bar" style="display:none">
+                    <span id="rpt-trips-count-total"><strong>—</strong> trips</span>
+                    <span class="rpt-sep">·</span>
+                    <span id="rpt-trips-total-dist"><strong>—</strong> mi total</span>
+                    <span class="rpt-sep">·</span>
+                    <span id="rpt-trips-total-dur"><strong>—</strong> total duration</span>
+                </div>
+                <div id="rpt-trips-alert" class="alert" style="display:none"><span id="rpt-trips-alert-text"></span></div>
+                <div class="rpt-table-wrap">
+                    <table class="rpt-table" id="rpt-trips-table">
+                        <thead>
+                            <tr>
+                                <th style="width:40px">#</th>
+                                <th>Start</th>
+                                <th>End</th>
+                                <th>Duration</th>
+                                <th style="text-align:center">Distance (mi)</th>
+                                <th>From</th>
+                                <th>To</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rpt-trips-tbody">
+                            <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-3)">Select a tag and date range, then click <strong>Load Trips</strong>.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ═══ REPORTS — Geofence Events ═══ -->
+            <div id="tab-reports-geofence" class="tab-content">
+                <div class="rpt-toolbar">
+                    <select id="rpt-geo-days" onchange="rptGeoLoad()" style="min-width:130px">
+                        <option value="7">Last 7 days</option>
+                        <option value="30" selected>Last 30 days</option>
+                        <option value="60">Last 60 days</option>
+                        <option value="90">Last 90 days</option>
+                    </select>
+                    <select id="rpt-geo-tag-filter" onchange="rptGeoFilter()" style="min-width:180px">
+                        <option value="">All tags</option>
+                    </select>
+                    <select id="rpt-geo-zone-filter" onchange="rptGeoFilter()" style="min-width:180px">
+                        <option value="">All zones</option>
+                    </select>
+                    <select id="rpt-geo-type-filter" onchange="rptGeoFilter()" style="min-width:140px">
+                        <option value="">Entry &amp; Exit</option>
+                        <option value="entry">Entry only</option>
+                        <option value="exit">Exit only</option>
+                    </select>
+                    <button class="btn btn-secondary btn-small" onclick="rptGeoRefresh()">
+                        <i class="fa-solid fa-rotate-right"></i> Refresh
+                    </button>
+                    <button class="btn btn-primary btn-small" id="rpt-geo-export-btn" onclick="rptGeoExportCSV()" disabled>
+                        <i class="fa-solid fa-file-csv"></i> Export CSV
+                    </button>
+                </div>
+                <div id="rpt-geo-summary" class="rpt-summary-bar" style="display:none">
+                    <span id="rpt-geo-count-total"><strong>—</strong> events</span>
+                    <span class="rpt-sep">·</span>
+                    <span id="rpt-geo-count-entry" style="color:var(--success)"><strong>—</strong> entries</span>
+                    <span class="rpt-sep">·</span>
+                    <span id="rpt-geo-count-exit" style="color:var(--warning)"><strong>—</strong> exits</span>
+                </div>
+                <div id="rpt-geo-alert" class="alert" style="display:none"><span id="rpt-geo-alert-text"></span></div>
+                <div class="rpt-table-wrap">
+                    <table class="rpt-table" id="rpt-geo-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" onclick="rptGeoSort('created_at')">Date / Time <span class="sort-arrow" data-col="created_at"></span></th>
+                                <th class="sortable" onclick="rptGeoSort('tag_label')">Tag <span class="sort-arrow" data-col="tag_label"></span></th>
+                                <th class="sortable" onclick="rptGeoSort('poi_name')">Zone <span class="sort-arrow" data-col="poi_name"></span></th>
+                                <th class="sortable" onclick="rptGeoSort('event_type')">Event <span class="sort-arrow" data-col="event_type"></span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="rpt-geo-tbody">
+                            <tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ═══ REPORTS — Battery & Offline ═══ -->
+            <div id="tab-reports-battery" class="tab-content">
+                <div class="rpt-toolbar">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label style="font-size:12px;color:var(--text-3);white-space:nowrap">Battery ≤</label>
+                        <select id="rpt-bat-threshold" onchange="rptBatFilter()" style="width:auto">
+                            <option value="10">10%</option>
+                            <option value="20" selected>20%</option>
+                            <option value="30">30%</option>
+                            <option value="50">50%</option>
+                            <option value="100">All levels</option>
+                        </select>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label style="font-size:12px;color:var(--text-3);white-space:nowrap">Silent ≥</label>
+                        <select id="rpt-bat-offline-hrs" onchange="rptBatFilter()" style="width:auto">
+                            <option value="0">Any duration</option>
+                            <option value="24">24 hours</option>
+                            <option value="48" selected>48 hours</option>
+                            <option value="168">7 days</option>
+                            <option value="720">30 days</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-secondary btn-small" onclick="rptBatRefresh()">
+                        <i class="fa-solid fa-rotate-right"></i> Refresh
+                    </button>
+                    <button class="btn btn-primary btn-small" id="rpt-bat-export-btn" onclick="rptBatExportCSV()" disabled>
+                        <i class="fa-solid fa-file-csv"></i> Export CSV
+                    </button>
+                </div>
+                <div id="rpt-bat-summary" class="rpt-summary-bar" style="display:none">
+                    <span id="rpt-bat-count-total"><strong>—</strong> assets</span>
+                    <span class="rpt-sep">·</span>
+                    <span id="rpt-bat-count-low-bat" style="color:var(--danger)"><strong>—</strong> low battery</span>
+                    <span class="rpt-sep">·</span>
+                    <span id="rpt-bat-count-offline" style="color:var(--warning)"><strong>—</strong> offline / silent</span>
+                </div>
+                <div id="rpt-bat-alert" class="alert" style="display:none"><span id="rpt-bat-alert-text"></span></div>
+                <div class="rpt-table-wrap">
+                    <table class="rpt-table" id="rpt-bat-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" onclick="rptBatSort('description')">Tag / Device <span class="sort-arrow" data-col="description"></span></th>
+                                <th class="sortable" onclick="rptBatSort('owner_email')">User <span class="sort-arrow" data-col="owner_email"></span></th>
+                                <th class="sortable" onclick="rptBatSort('battery_level')">Battery <span class="sort-arrow" data-col="battery_level"></span></th>
+                                <th class="sortable" onclick="rptBatSort('last_seen')">Last Seen <span class="sort-arrow" data-col="last_seen"></span></th>
+                                <th class="sortable" onclick="rptBatSort('hours_silent')">Hrs Silent <span class="sort-arrow" data-col="hours_silent"></span></th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rpt-bat-tbody">
+                            <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
         </div><!-- /content -->
     </main><!-- /main-content -->
 </div><!-- /app -->
@@ -1891,7 +2123,7 @@ applyTheme(localStorage.getItem('pp-theme') || 'dark');
 // ══════════════════════════════════════════
 // Tab switching
 // ══════════════════════════════════════════
-const TAB_TITLES = { livemap: 'Live Map', assets: 'Asset List', history: 'Movement History', 'asset-mgmt': 'Asset Management', users: 'User Accounts', building: 'Floorplan Sketch', floorplan: 'Floorplan', settings: 'Settings', qr: 'QR / NFC Tags', 'reports-subscriptions': 'Tag Subscriptions Report' };
+const TAB_TITLES = { livemap: 'Live Map', assets: 'Asset List', history: 'Movement History', 'asset-mgmt': 'Asset Management', users: 'User Accounts', building: 'Floorplan Sketch', floorplan: 'Floorplan', settings: 'Settings', qr: 'QR / NFC Tags', 'reports-subscriptions': 'Tag Subscriptions Report', 'reports-activity': 'Asset Activity Summary', 'reports-trips': 'Movement / Trip Log', 'reports-geofence': 'Geofence Events', 'reports-battery': 'Battery & Offline Report' };
 let _mapInitialized = false;
 
 function switchTab(name) {
@@ -1922,6 +2154,10 @@ function switchTab(name) {
     if (name === 'settings')   loadSettings();
     if (name === 'qr' && typeof QRG !== 'undefined') QRG.onShow();
     if (name === 'reports-subscriptions') loadReports();
+    if (name === 'reports-activity')  loadReportsActivity();
+    if (name === 'reports-trips')     loadReportsTrips();
+    if (name === 'reports-geofence')  loadReportsGeofence();
+    if (name === 'reports-battery')   loadReportsBattery();
     // Sketch tab: resize canvases now the container is visible
     if (name === 'building' && typeof resizeCanvases === 'function') {
         requestAnimationFrame(() => { resizeCanvases(); if (typeof render === 'function') render(); });
@@ -2684,6 +2920,529 @@ function _showSettingsAlert(alertEl, alertTx, msg) {
     alertTx.textContent   = msg;
     alertEl.className     = 'alert alert-error';
     alertEl.style.display = 'flex';
+}
+
+// ══════════════════════════════════════════
+// REPORTS — shared helpers
+// ══════════════════════════════════════════
+
+// Shared tags cache so each report tab doesn't re-fetch /api/portal/tags
+let _rptSharedTags = [];
+let _rptTagsLoaded = false;
+
+async function _rptEnsureTags() {
+    if (_rptTagsLoaded) return _rptSharedTags;
+    const res = await apiFetch('/api/portal/tags');
+    if (!res.ok) throw new Error(await safeJsonDetail(res, 'Failed to load tags'));
+    _rptSharedTags = await res.json();
+    _rptTagsLoaded = true;
+    return _rptSharedTags;
+}
+
+function _rptTagsInvalidate() {
+    _rptTagsLoaded = false;
+    _rptSubLoaded  = false;  // also invalidate subscriptions cache
+}
+
+function _rptHoursSilent(tag) {
+    if (!tag.last_seen) return null;
+    return Math.floor((Date.now() - new Date(tag.last_seen).getTime()) / 3600000);
+}
+
+function _rptActivityStatus(hrs) {
+    if (hrs === null || hrs === undefined) return 'unknown';
+    if (hrs <= 24)  return 'active';
+    if (hrs <= 168) return 'idle';
+    return 'offline';
+}
+
+function _rptFmtDuration(secs) {
+    if (!secs) return '—';
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+}
+
+function _rptDownloadCSV(rows, filename) {
+    const csv  = rows.map(r => r.map(v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `${filename}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function _rptSortHelper(arr, col, asc) {
+    return [...arr].sort((a, b) => {
+        let va = a[col], vb = b[col];
+        if (va == null) va = asc ? '\uffff' : '';
+        if (vb == null) vb = asc ? '\uffff' : '';
+        if (typeof va === 'number' && typeof vb === 'number') return asc ? va - vb : vb - va;
+        return asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+    });
+}
+
+// ══════════════════════════════════════════
+// REPORTS — Asset Activity Summary
+// ══════════════════════════════════════════
+
+let _rptActFiltered = [];
+let _rptActSortCol  = 'hours_silent';
+let _rptActSortAsc  = false;  // most-silent first
+
+async function loadReportsActivity() {
+    const tbody = document.getElementById('rpt-act-tbody');
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>';
+    document.getElementById('rpt-act-summary').style.display = 'none';
+    document.getElementById('rpt-act-alert').style.display   = 'none';
+    try {
+        const tags = await _rptEnsureTags();
+        // Augment with computed hours_silent
+        _rptSharedTags = tags.map(t => ({ ...t, hours_silent: _rptHoursSilent(t) }));
+        _rptActBuildCatFilter(_rptSharedTags);
+        document.getElementById('rpt-act-export-btn').disabled = false;
+        rptActFilter();
+    } catch (err) {
+        document.getElementById('rpt-act-alert-text').textContent = err.message;
+        const alertEl = document.getElementById('rpt-act-alert');
+        alertEl.className = 'alert alert-error';
+        alertEl.style.display = 'flex';
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--danger)">${esc(err.message)}</td></tr>`;
+    }
+}
+
+function rptActRefresh() {
+    _rptTagsInvalidate();
+    document.getElementById('rpt-act-export-btn').disabled = true;
+    loadReportsActivity();
+}
+
+function _rptActBuildCatFilter(tags) {
+    const sel   = document.getElementById('rpt-act-cat-filter');
+    const names = [...new Set(tags.map(t => t.category_name).filter(Boolean))].sort();
+    sel.innerHTML = '<option value="">All categories</option>' +
+        names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+}
+
+function rptActFilter() {
+    const q      = (document.getElementById('rpt-act-search')?.value || '').toLowerCase();
+    const cat    = document.getElementById('rpt-act-cat-filter')?.value  || '';
+    const status = document.getElementById('rpt-act-status-filter')?.value || '';
+    _rptActFiltered = _rptSharedTags.filter(t => {
+        if (q) {
+            const hay = `${t.description||''} ${t.device_name||''} ${t.imei} ${t.owner_email} ${t.category_name||''}`.toLowerCase();
+            if (!hay.includes(q)) return false;
+        }
+        if (cat && t.category_name !== cat) return false;
+        if (status && _rptActivityStatus(t.hours_silent) !== status) return false;
+        return true;
+    });
+    _rptActSortAndRender();
+    _rptActUpdateSummary();
+}
+
+function rptActSort(col) {
+    if (_rptActSortCol === col) _rptActSortAsc = !_rptActSortAsc;
+    else { _rptActSortCol = col; _rptActSortAsc = true; }
+    document.querySelectorAll('#rpt-act-table .sort-arrow').forEach(el => el.textContent = '');
+    const arrow = document.querySelector(`#rpt-act-table .sort-arrow[data-col="${col}"]`);
+    if (arrow) arrow.textContent = _rptActSortAsc ? ' ▲' : ' ▼';
+    _rptActSortAndRender();
+}
+
+function _rptActSortAndRender() {
+    _rptActRenderRows(_rptSortHelper(_rptActFiltered, _rptActSortCol, _rptActSortAsc));
+}
+
+function _rptActRenderRows(rows) {
+    const tbody = document.getElementById('rpt-act-tbody');
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-3)">No assets match the current filters.</td></tr>';
+        return;
+    }
+    const _ACT_BADGE = {
+        active:  '<span class="rpt-badge rpt-badge-active">Active</span>',
+        idle:    '<span class="rpt-badge rpt-badge-expiring">Idle</span>',
+        offline: '<span class="rpt-badge rpt-badge-expired">Offline</span>',
+        unknown: '<span class="rpt-badge rpt-badge-none">Unknown</span>',
+    };
+    tbody.innerHTML = rows.map(t => {
+        const hrs    = t.hours_silent;
+        const status = _rptActivityStatus(hrs);
+        const batColor = t.battery_level == null ? 'var(--text-3)'
+            : t.battery_level <= 10 ? 'var(--danger)' : t.battery_level <= 30 ? 'var(--warning)' : 'var(--success)';
+        const batCell = t.battery_level != null
+            ? `<span style="font-weight:600;color:${batColor}">${t.battery_level}%</span>`
+            : '<span style="color:var(--text-3)">—</span>';
+        const hrsColor = status === 'offline' ? 'var(--danger)' : status === 'idle' ? 'var(--warning)' : 'var(--text-3)';
+        const hrsCell  = hrs != null ? `<span style="font-weight:600;color:${hrsColor}">${hrs.toLocaleString()}</span>` : '—';
+        return `<tr>
+            <td>${esc(t.description||t.device_name||t.imei)}<br><span style="font-size:11px;color:var(--text-3);font-family:monospace">${esc(t.imei)}</span></td>
+            <td style="font-size:12px">${esc(t.owner_email)}</td>
+            <td>${t.category_name ? esc(t.category_name) : '<span style="color:var(--text-3)">—</span>'}</td>
+            <td style="white-space:nowrap;font-size:12px">${t.last_seen ? _rptFmtDate(t.last_seen) : '<span style="color:var(--text-3)">Never</span>'}</td>
+            <td style="text-align:center">${hrsCell}</td>
+            <td style="text-align:center">${batCell}</td>
+            <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.location_description||'')}">${t.location_description ? esc(t.location_description) : '<span style="color:var(--text-3)">—</span>'}</td>
+            <td>${_ACT_BADGE[status]||''}</td>
+        </tr>`;
+    }).join('');
+}
+
+function _rptActUpdateSummary() {
+    const counts = { active: 0, idle: 0, offline: 0, unknown: 0 };
+    _rptActFiltered.forEach(t => counts[_rptActivityStatus(t.hours_silent)]++);
+    document.getElementById('rpt-act-count-total').innerHTML   = `<strong>${_rptActFiltered.length}</strong> assets`;
+    document.getElementById('rpt-act-count-active').innerHTML  = `<strong>${counts.active}</strong> active`;
+    document.getElementById('rpt-act-count-idle').innerHTML    = `<strong>${counts.idle}</strong> idle`;
+    document.getElementById('rpt-act-count-offline').innerHTML = `<strong>${counts.offline}</strong> offline`;
+    document.getElementById('rpt-act-summary').style.display   = 'flex';
+}
+
+function rptActExportCSV() {
+    const cols = ['Tag / Device','IMEI','User','Category','Last Seen','Hrs Silent','Battery %','Location','Status'];
+    const rows = _rptActFiltered.map(t => [
+        t.description||t.device_name||t.imei, t.imei, t.owner_email, t.category_name||'',
+        t.last_seen ? _rptFmtDate(t.last_seen) : '',
+        t.hours_silent != null ? t.hours_silent : '',
+        t.battery_level != null ? t.battery_level : '',
+        t.location_description||'',
+        _rptActivityStatus(t.hours_silent),
+    ]);
+    _rptDownloadCSV([cols, ...rows], 'asset-activity');
+}
+
+// ══════════════════════════════════════════
+// REPORTS — Movement / Trip Log
+// ══════════════════════════════════════════
+
+let _rptTripsData = [];
+
+async function loadReportsTrips() {
+    // Populate tag picker
+    const sel = document.getElementById('rpt-trips-tag');
+    const cur = sel.value;
+    try {
+        const tags = await _rptEnsureTags();
+        sel.innerHTML = '<option value="">— Select a tag —</option>' +
+            tags.map(t => `<option value="${esc(String(t.id))}">${esc(t.description||t.device_name||t.imei)}</option>`).join('');
+        if (cur) sel.value = cur;
+    } catch (_) {}
+    // Default date range: last 7 days
+    const toEl   = document.getElementById('rpt-trips-to');
+    const fromEl = document.getElementById('rpt-trips-from');
+    if (!toEl.value) {
+        const now = new Date();
+        toEl.value = now.toISOString().slice(0, 10);
+        now.setDate(now.getDate() - 7);
+        fromEl.value = now.toISOString().slice(0, 10);
+    }
+}
+
+async function rptTripsLoad() {
+    const tagId   = document.getElementById('rpt-trips-tag').value;
+    const fromVal = document.getElementById('rpt-trips-from').value;
+    const toVal   = document.getElementById('rpt-trips-to').value;
+    const alertEl = document.getElementById('rpt-trips-alert');
+    alertEl.style.display = 'none';
+    if (!tagId)   { _rptTripsAlert('Please select a tag.'); return; }
+    if (!fromVal) { _rptTripsAlert('Please select a start date.'); return; }
+    if (!toVal)   { _rptTripsAlert('Please select an end date.'); return; }
+
+    const tbody = document.getElementById('rpt-trips-tbody');
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading trips…</td></tr>';
+    document.getElementById('rpt-trips-summary').style.display   = 'none';
+    document.getElementById('rpt-trips-export-btn').disabled     = true;
+    try {
+        const res = await apiFetch('/api/portal/trips', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ vehicleId: tagId, startDate: fromVal + 'T00:00:00Z', endDate: toVal + 'T23:59:59Z' }),
+        });
+        if (!res.ok) throw new Error(await safeJsonDetail(res, 'Failed to load trips'));
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Failed to load trips');
+        _rptTripsData = data.trips || [];
+        _rptTripsRender();
+        document.getElementById('rpt-trips-export-btn').disabled = !_rptTripsData.length;
+    } catch (err) {
+        _rptTripsAlert(err.message);
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-3)">—</td></tr>';
+    }
+}
+
+function _rptTripsAlert(msg) {
+    document.getElementById('rpt-trips-alert-text').textContent = msg;
+    const el = document.getElementById('rpt-trips-alert');
+    el.className = 'alert alert-error';
+    el.style.display = 'flex';
+}
+
+function _rptTripsRender() {
+    const tbody = document.getElementById('rpt-trips-tbody');
+    if (!_rptTripsData.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-3)">No trips found for the selected date range.</td></tr>';
+        document.getElementById('rpt-trips-summary').style.display = 'none';
+        return;
+    }
+    let totalDist = 0, totalDur = 0;
+    tbody.innerHTML = _rptTripsData.map((trip, idx) => {
+        const dist = Number(trip.distance || 0);
+        const dur  = Number(trip.duration || 0);
+        totalDist += dist; totalDur += dur;
+        return `<tr>
+            <td style="text-align:center;color:var(--text-3)">${idx + 1}</td>
+            <td style="white-space:nowrap;font-size:12px">${trip.startUtcTimestamp ? _rptFmtDate(trip.startUtcTimestamp) : '—'}</td>
+            <td style="white-space:nowrap;font-size:12px">${trip.endUtcTimestamp   ? _rptFmtDate(trip.endUtcTimestamp)   : '—'}</td>
+            <td>${_rptFmtDuration(dur)}</td>
+            <td style="text-align:center"><strong>${dist.toFixed(1)}</strong></td>
+            <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(trip.startLocationDescription||'')}">${trip.startLocationDescription ? esc(trip.startLocationDescription) : '<span style="color:var(--text-3)">—</span>'}</td>
+            <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(trip.endLocationDescription||'')}">${trip.endLocationDescription   ? esc(trip.endLocationDescription)   : '<span style="color:var(--text-3)">—</span>'}</td>
+        </tr>`;
+    }).join('');
+    document.getElementById('rpt-trips-count-total').innerHTML = `<strong>${_rptTripsData.length}</strong> trips`;
+    document.getElementById('rpt-trips-total-dist').innerHTML  = `<strong>${totalDist.toFixed(1)}</strong> mi total`;
+    document.getElementById('rpt-trips-total-dur').innerHTML   = `<strong>${_rptFmtDuration(totalDur)}</strong> total`;
+    document.getElementById('rpt-trips-summary').style.display = 'flex';
+}
+
+function rptTripsExportCSV() {
+    const tagLabel = document.getElementById('rpt-trips-tag').selectedOptions[0]?.text || '';
+    const cols = ['#','Tag','Start','End','Duration (s)','Distance (mi)','From','To'];
+    const rows = _rptTripsData.map((trip, idx) => [
+        idx + 1, tagLabel,
+        trip.startUtcTimestamp || '', trip.endUtcTimestamp || '',
+        trip.duration || 0,
+        Number(trip.distance || 0).toFixed(2),
+        trip.startLocationDescription || '', trip.endLocationDescription || '',
+    ]);
+    _rptDownloadCSV([cols, ...rows], 'trip-log');
+}
+
+// ══════════════════════════════════════════
+// REPORTS — Geofence Events
+// ══════════════════════════════════════════
+
+let _rptGeoData     = [];
+let _rptGeoFiltered = [];
+let _rptGeoSortCol  = 'created_at';
+let _rptGeoSortAsc  = false;  // newest first
+let _rptGeoLoaded   = false;
+
+async function loadReportsGeofence() {
+    if (_rptGeoLoaded) { rptGeoFilter(); return; }
+    const days  = document.getElementById('rpt-geo-days')?.value || 30;
+    const tbody = document.getElementById('rpt-geo-tbody');
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>';
+    document.getElementById('rpt-geo-summary').style.display = 'none';
+    document.getElementById('rpt-geo-alert').style.display   = 'none';
+    try {
+        const res = await apiFetch(`/api/portal/reports/geofence-events?days=${days}`);
+        if (!res.ok) throw new Error(await safeJsonDetail(res, 'Failed to load geofence events'));
+        _rptGeoData   = await res.json();
+        _rptGeoLoaded = true;
+        _rptGeoBuildFilters();
+        rptGeoFilter();
+        document.getElementById('rpt-geo-export-btn').disabled = false;
+    } catch (err) {
+        document.getElementById('rpt-geo-alert-text').textContent = err.message;
+        const alertEl = document.getElementById('rpt-geo-alert');
+        alertEl.className = 'alert alert-error';
+        alertEl.style.display = 'flex';
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--danger)">${esc(err.message)}</td></tr>`;
+    }
+}
+
+function rptGeoLoad()    { _rptGeoLoaded = false; loadReportsGeofence(); }
+function rptGeoRefresh() { rptGeoLoad(); }
+
+function _rptGeoBuildFilters() {
+    const tagSel  = document.getElementById('rpt-geo-tag-filter');
+    const zoneSel = document.getElementById('rpt-geo-zone-filter');
+    const tags  = [...new Set(_rptGeoData.map(e => e.tag_label))].sort();
+    const zones = [...new Set(_rptGeoData.map(e => e.poi_name))].sort();
+    tagSel.innerHTML  = '<option value="">All tags</option>'  + tags.map(n  => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    zoneSel.innerHTML = '<option value="">All zones</option>' + zones.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+}
+
+function rptGeoFilter() {
+    const tag  = document.getElementById('rpt-geo-tag-filter')?.value  || '';
+    const zone = document.getElementById('rpt-geo-zone-filter')?.value || '';
+    const type = document.getElementById('rpt-geo-type-filter')?.value || '';
+    _rptGeoFiltered = _rptGeoData.filter(e => {
+        if (tag  && e.tag_label  !== tag)  return false;
+        if (zone && e.poi_name   !== zone) return false;
+        if (type && e.event_type !== type) return false;
+        return true;
+    });
+    _rptGeoSortAndRender();
+    _rptGeoUpdateSummary();
+}
+
+function rptGeoSort(col) {
+    if (_rptGeoSortCol === col) _rptGeoSortAsc = !_rptGeoSortAsc;
+    else { _rptGeoSortCol = col; _rptGeoSortAsc = false; }
+    document.querySelectorAll('#rpt-geo-table .sort-arrow').forEach(el => el.textContent = '');
+    const arrow = document.querySelector(`#rpt-geo-table .sort-arrow[data-col="${col}"]`);
+    if (arrow) arrow.textContent = _rptGeoSortAsc ? ' ▲' : ' ▼';
+    _rptGeoSortAndRender();
+}
+
+function _rptGeoSortAndRender() {
+    _rptGeoRenderRows(_rptSortHelper(_rptGeoFiltered, _rptGeoSortCol, _rptGeoSortAsc));
+}
+
+function _rptGeoRenderRows(rows) {
+    const tbody = document.getElementById('rpt-geo-tbody');
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--text-3)">No geofence events found for the selected period.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = rows.map(e => {
+        const evBadge = e.event_type === 'entry'
+            ? '<span class="rpt-badge rpt-badge-active"><i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:4px;font-size:10px"></i>Entry</span>'
+            : '<span class="rpt-badge rpt-badge-expiring"><i class="fa-solid fa-arrow-right-from-bracket" style="margin-right:4px;font-size:10px"></i>Exit</span>';
+        return `<tr>
+            <td style="white-space:nowrap;font-size:12px">${e.created_at ? _rptFmtDate(e.created_at) : '—'}</td>
+            <td>${esc(e.tag_label)}<br><span style="font-size:11px;color:var(--text-3);font-family:monospace">${esc(e.tag_imei)}</span></td>
+            <td><i class="fa-solid fa-draw-polygon" style="color:var(--warning);margin-right:6px;font-size:11px"></i>${esc(e.poi_name)}</td>
+            <td>${evBadge}</td>
+        </tr>`;
+    }).join('');
+}
+
+function _rptGeoUpdateSummary() {
+    const entries = _rptGeoFiltered.filter(e => e.event_type === 'entry').length;
+    const exits   = _rptGeoFiltered.filter(e => e.event_type === 'exit').length;
+    document.getElementById('rpt-geo-count-total').innerHTML = `<strong>${_rptGeoFiltered.length}</strong> events`;
+    document.getElementById('rpt-geo-count-entry').innerHTML = `<strong>${entries}</strong> entries`;
+    document.getElementById('rpt-geo-count-exit').innerHTML  = `<strong>${exits}</strong> exits`;
+    document.getElementById('rpt-geo-summary').style.display = 'flex';
+}
+
+function rptGeoExportCSV() {
+    const cols = ['Date / Time','Tag','IMEI','Zone','Event'];
+    const rows = _rptGeoFiltered.map(e => [
+        e.created_at || '', e.tag_label, e.tag_imei, e.poi_name, e.event_type,
+    ]);
+    _rptDownloadCSV([cols, ...rows], 'geofence-events');
+}
+
+// ══════════════════════════════════════════
+// REPORTS — Battery & Offline
+// ══════════════════════════════════════════
+
+let _rptBatFiltered = [];
+let _rptBatSortCol  = 'hours_silent';
+let _rptBatSortAsc  = false;  // most-offline first
+
+async function loadReportsBattery() {
+    const tbody = document.getElementById('rpt-bat-tbody');
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>';
+    document.getElementById('rpt-bat-summary').style.display = 'none';
+    document.getElementById('rpt-bat-alert').style.display   = 'none';
+    try {
+        const tags = await _rptEnsureTags();
+        _rptSharedTags = tags.map(t => ({ ...t, hours_silent: _rptHoursSilent(t) }));
+        document.getElementById('rpt-bat-export-btn').disabled = false;
+        rptBatFilter();
+    } catch (err) {
+        document.getElementById('rpt-bat-alert-text').textContent = err.message;
+        const alertEl = document.getElementById('rpt-bat-alert');
+        alertEl.className = 'alert alert-error';
+        alertEl.style.display = 'flex';
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--danger)">${esc(err.message)}</td></tr>`;
+    }
+}
+
+function rptBatRefresh() {
+    _rptTagsInvalidate();
+    document.getElementById('rpt-bat-export-btn').disabled = true;
+    loadReportsBattery();
+}
+
+function rptBatFilter() {
+    const batThresh  = parseInt(document.getElementById('rpt-bat-threshold')?.value  || '20');
+    const offlineHrs = parseInt(document.getElementById('rpt-bat-offline-hrs')?.value || '0');
+    _rptBatFiltered = _rptSharedTags.filter(t => {
+        const lowBat  = t.battery_level != null && t.battery_level <= batThresh;
+        const offline = offlineHrs === 0 ? true : (t.hours_silent != null && t.hours_silent >= offlineHrs);
+        return lowBat || offline;  // flag if either condition matches
+    });
+    _rptBatSortAndRender();
+    _rptBatUpdateSummary();
+}
+
+function rptBatSort(col) {
+    if (_rptBatSortCol === col) _rptBatSortAsc = !_rptBatSortAsc;
+    else { _rptBatSortCol = col; _rptBatSortAsc = true; }
+    document.querySelectorAll('#rpt-bat-table .sort-arrow').forEach(el => el.textContent = '');
+    const arrow = document.querySelector(`#rpt-bat-table .sort-arrow[data-col="${col}"]`);
+    if (arrow) arrow.textContent = _rptBatSortAsc ? ' ▲' : ' ▼';
+    _rptBatSortAndRender();
+}
+
+function _rptBatSortAndRender() {
+    _rptBatRenderRows(_rptSortHelper(_rptBatFiltered, _rptBatSortCol, _rptBatSortAsc));
+}
+
+function _rptBatRenderRows(rows) {
+    const tbody = document.getElementById('rpt-bat-tbody');
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-3)">No assets match the current thresholds.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = rows.map(t => {
+        const lvl = t.battery_level;
+        const hrs = t.hours_silent;
+        const batColor = lvl == null ? 'var(--text-3)' : lvl <= 10 ? 'var(--danger)' : lvl <= 30 ? 'var(--warning)' : 'var(--success)';
+        const offColor = hrs == null ? 'var(--text-3)' : hrs > 168 ? 'var(--danger)' : hrs > 24 ? 'var(--warning)' : 'var(--text-3)';
+        const batIcon  = lvl == null ? '' : lvl <= 10 ? '<i class="fa-solid fa-battery-empty" style="margin-right:4px"></i>'
+            : lvl <= 30 ? '<i class="fa-solid fa-battery-low" style="margin-right:4px"></i>' : '';
+        const isLowBat  = lvl  != null && lvl  <= 20;
+        const isOffline = hrs  != null && hrs  >= 48;
+        const statusBadge = (isLowBat && isOffline)
+            ? '<span class="rpt-badge rpt-badge-expired">Critical</span>'
+            : (isLowBat || isOffline)
+            ? '<span class="rpt-badge rpt-badge-expiring">Warning</span>'
+            : '<span class="rpt-badge rpt-badge-none">Monitoring</span>';
+        return `<tr>
+            <td>${esc(t.description||t.device_name||t.imei)}<br><span style="font-size:11px;color:var(--text-3);font-family:monospace">${esc(t.imei)}</span></td>
+            <td style="font-size:12px">${esc(t.owner_email)}</td>
+            <td style="text-align:center"><span style="font-weight:600;color:${batColor}">${batIcon}${lvl != null ? lvl + '%' : '—'}</span></td>
+            <td style="white-space:nowrap;font-size:12px">${t.last_seen ? _rptFmtDate(t.last_seen) : '<span style="color:var(--text-3)">Never</span>'}</td>
+            <td style="text-align:center"><span style="font-weight:600;color:${offColor}">${hrs != null ? hrs.toLocaleString() : '—'}</span></td>
+            <td>${statusBadge}</td>
+        </tr>`;
+    }).join('');
+}
+
+function _rptBatUpdateSummary() {
+    const lowBat  = _rptBatFiltered.filter(t => t.battery_level != null && t.battery_level <= 20).length;
+    const offline = _rptBatFiltered.filter(t => t.hours_silent  != null && t.hours_silent  >= 48).length;
+    document.getElementById('rpt-bat-count-total').innerHTML   = `<strong>${_rptBatFiltered.length}</strong> assets`;
+    document.getElementById('rpt-bat-count-low-bat').innerHTML = `<strong>${lowBat}</strong> low battery`;
+    document.getElementById('rpt-bat-count-offline').innerHTML = `<strong>${offline}</strong> offline`;
+    document.getElementById('rpt-bat-summary').style.display   = 'flex';
+}
+
+function rptBatExportCSV() {
+    const cols = ['Tag / Device','IMEI','User','Battery %','Last Seen','Hrs Silent','Status'];
+    const rows = _rptBatFiltered.map(t => {
+        const isLowBat  = t.battery_level != null && t.battery_level <= 20;
+        const isOffline = t.hours_silent  != null && t.hours_silent  >= 48;
+        return [
+            t.description||t.device_name||t.imei, t.imei, t.owner_email,
+            t.battery_level != null ? t.battery_level : '',
+            t.last_seen ? _rptFmtDate(t.last_seen) : '',
+            t.hours_silent  != null ? t.hours_silent  : '',
+            (isLowBat && isOffline) ? 'Critical' : (isLowBat || isOffline) ? 'Warning' : 'Monitoring',
+        ];
+    });
+    _rptDownloadCSV([cols, ...rows], 'battery-offline');
 }
 
 // ══════════════════════════════════════════
