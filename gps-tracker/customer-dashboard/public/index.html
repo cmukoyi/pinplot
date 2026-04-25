@@ -818,20 +818,105 @@
 
             <!-- ═══ SETTINGS TAB ═══ -->
             <div id="tab-settings" class="tab-content">
-                <!-- ─── Asset Categories card ─── -->
-                <div class="card" style="margin-top:20px">
-                    <div class="card-header">
-                        <span class="card-title"><i class="fa-solid fa-layer-group" style="color:var(--primary);margin-right:8px"></i>Asset Categories</span>
-                        <button class="btn btn-primary btn-small" onclick="openAddCategoryModal()">
-                            <i class="fa-solid fa-plus"></i> Add Category
-                        </button>
+                <div id="settingsGlobalAlert" class="alert" style="display:none"><span id="settingsGlobalAlertText"></span></div>
+                <div class="settings-cards">
+
+                    <!-- ─── Group Profile (read-only) ─── -->
+                    <div class="card" id="settings-profile-card">
+                        <div class="settings-section-header">
+                            <i class="fa-solid fa-building" style="color:var(--primary)"></i>
+                            <div>
+                                <h3>Group Profile</h3>
+                                <p>Your organisation's account details on Pinplot.</p>
+                            </div>
+                        </div>
+                        <div id="settings-profile-loading" style="padding:24px;text-align:center;color:var(--text-3)">
+                            <i class="fa-solid fa-spinner fa-spin"></i> Loading…
+                        </div>
+                        <div id="settings-profile-body" style="display:none">
+                            <div class="settings-row">
+                                <div>
+                                    <div class="settings-row-label">Group Name</div>
+                                </div>
+                                <span class="settings-row-value" id="settings-val-name">—</span>
+                            </div>
+                            <div class="settings-row">
+                                <div>
+                                    <div class="settings-row-label">Group Slug</div>
+                                    <div class="settings-row-hint">Used in URLs and references.</div>
+                                </div>
+                                <span class="settings-row-value" id="settings-val-slug">—</span>
+                            </div>
+                        </div>
                     </div>
-                    <p style="font-size:13px;color:var(--gray);margin:0 0 16px">Define categories (e.g. Vehicles, Equipment, Containers) that can be assigned to assets when adding or editing tags.</p>
-                    <div id="categoriesAlert" class="alert" style="display:none"><span id="categoriesAlertText"></span></div>
-                    <div id="categoriesList">
-                        <div style="padding:32px;text-align:center;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>
+
+                    <!-- ─── Auto-Registration ─── -->
+                    <div class="card" id="settings-domain-card">
+                        <div class="settings-section-header">
+                            <i class="fa-solid fa-at" style="color:var(--primary)"></i>
+                            <div>
+                                <h3>Tag Auto-Registration</h3>
+                                <p>Mobile app users whose email matches this domain are automatically included in your asset list.</p>
+                            </div>
+                        </div>
+                        <div id="settings-domain-loading" style="padding:24px;text-align:center;color:var(--text-3)">
+                            <i class="fa-solid fa-spinner fa-spin"></i> Loading…
+                        </div>
+                        <div id="settings-domain-body" style="display:none">
+                            <div class="settings-row">
+                                <div>
+                                    <div class="settings-row-label">Email Domain</div>
+                                    <div class="settings-row-hint">e.g. <em>yourcompany.com</em></div>
+                                </div>
+                                <div class="settings-row-control">
+                                    <span class="settings-row-value" id="settings-val-domain">Not configured</span>
+                                    <button class="btn btn-secondary btn-small" id="settings-domain-edit-btn"
+                                            style="display:none" onclick="settingsDomainEdit()">
+                                        <i class="fa-solid fa-pen"></i> Edit
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- inline edit form (hidden until Edit clicked) -->
+                            <div class="settings-inline-edit" id="settings-domain-form" style="display:none">
+                                <div class="input-prefix-row">
+                                    <span>@</span>
+                                    <input type="text" id="settings-domain-input"
+                                           placeholder="e.g. yourcompany.com"
+                                           onkeydown="if(event.key==='Enter')settingsDomainSave()">
+                                </div>
+                                <p class="hint">Leave blank to disable auto-registration.</p>
+                                <div class="actions">
+                                    <button class="btn btn-primary btn-small" id="settings-domain-save-btn"
+                                            onclick="settingsDomainSave()">Save</button>
+                                    <button class="btn btn-secondary btn-small"
+                                            onclick="settingsDomainCancel()">Cancel</button>
+                                </div>
+                                <div class="alert" id="settings-domain-alert" style="display:none">
+                                    <span id="settings-domain-alert-text"></span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
+
+                    <!-- ─── Asset Categories ─── -->
+                    <div class="card">
+                        <div class="settings-section-header">
+                            <i class="fa-solid fa-layer-group" style="color:var(--primary)"></i>
+                            <div>
+                                <h3>Asset Categories</h3>
+                                <p>Define categories (e.g. Vehicles, Equipment, Containers) that can be assigned to assets when adding or editing tags.</p>
+                            </div>
+                            <button class="btn btn-primary btn-small header-action" onclick="openAddCategoryModal()">
+                                <i class="fa-solid fa-plus"></i> Add Category
+                            </button>
+                        </div>
+                        <div id="categoriesAlert" class="alert" style="display:none"><span id="categoriesAlertText"></span></div>
+                        <div id="categoriesList">
+                            <div style="padding:32px;text-align:center;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>
+                        </div>
+                    </div>
+
+                </div><!-- /.settings-cards -->
             </div>
 
             <!-- ═══ USERS TAB ═══ -->
@@ -1462,6 +1547,17 @@ function apiFetch(path, options = {}) {
     return fetch(path, { ...options, headers: { ...authHeaders(), ...(options.headers || {}) } });
 }
 
+// Safely extract a detail message from a non-2xx response.
+// Falls back to `fallback` if the body is not valid JSON (e.g. 502, 500 HTML).
+async function safeJsonDetail(res, fallback) {
+    try {
+        const data = await res.clone().json();
+        return data.detail || fallback;
+    } catch (_) {
+        return fallback;
+    }
+}
+
 // ══════════════════════════════════════════
 // Login / Logout
 // ══════════════════════════════════════════
@@ -1967,8 +2063,106 @@ async function submitTagForm(e) {
 // SETTINGS
 // ══════════════════════════════════════════
 
-function loadSettings() {
+let _settingsCache = null;  // last loaded GroupSettingsOut
+
+async function loadSettings() {
+    // Reset loading states
+    ['settings-profile-loading', 'settings-domain-loading'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.style.display = ''; }
+    });
+    ['settings-profile-body', 'settings-domain-body'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.style.display = 'none'; }
+    });
+
+    try {
+        const res = await apiFetch('/api/portal/settings');
+        if (!res.ok) {
+            const msg = await safeJsonDetail(res, 'Failed to load settings');
+            throw new Error(msg);
+        }
+        _settingsCache = await res.json();
+        _renderSettingsProfile(_settingsCache);
+        _renderSettingsDomain(_settingsCache);
+    } catch (err) {
+        ['settings-profile-loading', 'settings-domain-loading'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = `<span style="color:var(--danger)">${esc(err.message)}</span>`;
+        });
+    }
+
     loadCategories();
+}
+
+function _renderSettingsProfile(s) {
+    const loading = document.getElementById('settings-profile-loading');
+    const body    = document.getElementById('settings-profile-body');
+    if (loading) loading.style.display = 'none';
+    if (body)    body.style.display    = '';
+    const nameEl = document.getElementById('settings-val-name');
+    const slugEl = document.getElementById('settings-val-slug');
+    if (nameEl) nameEl.textContent = s.name || '—';
+    if (slugEl) slugEl.textContent = s.slug || '—';
+}
+
+function _renderSettingsDomain(s) {
+    const loading  = document.getElementById('settings-domain-loading');
+    const body     = document.getElementById('settings-domain-body');
+    const valEl    = document.getElementById('settings-val-domain');
+    const editBtn  = document.getElementById('settings-domain-edit-btn');
+    if (loading) loading.style.display = 'none';
+    if (body)    body.style.display    = '';
+    if (valEl)   valEl.textContent = s.email_domain ? `@${s.email_domain}` : 'Not configured';
+    const isAdmin = getSession().user?.is_group_admin;
+    if (editBtn) editBtn.style.display = isAdmin ? '' : 'none';
+    // Collapse form if it was open
+    settingsDomainCancel();
+}
+
+function settingsDomainEdit() {
+    const form  = document.getElementById('settings-domain-form');
+    const input = document.getElementById('settings-domain-input');
+    const alert = document.getElementById('settings-domain-alert');
+    if (!form) return;
+    input.value = (_settingsCache?.email_domain) || '';
+    alert.style.display = 'none';
+    form.style.display  = '';
+    input.focus();
+}
+
+function settingsDomainCancel() {
+    const form = document.getElementById('settings-domain-form');
+    if (form) form.style.display = 'none';
+}
+
+async function settingsDomainSave() {
+    const input   = document.getElementById('settings-domain-input');
+    const saveBtn = document.getElementById('settings-domain-save-btn');
+    const alertEl = document.getElementById('settings-domain-alert');
+    const alertTx = document.getElementById('settings-domain-alert-text');
+    alertEl.style.display = 'none';
+    saveBtn.disabled = true;
+    try {
+        const res = await apiFetch('/api/portal/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email_domain: input.value.trim() || null }),
+        });
+        if (!res.ok) throw new Error(await safeJsonDetail(res, 'Save failed'));
+        _settingsCache = await res.json();
+        _renderSettingsDomain(_settingsCache);
+        // Refresh tag list domain hint if assets tab is visible
+        if (document.getElementById('tab-assets')?.classList.contains('active')) {
+            initAssetMgmt();
+        }
+    } catch (err) {
+        alertTx.textContent    = err.message;
+        alertEl.className      = 'alert alert-error';
+        alertEl.style.display  = 'flex';
+    } finally {
+        saveBtn.disabled = false;
+    }
 }
 
 // ══════════════════════════════════════════
@@ -1994,7 +2188,7 @@ async function loadCategories() {
     el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
     try {
         const res = await apiFetch('/api/portal/categories');
-        if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+        if (!res.ok) throw new Error(await safeJsonDetail(res, 'Failed to load categories'));
         _categoriesCache = await res.json();
     } catch (err) {
         el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--danger)">${esc(err.message)}</div>`;
