@@ -592,18 +592,23 @@ class AuthService {
       print('📄 Response: ${response.body}');
       
       if (response.statusCode == 200) {
-        print('✅ Email available or code sent');
+        print('✅ Email available — code sent');
         return {'exists': false, 'can_register': true};
       } else if (response.statusCode == 400) {
         final data = json.decode(response.body);
-        if (data['detail']?.toString().contains('already registered') ?? false) {
+        final detail = data['detail']?.toString() ?? '';
+        if (detail.contains('already registered')) {
           print('⚠️ Email already fully registered');
           return {'exists': true, 'can_register': false, 'message': 'Email already registered. Please sign in.'};
         }
-        return {'exists': false, 'can_register': true};
+        // Domain not allowed or any other policy rejection
+        print('🚫 Registration blocked by server: $detail');
+        return {'exists': false, 'can_register': false, 'message': detail.isNotEmpty ? detail : 'Registration is not available for your email domain.'};
       }
-      
-      return {'exists': false, 'can_register': true};
+
+      // Any other non-200 response — block to be safe
+      print('⚠️ Unexpected status ${response.statusCode}');
+      return {'exists': false, 'can_register': false, 'message': 'Unable to register at this time. Please try again.'};
     } catch (e) {
       print('❌ Check email error: $e');
       // If check fails, allow to continue (network issues shouldn't block)

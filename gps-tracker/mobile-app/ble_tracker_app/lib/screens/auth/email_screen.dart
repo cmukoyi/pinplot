@@ -45,22 +45,25 @@ class _EmailScreenState extends State<EmailScreen> {
       final endTime = DateTime.now();
       final duration = endTime.difference(startTime).inMilliseconds;
       
-      if (emailCheck['exists'] == true && emailCheck['can_register'] == false) {
-        print('⚠️ Email already registered');
+      if (emailCheck['can_register'] == false) {
+        print('⛔ Registration blocked: ${emailCheck['message']}');
         if (mounted) {
+          final isAlreadyRegistered = emailCheck['exists'] == true;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(emailCheck['message'] ?? 'Email already registered'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
-              action: SnackBarAction(
-                label: 'Sign In',
-                textColor: Colors.white,
-                onPressed: () {
-                  ScaffoldMessenger.of(context).clearSnackBars();
-                  Navigator.pop(context);
-                },
-              ),
+              content: Text(emailCheck['message'] ?? 'Registration not available for this email.'),
+              backgroundColor: isAlreadyRegistered ? Colors.orange : Colors.red,
+              duration: Duration(seconds: 5),
+              action: isAlreadyRegistered
+                  ? SnackBarAction(
+                      label: 'Sign In',
+                      textColor: Colors.white,
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).clearSnackBars();
+                        Navigator.pop(context);
+                      },
+                    )
+                  : null,
             ),
           );
         }
