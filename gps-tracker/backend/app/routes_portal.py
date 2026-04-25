@@ -637,6 +637,7 @@ class PortalTagOut(BaseModel):
     added_at: Optional[datetime] = None
     expiry_date: Optional[datetime] = None
     days_remaining: Optional[int] = None  # None = no package; negative = expired
+    activation_date: Optional[datetime] = None  # first GPS fix; expiry is calculated from this
     # Category (from attributes.category.value)
     category_id: Optional[str] = None
     category_name: Optional[str] = None
@@ -720,6 +721,7 @@ def list_group_tags(request: Request, db: Session = Depends(get_db)):
             added_at=tag.added_at,
             expiry_date=tag.expiry_date,
             days_remaining=days_remaining,
+            activation_date=tag.activation_date,
             category_id=cat_id,
             category_name=cat_name,
         ))
@@ -840,6 +842,7 @@ def _build_tag_out(tag: BLETag, owner_email: str, db: Optional[Session] = None) 
         added_at=tag.added_at,
         expiry_date=tag.expiry_date,
         days_remaining=days_remaining,
+        activation_date=tag.activation_date,
     )
 
 
@@ -880,6 +883,7 @@ class PortalTagUpdate(BaseModel):
     tag_type: Optional[str] = None
     user_id: Optional[str] = None
     category: Optional[str] = None  # category name; empty string clears it
+    package_id: Optional[str] = None  # UUID string; empty string clears package
 
 
 @router.put("/tags/{tag_id}", response_model=PortalTagOut)
@@ -914,6 +918,25 @@ def update_tag(tag_id: str, data: PortalTagUpdate, request: Request, db: Session
         else:
             attrs.pop('category', None)
         tag.attributes = attrs
+    if data.package_id is not None:
+        if data.package_id == "":
+            # Clear the package
+            tag.package_id = None
+            tag.expiry_date = None
+        else:
+            pkg = db.query(TagPackage).filter(
+                TagPackage.id == str(data.package_id),
+                TagPackage.is_active == True,
+            ).first()
+            if not pkg:
+                raise HTTPException(status_code=404, detail="Package not found or inactive")
+            tag.package_id = str(data.package_id)
+            # Expiry = activation_date + validity_days if the tag already has a GPS fix,
+            # otherwise leave expiry_date as None — it will be set on first location update.
+            if tag.activation_date:
+                tag.expiry_date = tag.activation_date.replace(tzinfo=None) + timedelta(days=pkg.validity_days)
+            else:
+                tag.expiry_date = None  # pending first GPS fix
 
     db.commit()
     db.refresh(tag)

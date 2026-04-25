@@ -104,8 +104,9 @@ class BLETag(Base):
     added_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     # Package / subscription
-    package_id  = Column(String(36), ForeignKey("tag_packages.id"), nullable=True, index=True)
-    expiry_date = Column(DateTime(timezone=True), nullable=True)  # added_at + package.validity_days
+    package_id      = Column(String(36), ForeignKey("tag_packages.id"), nullable=True, index=True)
+    expiry_date     = Column(DateTime(timezone=True), nullable=True)  # activation_date + package.validity_days
+    activation_date = Column(DateTime(timezone=True), nullable=True)  # set on first GPS fix; expiry calculated from here
 
     # Relationships
     user = relationship("User", back_populates="ble_tags")

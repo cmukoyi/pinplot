@@ -123,6 +123,15 @@ class LocationPollerService:
                         tracker.location_description = loc.address
                     tracker.last_seen = datetime.utcnow()
 
+                    # Set activation_date on first GPS fix and (re)calculate expiry
+                    if tracker.activation_date is None:
+                        tracker.activation_date = datetime.utcnow()
+                        if tracker.package_id:
+                            pkg = db.query(TagPackage).filter(TagPackage.id == str(tracker.package_id)).first()
+                            if pkg:
+                                tracker.expiry_date = tracker.activation_date + timedelta(days=pkg.validity_days)
+                                logger.info("📅 Tag %s activated — expiry set to %s", tracker.imei, tracker.expiry_date)
+
                     # Refresh battery level and attributes dict if available
                     if loc.battery_level is not None:
                         tracker.battery_level = loc.battery_level
@@ -181,6 +190,15 @@ class LocationPollerService:
                     tracker.longitude = str(position.get('longitude'))
                     tracker.location_description = position.get('locationDescription')
                     tracker.last_seen = datetime.utcnow()
+
+                    # Set activation_date on first GPS fix and (re)calculate expiry
+                    if tracker.activation_date is None:
+                        tracker.activation_date = datetime.utcnow()
+                        if tracker.package_id:
+                            pkg = db.query(TagPackage).filter(TagPackage.id == str(tracker.package_id)).first()
+                            if pkg:
+                                tracker.expiry_date = tracker.activation_date + timedelta(days=pkg.validity_days)
+                                logger.info("📅 Tag %s activated — expiry set to %s", tracker.imei, tracker.expiry_date)
 
                     mzone_vehicle_id = vehicle.get('id')
                     if mzone_vehicle_id and tracker.mzone_vehicle_id != mzone_vehicle_id:

@@ -2480,6 +2480,9 @@ async function _loadPackagesIntoSelect() {
 }
 
 async function openAddTagModal() {
+    // Remove activation banner if left from edit mode
+    const _b = document.getElementById('tagActivationBanner');
+    if (_b) _b.remove();
     document.getElementById('tagMgmtTitle').textContent = 'Add Tag';
     document.getElementById('tagMgmtSubmitBtn').textContent = 'Add Tag';
     document.getElementById('tagMgmtTagId').value = '';
@@ -2497,6 +2500,7 @@ async function openAddTagModal() {
     document.getElementById('tagMgmtTypeGroup').style.display = '';
     document.getElementById('tagMgmtCategoryGroup').style.display = '';
     document.getElementById('tagMgmtPackageGroup').style.display = '';
+    document.getElementById('tagMgmtPackageGroup').querySelector('label').textContent = 'Package *';
     document.getElementById('tagMgmtPackage').setAttribute('required', '');
     document.getElementById('tagMgmtAlert').style.display = 'none';
     openModal('tagMgmtModal');
@@ -2552,15 +2556,37 @@ async function openTagMgmtModal(mode, imei) {
     // Category
     document.getElementById('tagMgmtCategoryGroup').style.display = '';
 
-    // Package — hide in edit mode (package changes require a separate flow)
-    document.getElementById('tagMgmtPackageGroup').style.display = 'none';
+    // Package — shown in edit mode; not required (tag may already have one)
+    document.getElementById('tagMgmtPackageGroup').style.display = '';
+    document.getElementById('tagMgmtPackageGroup').querySelector('label').textContent = 'Package';
     document.getElementById('tagMgmtPackage').removeAttribute('required');
 
+    // Activation status banner — show above the form (remove previous banner if any)
+    const _existingBanner = document.getElementById('tagActivationBanner');
+    if (_existingBanner) _existingBanner.remove();
+    const _banner = document.createElement('div');
+    _banner.id = 'tagActivationBanner';
+    _banner.style.cssText = 'padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:8px;background:var(--surface-2,#f3f4f6);color:var(--text-2,#6b7280);border:1px solid var(--border,#e5e7eb)';
+    if (tag.activation_date) {
+        const ad = new Date(tag.activation_date);
+        const expStr = tag.expiry_date ? new Date(tag.expiry_date).toLocaleDateString() : 'N/A';
+        _banner.innerHTML = `<i class="fa-solid fa-circle-check" style="color:var(--green,#22c55e);margin-right:6px"></i>Activated ${ad.toLocaleDateString()} · Expires ${expStr}`;
+    } else if (tag.package_id) {
+        _banner.innerHTML = `<i class="fa-solid fa-clock" style="color:var(--yellow,#eab308);margin-right:6px"></i>Awaiting first GPS fix — expiry will be calculated on activation`;
+    } else {
+        _banner.innerHTML = `<i class="fa-solid fa-circle-exclamation" style="color:var(--red,#ef4444);margin-right:6px"></i>No package assigned — tag is Inactive`;
+    }
+    document.getElementById('tagMgmtForm').insertBefore(_banner, document.getElementById('tagMgmtImeiGroup'));
+
     openModal('tagMgmtModal');
-    await Promise.all([_loadMobileUsersIntoSelect(), _loadCategoriesIntoSelect()]);
+    await Promise.all([_loadMobileUsersIntoSelect(), _loadPackagesIntoSelect(), _loadCategoriesIntoSelect()]);
     if (_mobileUsersCache) {
         const match = _mobileUsersCache.find(u => u.email === tag.owner_email);
         if (match) document.getElementById('tagMgmtUser').value = String(match.id);
+    }
+    // Pre-select current package if assigned
+    if (tag.package_id) {
+        document.getElementById('tagMgmtPackage').value = tag.package_id;
     }
     // Pre-select existing category from tag attributes
     const existingCat = tag.attributes?.category?.value || '';
@@ -2587,7 +2613,8 @@ async function submitTagForm(e) {
     try {
         let res;
         if (tagId && mode === 'edit') {
-            // Full edit — description, tag_type, category, user reassignment
+            // Full edit — description, tag_type, category, user reassignment, package
+            const _pkgVal = document.getElementById('tagMgmtPackage')?.value || '';
             res = await apiFetch(`/api/portal/tags/${tagId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -2596,6 +2623,7 @@ async function submitTagForm(e) {
                     tag_type: document.getElementById('tagMgmtType').value,
                     user_id: userId,
                     category: categoryName,
+                    package_id: _pkgVal || null,
                 }),
             });
         } else if (tagId) {
