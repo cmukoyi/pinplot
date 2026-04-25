@@ -45,6 +45,17 @@ docker network prune -f 2>&1 | tee -a "$LOG_FILE"
 log ">> Pruning unused anonymous volumes..."
 docker volume prune -f 2>&1 | tee -a "$LOG_FILE"
 
+# --- 7. Trim systemd journal logs ---
+log ">> Trimming systemd journal (keep 50M)..."
+journalctl --vacuum-size=50M 2>&1 | tee -a "$LOG_FILE"
+
+# --- 8. Clear old btmp (failed SSH login log) if over 10MB ---
+BTMP_SIZE=$(stat -c%s /var/log/btmp 2>/dev/null || echo 0)
+if [ "$BTMP_SIZE" -gt 10485760 ]; then
+    log ">> Truncating /var/log/btmp (${BTMP_SIZE} bytes)..."
+    truncate -s 0 /var/log/btmp
+fi
+
 disk_after=$(df -h / | awk 'NR==2{print $3"/"$2" ("$5" used)"}')
 log "Disk after:  $disk_after"
 log "========================================="
