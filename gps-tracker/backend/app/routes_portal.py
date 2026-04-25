@@ -1301,7 +1301,7 @@ async def portal_get_trip_events(
 # ---------------------------------------------------------------------------
 
 class CategoryOut(BaseModel):
-    id: str
+    id: UUID
     name: str
     icon: Optional[str] = None
     color: Optional[str] = None
