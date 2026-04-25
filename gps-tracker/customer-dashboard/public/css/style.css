@@ -459,9 +459,9 @@ input, select, textarea { font-family: var(--font); }
   color: var(--text-3);
 }
 .stat-chip .stat-num { font-size: 1.1rem; font-weight: 700; }
-.stat-chip.online  .stat-num { color: var(--success); }
-.stat-chip.idle    .stat-num { color: var(--warning); }
-.stat-chip.offline .stat-num { color: var(--danger); }
+.stat-chip.online  .stat-num { color: var(--success); }   /* Active */
+.stat-chip.idle    .stat-num { color: var(--danger); }    /* Inactive */
+.stat-chip.offline .stat-num { color: var(--text-3); }    /* Stock */
 
 .cat-filter {
   display: flex;
@@ -1041,6 +1041,10 @@ tbody tr:hover { background: var(--bg-3); }
 .status-online  { background: var(--success); box-shadow: 0 0 6px var(--success); }
 .status-idle    { background: var(--warning); box-shadow: 0 0 6px var(--warning); }
 .status-offline { background: var(--danger); }
+/* New canonical status classes */
+.status-active   { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.status-inactive { background: var(--danger); }
+.status-stock    { background: var(--text-3); }
 
 /* ── Battery ───────────────────────────────────────────────── */
 .battery-wrap { display: flex; align-items: center; gap: 3px; font-size: .8rem; }

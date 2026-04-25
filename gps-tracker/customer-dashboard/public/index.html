@@ -238,15 +238,15 @@
                         </div>
                         <div class="stat-chip online">
                             <span class="stat-num" id="lm-stat-online">—</span>
-                            <span>Online</span>
+                            <span>Active</span>
                         </div>
                         <div class="stat-chip idle">
                             <span class="stat-num" id="lm-stat-idle">—</span>
-                            <span>Idle</span>
+                            <span>Inactive</span>
                         </div>
                         <div class="stat-chip offline">
                             <span class="stat-num" id="lm-stat-offline">—</span>
-                            <span>Offline</span>
+                            <span>Stock</span>
                         </div>
                     </div>
 
@@ -2540,8 +2540,8 @@ async function openTagMgmtModal(mode, imei) {
     imeiInput.removeAttribute('required');
     document.getElementById('tagMgmtImeiGroup').style.display = '';
 
-    // Description
-    document.getElementById('tagMgmtDesc').value = tag.description || '';
+    // Description — pre-populate with description or device_name (effective display name)
+    document.getElementById('tagMgmtDesc').value = tag.description || tag.device_name || '';
     document.getElementById('tagMgmtDescGroup').style.display = '';
 
     // Tag type
@@ -4840,20 +4840,21 @@ let _lmSelected     = null;      // currently selected imei
 let _lmCatFilter    = 'all';     // 'all' | category UUID from _categoriesCache
 
 function _lmStatusClass(tag) {
-    if (!tag.is_active) return 'offline';
-    if (tag.latitude && tag.longitude) return 'online';
-    return 'idle';
+    if (!tag.last_seen) return 'stock';
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    if (new Date(tag.last_seen).getTime() >= sevenDaysAgo) return 'active';
+    return 'inactive';
 }
 
 function _lmMarkerIcon(tag) {
     const status = _lmStatusClass(tag);
-    const colors = { online: '#10B981', idle: '#F59E0B', offline: '#EF4444' };
-    const c = colors[status] || '#6B7280';
+    const colors = { active: '#10B981', inactive: '#EF4444', stock: '#9CA3AF' };
+    const c = colors[status] || '#9CA3AF';
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="44" viewBox="0 0 36 44">
       <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 26 18 26S36 31.5 36 18C36 8.06 27.94 0 18 0z" fill="${c}"/>
       <circle cx="18" cy="18" r="11" fill="white" opacity="0.95"/>
       <text x="18" y="23" text-anchor="middle" font-size="13" font-family="sans-serif" fill="${c}">
-        ${status === 'online' ? '●' : status === 'idle' ? '◐' : '○'}
+        ${status === 'active' ? '●' : status === 'inactive' ? '◐' : '○'}
       </text>
     </svg>`;
     return L.divIcon({
@@ -4908,7 +4909,7 @@ function _lmPlaceMarkers() {
             .addTo(_liveMap);
         const label = esc(t.description || t.device_name || t.imei);
         const status = _lmStatusClass(t);
-        const statusLabels = { online: 'Online', idle: 'Idle', offline: 'Offline' };
+        const statusLabels = { active: 'Active', inactive: 'Inactive', stock: 'Stock' };
         m.bindPopup(`
             <div class="map-popup">
                 <strong>${label}</strong><br>
@@ -4950,7 +4951,7 @@ function _lmRenderList(query) {
         const label  = esc(t.description || t.device_name || t.imei);
         const hasGPS = !!(t.latitude && t.longitude);
         const cls    = _lmSelected === t.imei ? ' selected' : '';
-        const statusColors = { online: 'var(--success)', idle: 'var(--warning)', offline: 'var(--danger)' };
+        const statusColors = { active: 'var(--success)', inactive: 'var(--danger)', stock: 'var(--text-3)' };
         const iconBg  = `${statusColors[status]}20`;
         const iconClr = statusColors[status];
         const faIcon  = hasGPS ? 'fa-location-dot' : 'fa-tag';
@@ -4975,13 +4976,13 @@ function _lmRenderList(query) {
 }
 
 function _lmUpdateStats() {
-    const online  = _lmTags.filter(t => _lmStatusClass(t) === 'online').length;
-    const idle    = _lmTags.filter(t => _lmStatusClass(t) === 'idle').length;
-    const offline = _lmTags.filter(t => _lmStatusClass(t) === 'offline').length;
-    document.getElementById('lm-stat-total').textContent   = _lmTags.length;
-    document.getElementById('lm-stat-online').textContent  = online;
-    document.getElementById('lm-stat-idle').textContent    = idle;
-    document.getElementById('lm-stat-offline').textContent = offline;
+    const active   = _lmTags.filter(t => _lmStatusClass(t) === 'active').length;
+    const inactive = _lmTags.filter(t => _lmStatusClass(t) === 'inactive').length;
+    const stock    = _lmTags.filter(t => _lmStatusClass(t) === 'stock').length;
+    document.getElementById('lm-stat-total').textContent    = _lmTags.length;
+    document.getElementById('lm-stat-online').textContent   = active;
+    document.getElementById('lm-stat-idle').textContent     = inactive;
+    document.getElementById('lm-stat-offline').textContent  = stock;
 }
 
 function lmFilterList() {
@@ -5034,8 +5035,8 @@ function _lmRenderDetail(t) {
     if (!panel) return;
     const label   = esc(t.description || t.device_name || t.imei);
     const status  = _lmStatusClass(t);
-    const statusColors = { online: 'var(--success)', idle: 'var(--warning)', offline: 'var(--danger)' };
-    const statusLabel  = { online: 'Active + GPS', idle: 'Active, No GPS', offline: 'Inactive' };
+    const statusColors = { active: 'var(--success)', inactive: 'var(--danger)', stock: 'var(--text-3)' };
+    const statusLabel  = { active: 'Active', inactive: 'Inactive', stock: 'Stock' };
     const lastSeen  = t.last_seen   ? new Date(t.last_seen).toLocaleString()    : '—';
     const expiry    = t.expiry_date ? new Date(t.expiry_date).toLocaleDateString() : '—';
     const daysLeft  = t.days_remaining != null
@@ -5156,8 +5157,8 @@ function alRenderTable() {
         tbody.innerHTML = '<tr><td colspan="8" class="table-empty" style="text-align:center;padding:40px;color:var(--text-3)">No assets match the search.</td></tr>';
         return;
     }
-    const statusColors = { online: 'var(--success)', idle: 'var(--warning)', offline: 'var(--danger)' };
-    const statusLabel  = { online: 'Active + GPS', idle: 'Active', offline: 'Inactive' };
+    const statusColors = { active: 'var(--success)', inactive: 'var(--danger)', stock: 'var(--text-3)' };
+    const statusLabel  = { active: 'Active', inactive: 'Inactive', stock: 'Stock' };
     tbody.innerHTML = list.map(t => {
         const status = _lmStatusClass(t);
         const label  = esc(t.description || t.device_name || t.imei);
@@ -5539,8 +5540,8 @@ function amRenderCards() {
             <p>No assets found.</p></div>`;
         return;
     }
-    const statusColors = { online: 'var(--success)', idle: 'var(--warning)', offline: 'var(--danger)' };
-    const statusLabel  = { online: 'Active + GPS', idle: 'Active, No GPS', offline: 'Inactive' };
+    const statusColors = { active: 'var(--success)', inactive: 'var(--danger)', stock: 'var(--text-3)' };
+    const statusLabel  = { active: 'Active', inactive: 'Inactive', stock: 'Stock' };
     grid.innerHTML = `<div class="asset-card-grid">${list.map(t => {
         const status   = _lmStatusClass(t);
         const color    = statusColors[status];
