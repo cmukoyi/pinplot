@@ -175,6 +175,11 @@ jobs:
             echo "━━━ Stopping containers ━━━"
             docker compose down --remove-orphans || true
 
+            echo "━━━ Pre-build disk cleanup ━━━"
+            docker container prune -f
+            docker image prune -f
+            df -h / | awk 'NR==2{print "  Disk: "$3"/"$2" ("$5" used)"}'
+
             echo "━━━ Building UI services (no cache) ━━━"
             docker compose build --no-cache flutter-web admin-portal
 
@@ -232,6 +237,29 @@ jobs:
               }
             }
           SSHEOF
+
+      # ── Install / refresh daily cleanup cron job ─────────────────
+      - name: Install daily Docker cleanup cron
+        env:
+          DO_SERVER_IP: ${{ secrets.DO_SERVER_IP }}
+          DO_USER: ${{ secrets.DO_USER }}
+        run: |
+          SERVER=$(echo "$DO_SERVER_IP" | tr -d '[:space:]')
+          USER=$(echo "$DO_USER" | tr -d '[:space:]')
+
+          # Upload the cleanup script from the checked-out repo
+          scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            deploy/docker-daily-cleanup.sh \
+            "${USER}@${SERVER}:/usr/local/bin/docker-daily-cleanup.sh"
+
+          # Make executable and register as a cron job (03:00 daily)
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            "${USER}@${SERVER}" \
+            'chmod +x /usr/local/bin/docker-daily-cleanup.sh && \
+             printf "0 3 * * * root /usr/local/bin/docker-daily-cleanup.sh\n" \
+               > /etc/cron.d/docker-cleanup && \
+             chmod 0644 /etc/cron.d/docker-cleanup && \
+             echo "✅ Cron job installed: 03:00 daily → /usr/local/bin/docker-daily-cleanup.sh"'
 
       # ── Health checks ─────────────────────────────────────────────
       - name: Health checks
