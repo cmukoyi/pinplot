@@ -6,6 +6,7 @@ Routes are mounted at /api/portal (separate from /api/v1 user routes and
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from datetime import datetime, timedelta
 from typing import List, Optional
 from uuid import UUID
@@ -421,22 +422,27 @@ def update_settings(
     if not group:
         raise HTTPException(status_code=404, detail="User group not found")
 
-    # Normalise domain: strip whitespace, lowercase, strip leading "@" if present
-    domain = (data.email_domain or "").strip().lower().lstrip("@") or None
+    # Normalise comma-separated domains: strip whitespace, lowercase, strip leading "@"
+    raw_domains = [d.strip().lower().lstrip("@") for d in (data.email_domain or "").split(",")]
+    clean_domains = [d for d in raw_domains if d]
+    domain_value = ",".join(clean_domains) or None
 
-    # Ensure no other group is already using this domain
-    if domain:
-        conflict = db.query(UserGroup).filter(
-            UserGroup.email_domain == domain,
-            UserGroup.id != group.id,
-        ).first()
-        if conflict:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Domain '{domain}' is already claimed by another group",
-            )
+    # Ensure no other group already uses any of these domains
+    if clean_domains:
+        for d in clean_domains:
+            conflict = db.query(UserGroup).filter(
+                UserGroup.email_domain.ilike(f"%{d}%"),
+                UserGroup.id != group.id,
+            ).first()
+            if conflict:
+                existing = [x.strip().lower() for x in (conflict.email_domain or "").split(",")]
+                if d in existing:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Domain '{d}' is already claimed by another group",
+                    )
 
-    group.email_domain = domain
+    group.email_domain = domain_value
     db.commit()
     db.refresh(group)
     return GroupSettingsOut.model_validate(group)
@@ -640,13 +646,13 @@ def list_group_tags(request: Request, db: Session = Depends(get_db)):
     if not group or not group.email_domain:
         return []
 
-    domain = group.email_domain.lower()
+    domains = _domains(group)
 
     tags = (
         db.query(BLETag, User.email)
         .join(User, User.id == BLETag.user_id)
         .filter(
-            User.email.ilike(f"%@{domain}"),
+            _domain_filter(domains),
             BLETag.is_active == True,
         )
         .order_by(BLETag.added_at.desc())
@@ -765,10 +771,10 @@ def list_mobile_users(request: Request, db: Session = Depends(get_db)):
     group = db.query(UserGroup).filter(UserGroup.id == me.usergroup_id).first()
     if not group or not group.email_domain:
         return []
-    domain = group.email_domain.lower()
+    domains = _domains(group)
     users = (
         db.query(User)
-        .filter(User.email.ilike(f"%@{domain}"), User.is_active == True)
+        .filter(_domain_filter(domains), User.is_active == True)
         .order_by(User.email)
         .all()
     )
@@ -833,8 +839,28 @@ def _get_group_and_assert_domain(me: PortalUser, db: Session) -> UserGroup:
     return group
 
 
-def _assert_user_in_domain(user: User, domain: str) -> None:
-    if not user or not user.email.lower().endswith(f"@{domain.lower()}"):
+def _domains(group: UserGroup) -> list:
+    """Return a lowercase list of domain strings for the group (supports comma-separated multiple domains)."""
+    if not group or not group.email_domain:
+        return []
+    return [d.strip().lower() for d in group.email_domain.split(",") if d.strip()]
+
+
+def _domain_filter(domains: list):
+    """Return a SQLAlchemy filter clause matching user emails against any of the given domains."""
+    return or_(*(User.email.ilike(f"%@{d}") for d in domains))
+
+
+def _assert_user_in_domain(user: User, domain_or_domains) -> None:
+    """Raise 403 if the user's email doesn't match any of the configured domains."""
+    if not user:
+        raise HTTPException(status_code=403, detail="User does not belong to this group's domain")
+    if isinstance(domain_or_domains, str):
+        domains = [domain_or_domains.lower()]
+    else:
+        domains = [d.lower() for d in domain_or_domains]
+    email = user.email.lower()
+    if not any(email.endswith(f"@{d}") for d in domains):
         raise HTTPException(status_code=403, detail="User does not belong to this group's domain")
 
 
@@ -856,7 +882,7 @@ def update_tag(tag_id: str, data: PortalTagUpdate, request: Request, db: Session
     tag = (
         db.query(BLETag)
         .join(User, User.id == BLETag.user_id)
-        .filter(BLETag.id == tag_id, User.email.ilike(f"%@{group.email_domain.lower()}"))
+        .filter(BLETag.id == tag_id, _domain_filter(_domains(group)))
         .first()
     )
     if not tag:
@@ -868,7 +894,7 @@ def update_tag(tag_id: str, data: PortalTagUpdate, request: Request, db: Session
         tag.tag_type = data.tag_type
     if data.user_id is not None:
         target_user = db.query(User).filter(User.id == str(data.user_id)).first()
-        _assert_user_in_domain(target_user, group.email_domain)
+        _assert_user_in_domain(target_user, _domains(group))
         tag.user_id = str(data.user_id)
     if data.category is not None:
         attrs = dict(tag.attributes or {})
@@ -893,7 +919,7 @@ def create_tag(data: PortalTagCreate, request: Request, db: Session = Depends(ge
     group = _get_group_and_assert_domain(me, db)
 
     target_user = db.query(User).filter(User.id == str(data.user_id)).first()
-    _assert_user_in_domain(target_user, group.email_domain)
+    _assert_user_in_domain(target_user, _domains(group))
 
     pkg = db.query(TagPackage).filter(TagPackage.id == str(data.package_id), TagPackage.is_active == True).first()
     if not pkg:
@@ -932,14 +958,14 @@ def assign_tag(tag_id: str, data: PortalTagAssign, request: Request, db: Session
     tag = (
         db.query(BLETag)
         .join(User, User.id == BLETag.user_id)
-        .filter(BLETag.id == tag_id, User.email.ilike(f"%@{group.email_domain.lower()}"))
+        .filter(BLETag.id == tag_id, _domain_filter(_domains(group)))
         .first()
     )
     if not tag:
         raise HTTPException(status_code=404, detail="Tag not found in your group")
 
     target_user = db.query(User).filter(User.id == str(data.user_id)).first()
-    _assert_user_in_domain(target_user, group.email_domain)
+    _assert_user_in_domain(target_user, _domains(group))
 
     tag.user_id = str(data.user_id)
     db.commit()
@@ -960,7 +986,7 @@ def delete_tags(data: PortalTagDelete, request: Request, db: Session = Depends(g
         tag = (
             db.query(BLETag)
             .join(User, User.id == BLETag.user_id)
-            .filter(BLETag.id == tag_id, User.email.ilike(f"%@{group.email_domain.lower()}"))
+            .filter(BLETag.id == tag_id, _domain_filter(_domains(group)))
             .first()
         )
         if tag:
@@ -980,7 +1006,7 @@ def delete_tag_single(tag_id: str, request: Request, db: Session = Depends(get_d
     tag = (
         db.query(BLETag)
         .join(User, User.id == BLETag.user_id)
-        .filter(BLETag.id == tag_id, User.email.ilike(f"%@{group.email_domain.lower()}"))
+        .filter(BLETag.id == tag_id, _domain_filter(_domains(group)))
         .first()
     )
     if not tag:
@@ -1039,9 +1065,10 @@ def bulk_create_tags(rows: List[BulkTagRow], request: Request, db: Session = Dep
                 results.append(BulkTagResult(imei=imei, success=False, error="IMEI already exists"))
                 continue
             owner_email = row.owner_email.strip().lower()
-            if not owner_email.endswith(f"@{group.email_domain.lower()}"):
+            bulk_domains = _domains(group)
+            if not any(owner_email.endswith(f"@{d}") for d in bulk_domains):
                 results.append(BulkTagResult(imei=imei, success=False,
-                                             error=f"Email must be @{group.email_domain}"))
+                                             error=f"Email must use one of: {', '.join('@'+d for d in bulk_domains)}"))
                 continue
             owner = db.query(User).filter(User.email == owner_email).first()
             if not owner:
@@ -1098,7 +1125,7 @@ async def portal_get_trips(
         .filter(
             BLETag.id == data.vehicleId,
             BLETag.is_active == True,
-            User.email.ilike(f"%@{group.email_domain.lower()}"),
+            _domain_filter(_domains(group)),
         )
         .first()
     )
@@ -1400,7 +1427,7 @@ def report_geofence_events(
         .join(User, User.id == BLETag.user_id)
         .join(POI, POI.id == GeofenceAlert.poi_id)
         .filter(
-            User.email.ilike(f"%@{group.email_domain.lower()}"),
+            _domain_filter(_domains(group)),
             GeofenceAlert.created_at >= since,
         )
     )

@@ -248,7 +248,7 @@ class UserGroup(Base):
     id           = get_uuid_column()
     name         = Column(String(200), nullable=False, unique=True)
     slug         = Column(String(100), nullable=False, unique=True)  # URL-safe identifier
-    email_domain = Column(String(255), nullable=True, index=True)   # e.g. "gmail.com" — auto-assigns mobile users
+    email_domain = Column(String(500), nullable=True, index=True)   # comma-separated list of domains e.g. "acme.com,acme.co.uk"
     default_package_id = Column(String(36), ForeignKey("tag_packages.id"), nullable=True)  # kept for bulk-import fallback
     is_active    = Column(Boolean, nullable=False, default=True)
     created_at   = Column(DateTime(timezone=True), server_default=func.now())

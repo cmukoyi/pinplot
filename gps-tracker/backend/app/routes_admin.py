@@ -986,7 +986,7 @@ def deactivate_usergroup(
 
 
 class UserGroupUpdate(BaseModel):
-    email_domain: Optional[str] = None   # empty string clears it
+    email_domain: Optional[str] = None   # empty string clears it; comma-separated for multiple domains
 
 
 @router.put("/usergroups/{group_id}")
@@ -996,7 +996,7 @@ def update_usergroup(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Update UserGroup settings (manager+). Currently supports email_domain."""
+    """Update UserGroup settings (manager+). Supports comma-separated email_domain for multiple domains."""
     admin = get_admin_from_request(request, db)
     if not check_role_permission(admin.role, "manager"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires manager role")
@@ -1004,17 +1004,24 @@ def update_usergroup(
     if not group:
         raise HTTPException(status_code=404, detail="User group not found")
     if data.email_domain is not None:
-        domain = data.email_domain.strip().lower().lstrip("@") or None
-        # Ensure no other group claims this domain
-        if domain:
-            conflict = (
-                db.query(UserGroup)
-                .filter(UserGroup.email_domain == domain, UserGroup.id != group_id)
-                .first()
-            )
-            if conflict:
-                raise HTTPException(status_code=409, detail=f"Domain '{domain}' is already used by another group")
-        group.email_domain = domain
+        # Parse and normalise the comma-separated list
+        raw_domains = [d.strip().lower().lstrip("@") for d in data.email_domain.split(",")]
+        clean_domains = [d for d in raw_domains if d]
+        domain_value = ",".join(clean_domains) or None
+        # Ensure no other group claims any of these domains
+        if clean_domains:
+            for d in clean_domains:
+                conflict = (
+                    db.query(UserGroup)
+                    .filter(UserGroup.email_domain.ilike(f"%{d}%"), UserGroup.id != group_id)
+                    .first()
+                )
+                if conflict:
+                    # Check exact match within comma-separated list
+                    existing = [x.strip().lower() for x in (conflict.email_domain or "").split(",")]
+                    if d in existing:
+                        raise HTTPException(status_code=409, detail=f"Domain '{d}' is already used by another group")
+        group.email_domain = domain_value
     db.commit()
     return {"id": str(group.id), "name": group.name, "email_domain": group.email_domain}
 

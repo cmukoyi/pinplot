@@ -107,7 +107,18 @@
                 <strong id="sidebarUserName" style="display:block;color:var(--text-2)">—</strong>
                 <small id="sidebarCompany">—</small>
             </div>
-            <div class="header-avatar" id="headerAvatar" title="Logout" onclick="handleLogout()" style="cursor:pointer">—</div>
+            <div class="avatar-menu-wrap" id="avatarMenuWrap">
+                <div class="header-avatar" id="headerAvatar" title="Account menu" onclick="toggleAvatarMenu(event)" style="cursor:pointer">—</div>
+                <div class="avatar-dropdown" id="avatarDropdown" style="display:none">
+                    <div class="avatar-dropdown-header" id="avatarDropdownEmail">—</div>
+                    <button class="avatar-menu-item" onclick="closeAvatarMenu(); switchTab('settings')">
+                        <i class="fa-solid fa-gear"></i> Settings
+                    </button>
+                    <button class="avatar-menu-item avatar-menu-item-danger" onclick="closeAvatarMenu(); handleLogout()">
+                        <i class="fa-solid fa-right-from-bracket"></i> Sign Out
+                    </button>
+                </div>
+            </div>
         </div>
     </header>
 
@@ -1125,6 +1136,48 @@
                         </div>
                     </div>
 
+                    <!-- ─── Domain Configuration ─── -->
+                    <div class="card" id="settings-domain-card">
+                        <div class="settings-section-header">
+                            <i class="fa-solid fa-globe" style="color:var(--primary)"></i>
+                            <div>
+                                <h3>Email Domain Allowlist</h3>
+                                <p>Mobile-app users whose email matches one of these domains will appear in your asset list. You can add up to multiple domains (e.g. your company and a subsidiary).</p>
+                            </div>
+                            <span id="domain-admin-badge" class="badge badge-info header-action" style="display:none">Admin only</span>
+                        </div>
+                        <div id="domain-loading" style="padding:24px;text-align:center;color:var(--text-3)">
+                            <i class="fa-solid fa-spinner fa-spin"></i> Loading…
+                        </div>
+                        <div id="domain-body" style="display:none">
+                            <div class="settings-row">
+                                <div>
+                                    <div class="settings-row-label">Allowed Domains</div>
+                                    <div class="settings-row-hint">Separate multiple domains with commas, e.g. <code>acme.com, acme.co.uk</code></div>
+                                </div>
+                                <div class="settings-row-control">
+                                    <span id="domain-view" class="settings-row-value">—</span>
+                                    <button class="btn btn-secondary btn-small" id="domain-edit-btn" style="display:none"
+                                            onclick="settingsToggleForm('domainForm')">
+                                        <i class="fa-solid fa-pen"></i> Edit
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="settings-inline-edit" id="domainForm" style="display:none">
+                                <div>
+                                    <label style="font-size:12px;font-weight:600;color:var(--text-3);display:block;margin-bottom:4px">Domains (comma-separated)</label>
+                                    <input type="text" id="domain-input" placeholder="e.g. acme.com, acme.co.uk" autocomplete="off">
+                                </div>
+                                <p class="hint">Only mobile users with matching email domains will be visible in this portal.</p>
+                                <div class="actions">
+                                    <button class="btn btn-primary btn-small" id="domain-save-btn" onclick="settingsSaveDomain()">Save Domains</button>
+                                    <button class="btn btn-secondary btn-small" onclick="settingsToggleForm('domainForm')">Cancel</button>
+                                </div>
+                                <div class="alert" id="domain-alert" style="display:none"><span id="domain-alert-text"></span></div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div><!-- /.settings-cards -->
             </div>
 
@@ -2123,7 +2176,31 @@ async function handleLogin(e) {
     }
 }
 
+// ── Avatar dropdown menu ────────────────────────────────────────────────────
+let _avatarMenuOpen = false;
+function toggleAvatarMenu(e) {
+    if (e) e.stopPropagation();
+    _avatarMenuOpen ? closeAvatarMenu() : openAvatarMenu();
+}
+function openAvatarMenu() {
+    const dd = document.getElementById('avatarDropdown');
+    if (dd) dd.style.display = '';
+    _avatarMenuOpen = true;
+}
+function closeAvatarMenu() {
+    const dd = document.getElementById('avatarDropdown');
+    if (dd) dd.style.display = 'none';
+    _avatarMenuOpen = false;
+}
+// Close on outside click
+document.addEventListener('click', function(e) {
+    if (_avatarMenuOpen && !document.getElementById('avatarMenuWrap')?.contains(e.target)) {
+        closeAvatarMenu();
+    }
+});
+
 function handleLogout() {
+    closeAvatarMenu();
     clearSession();
     document.getElementById('dashboardPage').style.display = 'none';
     document.getElementById('loginPage').style.display     = 'flex';
@@ -2148,6 +2225,8 @@ function showDashboard(user, group) {
         const initials = name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0,2) || '?';
         avatarEl.textContent = initials;
     }
+    const dropEmailEl = document.getElementById('avatarDropdownEmail');
+    if (dropEmailEl) dropEmailEl.textContent = user.email || name;
 
     // Defer map init so the browser has painted the dashboard container
     // and Leaflet can read real pixel dimensions (avoids 0×0 tile issue on login).
@@ -2287,7 +2366,7 @@ async function loadGroupTags() {
         const sRes = await apiFetch('/api/portal/settings');
         const settings = await sRes.json();
         hint.textContent = settings.email_domain
-            ? `Showing all tags for users with @${settings.email_domain} emails.`
+            ? `Showing all tags for users with @${settings.email_domain.split(',').map(d => d.trim()).join(' or @')} emails.`
             : 'No domain configured — contact your administrator to configure the email domain.';
     } catch (_) { hint.textContent = ''; }
 
@@ -2619,6 +2698,7 @@ async function loadSettings() {
         _loadSettingsTheme(isAdmin),
         _loadSettingsRetention(isAdmin),
         _loadSettingsNotifications(),
+        _loadSettingsDomain(isAdmin),
     ]);
     loadCategories();
 }
@@ -2933,6 +3013,62 @@ async function settingsSaveNotifications() {
         alertTx.textContent   = err.message;
         alertEl.className     = 'alert alert-error';
         alertEl.style.display = 'flex';
+    }
+}
+
+// ─── Domain Configuration ─────────────────────────────────────────────────────
+
+async function _loadSettingsDomain(isAdmin) {
+    const loading = document.getElementById('domain-loading');
+    const body    = document.getElementById('domain-body');
+    const badge   = document.getElementById('domain-admin-badge');
+    const editBtn = document.getElementById('domain-edit-btn');
+    try {
+        const res = await apiFetch('/api/portal/settings');
+        if (!res.ok) throw new Error(await safeJsonDetail(res, 'Failed'));
+        const s = await res.json();
+        const domains = (s.email_domain || '').split(',').map(d => d.trim()).filter(Boolean);
+        const view = document.getElementById('domain-view');
+        if (view) view.textContent = domains.length ? domains.join(', ') : 'Not configured';
+        const input = document.getElementById('domain-input');
+        if (input) input.value = domains.join(', ');
+    } catch (_) {
+        const view = document.getElementById('domain-view');
+        if (view) view.textContent = 'Error loading';
+    }
+    if (loading) loading.style.display = 'none';
+    if (body)    body.style.display    = '';
+    if (isAdmin && badge) badge.style.display = '';
+    if (isAdmin && editBtn) editBtn.style.display = '';
+}
+
+async function settingsSaveDomain() {
+    const input = document.getElementById('domain-input');
+    const btn   = document.getElementById('domain-save-btn');
+    const alert = document.getElementById('domain-alert');
+    const alertText = document.getElementById('domain-alert-text');
+
+    const raw = (input?.value || '').trim();
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+        const res = await apiFetch('/api/portal/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email_domain: raw }),
+        });
+        if (!res.ok) throw new Error(await safeJsonDetail(res, 'Failed to save'));
+        const s = await res.json();
+        const domains = (s.email_domain || '').split(',').map(d => d.trim()).filter(Boolean);
+        const view = document.getElementById('domain-view');
+        if (view) view.textContent = domains.length ? domains.join(', ') : 'Not configured';
+        settingsToggleForm('domainForm');
+        if (alert) alert.style.display = 'none';
+        showTabAlert('settings', 'Domains saved successfully.', 'success');
+    } catch (err) {
+        if (alertText) alertText.textContent = err.message;
+        if (alert) { alert.className = 'alert alert-danger'; alert.style.display = ''; }
+    } finally {
+        btn.disabled = false; btn.textContent = 'Save Domains';
     }
 }
 
