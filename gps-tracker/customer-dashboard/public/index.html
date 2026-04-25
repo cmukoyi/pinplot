@@ -914,7 +914,9 @@
                                 <div class="settings-row-control" id="color-primary-control" style="display:none">
                                     <input type="color" id="color-primary" value="#3b82f6" class="color-swatch-input"
                                            oninput="settingsColorPreview()">
-                                    <button class="btn btn-secondary btn-small" onclick="settingsResetColor('primary')">Reset</button>
+                                    <button class="btn btn-secondary btn-small" onclick="settingsResetColor('primary')" title="Restore to default (#3b82f6)">
+                                        <i class="fa-solid fa-rotate-left"></i> Restore default
+                                    </button>
                                 </div>
                                 <span id="color-primary-view" class="settings-row-value" style="display:flex;align-items:center;gap:8px">
                                     <span id="color-primary-dot" class="color-dot"></span>
@@ -929,7 +931,9 @@
                                 <div class="settings-row-control" id="color-accent-control" style="display:none">
                                     <input type="color" id="color-accent" value="#10b981" class="color-swatch-input"
                                            oninput="settingsColorPreview()">
-                                    <button class="btn btn-secondary btn-small" onclick="settingsResetColor('accent')">Reset</button>
+                                    <button class="btn btn-secondary btn-small" onclick="settingsResetColor('accent')" title="Restore to default (#10b981)">
+                                        <i class="fa-solid fa-rotate-left"></i> Restore default
+                                    </button>
                                 </div>
                                 <span id="color-accent-view" class="settings-row-value" style="display:flex;align-items:center;gap:8px">
                                     <span id="color-accent-dot" class="color-dot"></span>
@@ -1074,7 +1078,7 @@
                     </div>
 
                     <!-- ─── Asset Categories ─── -->
-                    <div class="card">
+                    <div class="card settings-card-wide">
                         <div class="settings-section-header">
                             <i class="fa-solid fa-layer-group" style="color:var(--primary)"></i>
                             <div>

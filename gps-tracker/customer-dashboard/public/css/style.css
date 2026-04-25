@@ -1626,11 +1626,28 @@ select option { background: var(--bg-3); }
 .btn-icon-xs.danger:hover { background: rgba(239,68,68,.1); color: var(--danger); }
 
 /* ── Settings page ────────────────────────────────────────── */
+/* Settings tab — allow scrolling (cards overflow the flex-fill tab pane) */
+#tab-settings.active {
+  overflow-y: auto;
+}
+
+/* Responsive card grid: single col on mobile, 2 col on wider screens */
 .settings-cards {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 20px;
-  margin-top: 20px;
+  margin-top: 0;
+  padding: 24px;
+  padding-bottom: 40px;
+  align-items: start;
+}
+@media (min-width: 860px) {
+  .settings-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .settings-card-wide {
+    grid-column: 1 / -1;
+  }
 }
 /* Section header inside a card: icon + title/desc block + optional trailing button */
 .settings-section-header {
