@@ -290,6 +290,7 @@
                                     <th>Asset / Tag</th>
                                     <th>Category</th>
                                     <th>Status</th>
+                                    <th>Package</th>
                                     <th>Battery</th>
                                     <th>Last Location</th>
                                     <th>Last Update</th>
@@ -298,7 +299,7 @@
                                 </tr>
                             </thead>
                             <tbody id="al-tbody">
-                                <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3)">Loading…</td></tr>
+                                <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-3)">Loading…</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -4840,6 +4841,7 @@ let _lmSelected     = null;      // currently selected imei
 let _lmCatFilter    = 'all';     // 'all' | category UUID from _categoriesCache
 
 function _lmStatusClass(tag) {
+    if (!tag.package_id) return 'inactive';  // no package → always inactive
     if (!tag.last_seen) return 'stock';
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     if (new Date(tag.last_seen).getTime() >= sevenDaysAgo) return 'active';
@@ -5039,9 +5041,15 @@ function _lmRenderDetail(t) {
     const statusLabel  = { active: 'Active', inactive: 'Inactive', stock: 'Stock' };
     const lastSeen  = t.last_seen   ? new Date(t.last_seen).toLocaleString()    : '—';
     const expiry    = t.expiry_date ? new Date(t.expiry_date).toLocaleDateString() : '—';
-    const daysLeft  = t.days_remaining != null
-        ? (t.days_remaining > 0 ? `${t.days_remaining}d left` : t.days_remaining === 0 ? 'Today' : 'Expired')
+    const daysLeft  = t.package_id
+        ? (t.days_remaining != null
+            ? (t.days_remaining > 0 ? `${t.days_remaining}d left` : t.days_remaining === 0 ? 'Today' : 'Expired')
+            : '—')
         : '—';
+    const pkgHtml = t.package_id
+        ? `<span>${esc(t.package_name || 'Unknown')}</span>`
+        : `<span style="color:var(--danger);font-weight:600"><i class="fa-solid fa-circle-exclamation" style="margin-right:3px"></i>No Package</span>`;
+    const expiryColor = !t.package_id ? 'var(--text-3)' : (t.days_remaining > 7 ? 'var(--success)' : 'var(--danger)');
     panel.innerHTML = `
         <div class="detail-header">
             <div class="detail-icon" style="background:${statusColors[status]}20;color:${statusColors[status]}">
@@ -5058,9 +5066,9 @@ function _lmRenderDetail(t) {
         <div class="detail-grid">
             <div class="detail-item"><label>Status</label><span style="color:${statusColors[status]}">${statusLabel[status]}</span></div>
             <div class="detail-item"><label>Owner</label><span>${esc((t.owner_email||'').split('@')[0])}</span></div>
-            <div class="detail-item"><label>Package</label><span>${esc(t.package_name||'—')}</span></div>
+            <div class="detail-item"><label>Package</label>${pkgHtml}</div>
             <div class="detail-item"><label>Days Left</label><span>${daysLeft}</span></div>
-            <div class="detail-item"><label>Expiry</label><span>${expiry}</span></div>
+            <div class="detail-item"><label>Expiry</label><span style="color:${expiryColor}">${expiry}</span></div>
             <div class="detail-item"><label>Last Seen</label><span>${lastSeen}</span></div>
             <div class="detail-item detail-full"><label>Type</label><span>${esc(t.tag_type||'—')}</span></div>
         </div>
@@ -5087,7 +5095,7 @@ async function initAssetList() {
         alRenderTable();
     } else {
         document.getElementById('al-tbody').innerHTML =
-            '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>';
+            '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>';
         try {
             const res = await apiFetch('/api/portal/tags');
             if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
@@ -5095,7 +5103,7 @@ async function initAssetList() {
             _alLoaded = true;
         } catch (err) {
             document.getElementById('al-tbody').innerHTML =
-                `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--danger)"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(err.message)}</td></tr>`;
+                `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--danger)"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(err.message)}</td></tr>`;
             return;
         }
         alRenderCategoryChips();
@@ -5154,7 +5162,7 @@ function alRenderTable() {
     const tbody = document.getElementById('al-tbody');
     if (!tbody) return;
     if (!list.length) {
-        tbody.innerHTML = '<tr><td colspan="8" class="table-empty" style="text-align:center;padding:40px;color:var(--text-3)">No assets match the search.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="table-empty" style="text-align:center;padding:40px;color:var(--text-3)">No assets match the search.</td></tr>';
         return;
     }
     const statusColors = { active: 'var(--success)', inactive: 'var(--danger)', stock: 'var(--text-3)' };
@@ -5172,11 +5180,18 @@ function alRenderTable() {
             ? `<span style="color:var(--success);font-size:.78rem"><i class="fa-solid fa-location-dot"></i> ${esc(t.location_description || (parseFloat(t.latitude).toFixed(4) + ', ' + parseFloat(t.longitude).toFixed(4)))}</span>`
             : `<span style="color:var(--text-3);font-size:.78rem"><i class="fa-solid fa-location-dot"></i> No GPS</span>`;
         const lastSeen = t.last_seen ? new Date(t.last_seen).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-        const daysLeft = t.days_remaining != null
-            ? (t.days_remaining > 30 ? `<span style="color:var(--success)">${t.days_remaining}d</span>`
-             : t.days_remaining > 7  ? `<span style="color:var(--warning)">${t.days_remaining}d</span>`
-             : t.days_remaining >= 0 ? `<span style="color:var(--danger)">${t.days_remaining}d</span>`
-             : `<span style="color:var(--danger)">Expired</span>`) : '—';
+        const pkgHtml = t.package_id
+            ? `<span style="font-size:.78rem">${esc(t.package_name || 'Unknown')}</span>`
+            : `<span style="font-size:.78rem;color:var(--danger);font-weight:600"><i class="fa-solid fa-circle-exclamation" style="margin-right:3px"></i>No Package</span>`;
+        const expiryDate = t.expiry_date ? new Date(t.expiry_date).toLocaleDateString([], {day:'2-digit',month:'short',year:'numeric'}) : null;
+        const daysLeft = t.package_id
+            ? (t.days_remaining != null
+                ? (t.days_remaining > 30 ? `<span style="color:var(--success);font-size:.78rem">${t.days_remaining}d<br><small style="color:var(--text-3)">${expiryDate}</small></span>`
+                 : t.days_remaining > 7  ? `<span style="color:var(--warning);font-size:.78rem">${t.days_remaining}d<br><small style="color:var(--text-3)">${expiryDate}</small></span>`
+                 : t.days_remaining >= 0 ? `<span style="color:var(--danger);font-size:.78rem">${t.days_remaining}d<br><small>${expiryDate}</small></span>`
+                 : `<span style="color:var(--danger);font-size:.78rem">Expired<br><small>${expiryDate}</small></span>`)
+                : '—')
+            : `<span style="color:var(--danger);font-size:.78rem">—</span>`;
         return `<tr>
             <td>
                 <div class="table-asset-name">
@@ -5196,6 +5211,7 @@ function alRenderTable() {
                     <span style="font-size:.78rem">${statusLabel[status]}</span>
                 </div>
             </td>
+            <td>${pkgHtml}</td>
             <td>${batHtml}</td>
             <td>${locHtml}</td>
             <td style="font-size:.78rem;color:var(--text-2)">${lastSeen}</td>
@@ -5547,12 +5563,20 @@ function amRenderCards() {
         const color    = statusColors[status];
         const label    = esc(t.description || t.device_name || t.imei);
         const owner    = esc((t.owner_email || '').split('@')[0] || '—');
-        const pkg      = esc(t.package_name || '—');
+        const hasPkg   = !!t.package_id;
+        const pkgHtml  = hasPkg
+            ? `<span>${esc(t.package_name || 'Unknown')}</span>`
+            : `<span style="color:var(--danger);font-weight:600"><i class="fa-solid fa-circle-exclamation" style="margin-right:3px"></i>No Package</span>`;
         const tagType  = esc(t.tag_type || '—');
         const lastSeen = t.last_seen ? new Date(t.last_seen).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-        const daysLeft = t.days_remaining != null
-            ? (t.days_remaining > 0 ? `${t.days_remaining} days left` : t.days_remaining === 0 ? 'Expires today' : 'Expired') : '—';
-        const daysColor= t.days_remaining != null ? (t.days_remaining > 30 ? 'var(--success)' : t.days_remaining > 7 ? 'var(--warning)' : 'var(--danger)') : 'var(--text-3)';
+        const expiryDate = t.expiry_date ? new Date(t.expiry_date).toLocaleDateString([], {day:'2-digit',month:'short',year:'numeric'}) : null;
+        const daysLeft = hasPkg
+            ? (t.days_remaining != null
+                ? (t.days_remaining > 0 ? `${t.days_remaining} days left` : t.days_remaining === 0 ? 'Expires today' : 'Expired')
+                : '—')
+            : '—';
+        const daysColor= !hasPkg ? 'var(--danger)' : (t.days_remaining != null ? (t.days_remaining > 30 ? 'var(--success)' : t.days_remaining > 7 ? 'var(--warning)' : 'var(--danger)') : 'var(--text-3)');
+        const expiryDisplay = hasPkg && expiryDate ? `${daysLeft}<br><small style="color:var(--text-3)">${expiryDate}</small>` : daysLeft;
         const batPct   = t.battery_level;
         const batCls   = batPct == null ? '' : batPct <= 20 ? 'battery-critical' : batPct <= 50 ? 'battery-low' : 'battery-ok';
         const batHtml  = batPct != null
@@ -5571,10 +5595,10 @@ function amRenderCards() {
             <div class="asset-card-body">
                 <div class="card-kv"><span>IMEI</span><span class="mono small">${esc(t.imei)}</span></div>
                 <div class="card-kv"><span>Owner</span><span>${owner}</span></div>
-                <div class="card-kv"><span>Package</span><span>${pkg}</span></div>
+                <div class="card-kv"><span>Package</span>${pkgHtml}</div>
                 <div class="card-kv"><span>Battery</span>${batHtml}</div>
                 <div class="card-kv"><span>Last Seen</span><span>${lastSeen}</span></div>
-                <div class="card-kv"><span>Expires</span><span style="color:${daysColor}">${daysLeft}</span></div>
+                <div class="card-kv"><span>Expires</span><span style="color:${daysColor}">${expiryDisplay}</span></div>
             </div>
             <div class="asset-card-footer">
                 <button class="btn btn-ghost btn-sm" onclick="openTagMgmtModal('edit','${esc(t.imei)}')">
