@@ -231,8 +231,8 @@ class UserGroupPackage(Base):
     __tablename__ = "user_group_packages"
 
     id           = get_uuid_column()
-    usergroup_id = Column(String(36), ForeignKey("user_groups.id"), nullable=False, index=True)
-    package_id   = Column(String(36), ForeignKey("tag_packages.id"), nullable=False)
+    usergroup_id = get_uuid_fk("user_groups.id")
+    package_id   = get_uuid_fk("tag_packages.id")
     is_default   = Column(Boolean, nullable=False, default=False)
     created_at   = Column(DateTime(timezone=True), server_default=func.now())
 

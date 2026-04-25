@@ -11,6 +11,7 @@ user_groups.default_package_id values into it with is_default=True.
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
 
@@ -43,9 +44,9 @@ def upgrade():
     if not _table_exists(conn, "user_group_packages"):
         op.create_table(
             "user_group_packages",
-            sa.Column("id",           sa.String(36), primary_key=True),
-            sa.Column("usergroup_id", sa.String(36), sa.ForeignKey("user_groups.id", ondelete="CASCADE"), nullable=False),
-            sa.Column("package_id",   sa.String(36), sa.ForeignKey("tag_packages.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("id",           UUID(as_uuid=False), primary_key=True),
+            sa.Column("usergroup_id", UUID(as_uuid=False), sa.ForeignKey("user_groups.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("package_id",   UUID(as_uuid=False), sa.ForeignKey("tag_packages.id", ondelete="CASCADE"), nullable=False),
             sa.Column("is_default",   sa.Boolean(),  nullable=False, server_default="false"),
             sa.Column("created_at",   sa.DateTime(timezone=True), server_default=sa.func.now()),
         )
@@ -67,7 +68,7 @@ def upgrade():
                 conn.execute(
                     text(
                         "INSERT INTO user_group_packages (id, usergroup_id, package_id, is_default) "
-                        "VALUES (:id, :g, :p, true)"
+                        "VALUES (:id::uuid, :g::uuid, :p::uuid, true)"
                     ),
                     {"id": str(uuid.uuid4()), "g": str(group_id), "p": str(pkg_id)},
                 )
