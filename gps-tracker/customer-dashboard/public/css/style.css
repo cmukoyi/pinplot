@@ -1797,3 +1797,83 @@ select option { background: var(--bg-3); }
   overflow: hidden;
 }
 
+/* ── Reports ──────────────────────────────────────────────── */
+.rpt-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+  flex-shrink: 0;
+}
+.rpt-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 20px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+.rpt-sep { color: var(--border); }
+.rpt-table-wrap {
+  flex: 1;
+  overflow: auto;
+  padding: 0 20px 20px;
+}
+.rpt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 16px;
+}
+.rpt-table thead th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--text-3);
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+  background: var(--bg-2);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.rpt-table thead th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.rpt-table thead th.sortable:hover { color: var(--primary); }
+.rpt-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background .1s;
+}
+.rpt-table tbody tr:hover { background: var(--bg-3); }
+.rpt-table tbody td {
+  padding: 10px 12px;
+  color: var(--text);
+  vertical-align: middle;
+}
+/* Status badges */
+.rpt-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rpt-badge-active   { background: rgba(16,185,129,.15); color: var(--success); }
+.rpt-badge-expiring { background: rgba(245,158,11,.15);  color: var(--warning); }
+.rpt-badge-expired  { background: rgba(239,68,68,.12);   color: var(--danger);  }
+.rpt-badge-none     { background: var(--bg-3);           color: var(--text-3);  }
+

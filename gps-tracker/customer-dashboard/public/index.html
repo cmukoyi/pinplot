@@ -157,6 +157,15 @@
             </button>
         </div>
 
+        <div class="nav-section">
+            <div class="nav-section-label">Reports</div>
+
+            <button class="nav-item" data-tab="reports-subscriptions" onclick="switchTab('reports-subscriptions')">
+                <span class="nav-icon"><i class="fa-solid fa-file-invoice"></i></span>
+                <span class="nav-label">Tag Subscriptions</span>
+            </button>
+        </div>
+
         <div class="sidebar-footer">
             <button class="btn btn-ghost btn-sm" onclick="handleLogout()" style="width:100%;justify-content:center">
                 <i class="fa-solid fa-right-from-bracket"></i>
@@ -1356,6 +1365,68 @@
               </div><!-- /qr-root -->
             </div>
 
+            <!-- ═══ REPORTS — Tag Subscriptions ═══ -->
+            <div id="tab-reports-subscriptions" class="tab-content">
+                <div class="rpt-toolbar">
+                    <div class="search-input-wrap" style="flex:1;max-width:280px">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="rpt-sub-search" placeholder="Search tag, user or package…"
+                               oninput="rptSubFilter()">
+                    </div>
+                    <select id="rpt-sub-pkg-filter" onchange="rptSubFilter()" style="min-width:160px">
+                        <option value="">All packages</option>
+                    </select>
+                    <select id="rpt-sub-status-filter" onchange="rptSubFilter()" style="min-width:150px">
+                        <option value="">All statuses</option>
+                        <option value="active">Active</option>
+                        <option value="expiring">Expiring soon (&lt;30 days)</option>
+                        <option value="expired">Expired</option>
+                        <option value="none">No package</option>
+                    </select>
+                    <button class="btn btn-secondary btn-small" onclick="rptSubRefresh()">
+                        <i class="fa-solid fa-rotate-right"></i> Refresh
+                    </button>
+                    <button class="btn btn-primary btn-small" id="rpt-sub-export-btn" onclick="rptSubExportCSV()" disabled>
+                        <i class="fa-solid fa-file-csv"></i> Export CSV
+                    </button>
+                </div>
+
+                <div id="rpt-sub-summary" class="rpt-summary-bar" style="display:none">
+                    <span id="rpt-sub-count-total"><strong>—</strong> tags</span>
+                    <span class="rpt-sep">·</span>
+                    <span id="rpt-sub-count-active" style="color:var(--success)"><strong>—</strong> active</span>
+                    <span class="rpt-sep">·</span>
+                    <span id="rpt-sub-count-expiring" style="color:var(--warning)"><strong>—</strong> expiring</span>
+                    <span class="rpt-sep">·</span>
+                    <span id="rpt-sub-count-expired" style="color:var(--danger)"><strong>—</strong> expired</span>
+                    <span class="rpt-sep">·</span>
+                    <span id="rpt-sub-count-none" style="color:var(--text-3)"><strong>—</strong> no package</span>
+                </div>
+
+                <div id="rpt-sub-alert" class="alert" style="display:none"><span id="rpt-sub-alert-text"></span></div>
+
+                <div class="rpt-table-wrap">
+                    <table class="rpt-table" id="rpt-sub-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" onclick="rptSubSort('description')">Tag / Device <span class="sort-arrow" data-col="description"></span></th>
+                                <th class="sortable" onclick="rptSubSort('owner_email')">Assigned User <span class="sort-arrow" data-col="owner_email"></span></th>
+                                <th class="sortable" onclick="rptSubSort('package_name')">Package <span class="sort-arrow" data-col="package_name"></span></th>
+                                <th class="sortable" onclick="rptSubSort('added_at')">Date Added <span class="sort-arrow" data-col="added_at"></span></th>
+                                <th class="sortable" onclick="rptSubSort('expiry_date')">Expiry Date <span class="sort-arrow" data-col="expiry_date"></span></th>
+                                <th class="sortable" onclick="rptSubSort('days_remaining')">Days Left <span class="sort-arrow" data-col="days_remaining"></span></th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rpt-sub-tbody">
+                            <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-3)">
+                                <i class="fa-solid fa-spinner fa-spin"></i> Loading…
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
         </div><!-- /content -->
     </main><!-- /main-content -->
 </div><!-- /app -->
@@ -1816,7 +1887,7 @@ applyTheme(localStorage.getItem('pp-theme') || 'dark');
 // ══════════════════════════════════════════
 // Tab switching
 // ══════════════════════════════════════════
-const TAB_TITLES = { livemap: 'Live Map', assets: 'Asset List', history: 'Movement History', 'asset-mgmt': 'Asset Management', users: 'User Accounts', building: 'Floorplan Sketch', floorplan: 'Floorplan', settings: 'Settings', qr: 'QR / NFC Tags' };
+const TAB_TITLES = { livemap: 'Live Map', assets: 'Asset List', history: 'Movement History', 'asset-mgmt': 'Asset Management', users: 'User Accounts', building: 'Floorplan Sketch', floorplan: 'Floorplan', settings: 'Settings', qr: 'QR / NFC Tags', 'reports-subscriptions': 'Tag Subscriptions Report' };
 let _mapInitialized = false;
 
 function switchTab(name) {
@@ -1846,6 +1917,7 @@ function switchTab(name) {
     if (name === 'users')      loadUsers();
     if (name === 'settings')   loadSettings();
     if (name === 'qr' && typeof QRG !== 'undefined') QRG.onShow();
+    if (name === 'reports-subscriptions') loadReports();
     // Sketch tab: resize canvases now the container is visible
     if (name === 'building' && typeof resizeCanvases === 'function') {
         requestAnimationFrame(() => { resizeCanvases(); if (typeof render === 'function') render(); });
@@ -2608,6 +2680,207 @@ function _showSettingsAlert(alertEl, alertTx, msg) {
     alertTx.textContent   = msg;
     alertEl.className     = 'alert alert-error';
     alertEl.style.display = 'flex';
+}
+
+// ══════════════════════════════════════════
+// REPORTS — Tag Subscriptions
+// ══════════════════════════════════════════
+
+let _rptSubData     = [];   // full dataset from API
+let _rptSubFiltered = [];   // after search/filter
+let _rptSubSortCol  = 'expiry_date';
+let _rptSubSortAsc  = true;
+let _rptSubLoaded   = false;
+
+async function loadReports() {
+    if (_rptSubLoaded) { rptSubFilter(); return; }
+    _rptSubSetLoading(true);
+    try {
+        const res = await apiFetch('/api/portal/tags');
+        if (!res.ok) throw new Error(await safeJsonDetail(res, 'Failed to load tags'));
+        _rptSubData   = await res.json();
+        _rptSubLoaded = true;
+        _rptSubBuildPkgFilter();
+        rptSubFilter();
+        document.getElementById('rpt-sub-export-btn').disabled = false;
+    } catch (err) {
+        const alertEl = document.getElementById('rpt-sub-alert');
+        document.getElementById('rpt-sub-alert-text').textContent = err.message;
+        alertEl.className     = 'alert alert-error';
+        alertEl.style.display = 'flex';
+        document.getElementById('rpt-sub-tbody').innerHTML =
+            `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--danger)">${esc(err.message)}</td></tr>`;
+    } finally {
+        _rptSubSetLoading(false);
+    }
+}
+
+function rptSubRefresh() {
+    _rptSubLoaded = false;
+    document.getElementById('rpt-sub-export-btn').disabled = true;
+    loadReports();
+}
+
+function _rptSubSetLoading(on) {
+    if (on) {
+        document.getElementById('rpt-sub-tbody').innerHTML =
+            '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>';
+        document.getElementById('rpt-sub-summary').style.display = 'none';
+    }
+}
+
+function _rptSubBuildPkgFilter() {
+    const sel   = document.getElementById('rpt-sub-pkg-filter');
+    const names = [...new Set(_rptSubData.map(t => t.package_name).filter(Boolean))].sort();
+    // keep first "All packages" option, replace rest
+    sel.innerHTML = '<option value="">All packages</option>' +
+        names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+}
+
+// ─── Status helper ────────────────────────────────────────────────────────────
+function _rptSubStatus(tag) {
+    if (!tag.package_name) return 'none';
+    const d = tag.days_remaining;
+    if (d === null || d === undefined) return 'none';
+    if (d < 0)  return 'expired';
+    if (d <= 30) return 'expiring';
+    return 'active';
+}
+
+// ─── Filter ───────────────────────────────────────────────────────────────────
+function rptSubFilter() {
+    const q          = (document.getElementById('rpt-sub-search')?.value || '').toLowerCase();
+    const pkgFilter  = document.getElementById('rpt-sub-pkg-filter')?.value  || '';
+    const statFilter = document.getElementById('rpt-sub-status-filter')?.value || '';
+
+    _rptSubFiltered = _rptSubData.filter(t => {
+        if (q) {
+            const hay = `${t.description || ''} ${t.device_name || ''} ${t.imei} ${t.owner_email} ${t.package_name || ''}`.toLowerCase();
+            if (!hay.includes(q)) return false;
+        }
+        if (pkgFilter  && t.package_name !== pkgFilter)        return false;
+        if (statFilter && _rptSubStatus(t) !== statFilter)      return false;
+        return true;
+    });
+
+    _rptSubSortAndRender();
+    _rptSubUpdateSummary();
+}
+
+// ─── Sort ─────────────────────────────────────────────────────────────────────
+function rptSubSort(col) {
+    if (_rptSubSortCol === col) {
+        _rptSubSortAsc = !_rptSubSortAsc;
+    } else {
+        _rptSubSortCol = col;
+        _rptSubSortAsc = true;
+    }
+    // Update arrow indicators
+    document.querySelectorAll('#rpt-sub-table .sort-arrow').forEach(el => {
+        el.textContent = '';
+    });
+    const arrow = document.querySelector(`#rpt-sub-table .sort-arrow[data-col="${col}"]`);
+    if (arrow) arrow.textContent = _rptSubSortAsc ? ' ▲' : ' ▼';
+
+    _rptSubSortAndRender();
+}
+
+function _rptSubSortAndRender() {
+    const col = _rptSubSortCol;
+    const asc = _rptSubSortAsc;
+    const rows = [..._rptSubFiltered].sort((a, b) => {
+        let va = a[col], vb = b[col];
+        if (va == null) va = asc ? '\uffff' : '';
+        if (vb == null) vb = asc ? '\uffff' : '';
+        if (typeof va === 'number' && typeof vb === 'number') return asc ? va - vb : vb - va;
+        return asc
+            ? String(va).localeCompare(String(vb))
+            : String(vb).localeCompare(String(va));
+    });
+    _rptSubRenderRows(rows);
+}
+
+// ─── Render rows ─────────────────────────────────────────────────────────────
+const _RPT_STATUS_BADGE = {
+    active:   '<span class="rpt-badge rpt-badge-active">Active</span>',
+    expiring: '<span class="rpt-badge rpt-badge-expiring">Expiring soon</span>',
+    expired:  '<span class="rpt-badge rpt-badge-expired">Expired</span>',
+    none:     '<span class="rpt-badge rpt-badge-none">No package</span>',
+};
+
+function _rptSubRenderRows(rows) {
+    const tbody = document.getElementById('rpt-sub-tbody');
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-3)">No tags match the current filters.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = rows.map(t => {
+        const status = _rptSubStatus(t);
+        const tagLabel  = esc(t.description || t.device_name || t.imei);
+        const tagSub    = (t.description && t.device_name && t.device_name !== t.description)
+                          ? `<br><span style="font-size:11px;color:var(--text-3)">${esc(t.device_name)}</span>` : '';
+        const imeiSub   = `<br><span style="font-size:11px;color:var(--text-3);font-family:monospace">${esc(t.imei)}</span>`;
+        const addedFmt  = t.added_at   ? _rptFmtDate(t.added_at)   : '—';
+        const expiryFmt = t.expiry_date ? _rptFmtDate(t.expiry_date) : '—';
+        let daysCell    = '—';
+        if (t.days_remaining !== null && t.days_remaining !== undefined && t.package_name) {
+            const color = status === 'active' ? 'var(--success)' : status === 'expiring' ? 'var(--warning)' : 'var(--danger)';
+            daysCell = `<span style="font-weight:600;color:${color}">${t.days_remaining > 0 ? t.days_remaining : 0}</span>`;
+        }
+        return `<tr>
+            <td>${tagLabel}${tagSub}${imeiSub}</td>
+            <td style="font-size:12px">${esc(t.owner_email)}</td>
+            <td>${t.package_name ? esc(t.package_name) : '<span style="color:var(--text-3)">—</span>'}</td>
+            <td style="white-space:nowrap">${addedFmt}</td>
+            <td style="white-space:nowrap">${expiryFmt}</td>
+            <td style="text-align:center">${daysCell}</td>
+            <td>${_RPT_STATUS_BADGE[status] || ''}</td>
+        </tr>`;
+    }).join('');
+}
+
+function _rptFmtDate(iso) {
+    if (!iso) return '—';
+    try {
+        return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch (_) { return iso; }
+}
+
+// ─── Summary bar ─────────────────────────────────────────────────────────────
+function _rptSubUpdateSummary() {
+    const counts = { active: 0, expiring: 0, expired: 0, none: 0 };
+    _rptSubFiltered.forEach(t => counts[_rptSubStatus(t)]++);
+    document.getElementById('rpt-sub-count-total').innerHTML    = `<strong>${_rptSubFiltered.length}</strong> tags`;
+    document.getElementById('rpt-sub-count-active').innerHTML   = `<strong>${counts.active}</strong> active`;
+    document.getElementById('rpt-sub-count-expiring').innerHTML = `<strong>${counts.expiring}</strong> expiring`;
+    document.getElementById('rpt-sub-count-expired').innerHTML  = `<strong>${counts.expired}</strong> expired`;
+    document.getElementById('rpt-sub-count-none').innerHTML     = `<strong>${counts.none}</strong> no package`;
+    document.getElementById('rpt-sub-summary').style.display    = 'flex';
+}
+
+// ─── CSV Export ──────────────────────────────────────────────────────────────
+function rptSubExportCSV() {
+    const cols = ['Tag / Device', 'IMEI', 'Assigned User', 'Package', 'Date Added', 'Expiry Date', 'Days Remaining', 'Status'];
+    const rows = _rptSubFiltered.map(t => [
+        t.description || t.device_name || t.imei,
+        t.imei,
+        t.owner_email,
+        t.package_name || '',
+        t.added_at    ? _rptFmtDate(t.added_at)    : '',
+        t.expiry_date ? _rptFmtDate(t.expiry_date) : '',
+        (t.days_remaining !== null && t.days_remaining !== undefined && t.package_name) ? Math.max(0, t.days_remaining) : '',
+        _rptSubStatus(t),
+    ]);
+    const csv = [cols, ...rows].map(r =>
+        r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+    ).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `tag-subscriptions-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
 }
 
 // ══════════════════════════════════════════
