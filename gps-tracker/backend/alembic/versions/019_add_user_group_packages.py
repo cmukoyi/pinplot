@@ -68,7 +68,7 @@ def upgrade():
                 conn.execute(
                     text(
                         "INSERT INTO user_group_packages (id, usergroup_id, package_id, is_default) "
-                        "VALUES (:id::uuid, :g::uuid, :p::uuid, true)"
+                        "VALUES (CAST(:id AS uuid), CAST(:g AS uuid), CAST(:p AS uuid), true)"
                     ),
                     {"id": str(uuid.uuid4()), "g": str(group_id), "p": str(pkg_id)},
                 )
