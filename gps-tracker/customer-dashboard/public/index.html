@@ -231,20 +231,20 @@
                     </div>
 
                     <!-- Stats -->
-                    <div class="stat-chips">
-                        <div class="stat-chip">
+                    <div class="stat-chips" id="lm-stat-chips">
+                        <div class="stat-chip" style="cursor:pointer" onclick="lmFilterStatus('all', this)" title="Show all">
                             <span class="stat-num" id="lm-stat-total">—</span>
                             <span>Total</span>
                         </div>
-                        <div class="stat-chip online">
+                        <div class="stat-chip online" style="cursor:pointer" onclick="lmFilterStatus('active', this)" title="Show active only">
                             <span class="stat-num" id="lm-stat-online">—</span>
                             <span>Active</span>
                         </div>
-                        <div class="stat-chip idle">
+                        <div class="stat-chip idle" style="cursor:pointer" onclick="lmFilterStatus('inactive', this)" title="Show inactive only">
                             <span class="stat-num" id="lm-stat-idle">—</span>
                             <span>Inactive</span>
                         </div>
-                        <div class="stat-chip offline">
+                        <div class="stat-chip offline" style="cursor:pointer" onclick="lmFilterStatus('stock', this)" title="Show stock only">
                             <span class="stat-num" id="lm-stat-offline">—</span>
                             <span>Stock</span>
                         </div>
@@ -2145,7 +2145,7 @@ function toggleAvatarMenu(e) {
 }
 function openAvatarMenu() {
     const dd = document.getElementById('avatarDropdown');
-    if (dd) dd.style.display = '';
+    if (dd) dd.style.display = 'block';
     _avatarMenuOpen = true;
 }
 function closeAvatarMenu() {
@@ -4867,6 +4867,7 @@ let _lmTags         = [];        // all tags from API
 let _lmMarkers      = {};        // imei → L.marker
 let _lmSelected     = null;      // currently selected imei
 let _lmCatFilter    = 'all';     // 'all' | category UUID from _categoriesCache
+let _lmStatusFilter = 'all';     // 'all' | 'active' | 'inactive' | 'stock'
 
 function _lmStatusClass(tag) {
     if (!tag.package_id) return 'inactive';  // no package → always inactive
@@ -4967,6 +4968,7 @@ function _lmRenderList(query) {
     query = (query || document.getElementById('lm-search')?.value || '').toLowerCase();
     const list = _lmTags.filter(t => {
         if (_lmCatFilter !== 'all' && t.category_id !== _lmCatFilter) return false;
+        if (_lmStatusFilter !== 'all' && _lmStatusClass(t) !== _lmStatusFilter) return false;
         if (!query) return true;
         const haystack = [t.imei, t.description, t.device_name, t.owner_email].join(' ').toLowerCase();
         return haystack.includes(query);
@@ -5023,6 +5025,13 @@ function lmFilterCat(catId, btn) {
     _lmCatFilter = catId;
     document.querySelectorAll('#lm-cat-filter .cat-btn').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
+    _lmRenderList();
+}
+
+function lmFilterStatus(status, el) {
+    _lmStatusFilter = status;
+    document.querySelectorAll('#lm-stat-chips .stat-chip').forEach(c => c.classList.remove('selected'));
+    if (el && status !== 'all') el.classList.add('selected');
     _lmRenderList();
 }
 

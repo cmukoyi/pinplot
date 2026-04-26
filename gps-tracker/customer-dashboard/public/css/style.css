@@ -457,7 +457,14 @@ input, select, textarea { font-family: var(--font); }
   border: 1px solid var(--border);
   font-size: .7rem;
   color: var(--text-3);
+  transition: var(--transition);
+  user-select: none;
 }
+.stat-chip:hover { border-color: var(--border-2); }
+.stat-chip.selected,
+.stat-chip.online.selected  { border-color: var(--success); background: rgba(16,185,129,.12); }
+.stat-chip.idle.selected    { border-color: var(--danger);  background: rgba(239,68,68,.12); }
+.stat-chip.offline.selected { border-color: var(--text-3);  background: rgba(107,122,153,.12); }
 .stat-chip .stat-num { font-size: 1.1rem; font-weight: 700; }
 .stat-chip.online  .stat-num { color: var(--success); }   /* Active */
 .stat-chip.idle    .stat-num { color: var(--danger); }    /* Inactive */
