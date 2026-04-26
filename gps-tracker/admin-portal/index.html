@@ -1272,7 +1272,7 @@
                                     <p style="margin:0 0 12px;font-size:13px">Temporary password (shown <span style="color:red;font-weight:600">once only</span>):</p>
                                     <div style="display:flex;align-items:center;gap:8px">
                                         <code id="cgResultPwd" style="flex:1;padding:8px 12px;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:6px;font-size:15px;letter-spacing:1px"></code>
-                                        <button class="btn btn-secondary" style="padding:8px 12px" onclick="copyTempPassword()">Copy</button>
+                                        <button id="copyPwdBtn" class="btn btn-secondary" style="padding:8px 12px" onclick="copyTempPassword()">Copy</button>
                                     </div>
                                     <p style="margin:12px 0 0;font-size:12px;color:var(--text-secondary)">Share this password securely with the group admin. They should change it after first login.</p>
                                     <div style="text-align:right;margin-top:16px">
@@ -2391,7 +2391,12 @@
 
         function copyTempPassword() {
             const pwd = document.getElementById('cgResultPwd').textContent;
-            navigator.clipboard.writeText(pwd).catch(() => {});
+            navigator.clipboard.writeText(pwd).then(() => {
+                const btn = document.getElementById('copyPwdBtn');
+                btn.textContent = 'Copied!';
+                btn.disabled = true;
+                setTimeout(() => { btn.textContent = 'Copy'; btn.disabled = false; }, 2000);
+            }).catch(() => {});
         }
 
         async function deactivateGroup(groupId, groupName) {
