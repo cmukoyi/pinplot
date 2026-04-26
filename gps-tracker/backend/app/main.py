@@ -1757,8 +1757,8 @@ async def get_trips(
                 print(f"❌ TRIPS ERROR: Could not find MZone vehicle ID for IMEI {tag.imei}")
                 print(f"   Searched registration and unit_Description fields")
                 return {
-                    "success": False,
-                    "error": "Vehicle not found in MZone system",
+                    "success": True,
+                    "count": 0,
                     "trips": []
                 }
         else:

@@ -931,10 +931,16 @@ def update_tag(tag_id: str, data: PortalTagUpdate, request: Request, db: Session
             if not pkg:
                 raise HTTPException(status_code=404, detail="Package not found or inactive")
             tag.package_id = str(data.package_id)
-            # Expiry = activation_date + validity_days if the tag already has a GPS fix,
-            # otherwise leave expiry_date as None — it will be set on first location update.
+            # Expiry = base_date + validity_days.
+            # base_date = activation_date if it exists, else now().
+            # But if activation_date is old enough that the calculated expiry would
+            # already be in the past, use now() instead so expiry is always future.
             if tag.activation_date:
-                tag.expiry_date = tag.activation_date.replace(tzinfo=None) + timedelta(days=pkg.validity_days)
+                base = tag.activation_date.replace(tzinfo=None)
+                candidate = base + timedelta(days=pkg.validity_days)
+                if candidate <= datetime.utcnow():
+                    base = datetime.utcnow()
+                tag.expiry_date = base + timedelta(days=pkg.validity_days)
             else:
                 tag.expiry_date = None  # pending first GPS fix
 
@@ -1234,7 +1240,7 @@ async def portal_get_trips(
                 print(f"✅ Cached MZone vehicle_Id={mzone_vehicle_id}")
                 break
         if not mzone_vehicle_id:
-            return {"success": False, "error": "Vehicle not found in MZone system", "trips": []}
+            return {"success": True, "count": 0, "trips": []}
     else:
         print(f"✅ Using cached MZone vehicle_Id (fast path)")
 
