@@ -1009,6 +1009,26 @@ def deactivate_usergroup(
     return {"detail": "User group deactivated"}
 
 
+@router.put("/usergroups/{group_id}/activate")
+def activate_usergroup(
+    group_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Re-activate a UserGroup and all its portal users (manager+)."""
+    admin = get_admin_from_request(request, db)
+    if not check_role_permission(admin.role, "manager"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires manager role")
+    group = db.query(UserGroup).filter(UserGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="User group not found")
+    group.is_active = True
+    for pu in group.portal_users:
+        pu.is_active = True
+    db.commit()
+    return {"detail": "User group activated"}
+
+
 class UserGroupUpdate(BaseModel):
     email_domain: Optional[str] = None   # empty string clears it; comma-separated for multiple domains
 

@@ -2268,7 +2268,7 @@
                         : '<span class="badge badge-error">Inactive</span>';
                     const deactivateBtn = g.is_active
                         ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="deactivateGroup('${g.id}','${escHtml(g.name)}')">Deactivate</button>`
-                        : '';
+                        : `<button class="btn btn-success" style="padding:4px 10px;font-size:12px" onclick="activateGroup('${g.id}','${escHtml(g.name)}')">Activate</button>`;
                     const portalUsers = g.portal_users || [];
                     const domainBadge = g.email_domain
                         ? `<code style="font-size:11px;opacity:.8">@${escHtml(g.email_domain)}</code>`
@@ -2374,6 +2374,21 @@
             if (!confirm(`Deactivate "${groupName}"? All portal users in this group will be disabled.`)) return;
             try {
                 const res = await fetch(`${API_URL}/api/admin/usergroups/${groupId}/deactivate`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (res.status === 401) { handle401(); return; }
+                if (!res.ok) { const d = await res.json().catch(()=>{}); throw new Error(d?.detail||'Failed'); }
+                loadUsergroups();
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function activateGroup(groupId, groupName) {
+            if (!confirm(`Re-activate "${groupName}"? All portal users in this group will be re-enabled.`)) return;
+            try {
+                const res = await fetch(`${API_URL}/api/admin/usergroups/${groupId}/activate`, {
                     method: 'PUT',
                     headers: { 'Authorization': `Bearer ${authToken}` }
                 });
