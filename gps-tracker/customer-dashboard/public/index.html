@@ -5996,9 +5996,9 @@ function _histHighlight(seq) {
     if (el) { el.classList.add('tl-active'); el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
     const m = _histMarkers[seq - 1];
     if (m && _histMap) {
-        const zoom = Math.max(16, _histMap.getZoom());
-        _histMap.flyTo(m.getLatLng(), zoom, { duration: 0.6 });
-        setTimeout(() => m.openPopup(), 650);
+        const zoom = Math.max(17, _histMap.getZoom());
+        _histMap.setView(m.getLatLng(), zoom, { animate: true, duration: 0.5 });
+        setTimeout(() => m.openPopup(), 550);
     }
 }
 
@@ -6006,6 +6006,11 @@ function _histHighlightMarker(seq) {
     document.querySelectorAll('.timeline-item').forEach(el => el.classList.remove('tl-active'));
     const el = document.getElementById(`tl-${seq}`);
     if (el) { el.classList.add('tl-active'); el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    const m = _histMarkers[seq - 1];
+    if (m && _histMap) {
+        const zoom = Math.max(17, _histMap.getZoom());
+        _histMap.setView(m.getLatLng(), zoom, { animate: true, duration: 0.5 });
+    }
 }
 
 function histExport() {
