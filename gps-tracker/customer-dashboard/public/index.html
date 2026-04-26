@@ -5294,7 +5294,16 @@ async function submitEditRole() {
 
     const { token, user, group, features } = getSession();
     if (token && user && group) {
+        // Show dashboard immediately with cached features, then refresh from server
         showDashboard(user, group, features);
+        // Fetch fresh features from /me so nav reflects any admin changes without re-login
+        apiFetch('/api/portal/me').then(r => r.ok ? r.json() : null).then(me => {
+            if (!me) return;
+            // Update stored session with fresh data
+            saveSession(token, me.portal_user || user, me.usergroup || group, me.effective_features || null);
+            // Re-apply nav visibility with fresh features
+            applyNavFeatures(me.effective_features || null);
+        }).catch(() => { /* silently ignore — dashboard already showing */ });
     } else {
         document.getElementById('loginPage').style.display = 'flex';
         // Pre-fill remembered email
