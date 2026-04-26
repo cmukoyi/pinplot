@@ -177,14 +177,15 @@ jobs:
 
             echo "━━━ Pre-build disk cleanup ━━━"
             docker container prune -f
-            docker image prune -f
+            # Remove ALL unused images (not just dangling) to reclaim space before building
+            docker image prune -a -f
             df -h / | awk 'NR==2{print "  Disk: "$3"/"$2" ("$5" used)"}'
 
-            echo "━━━ Building UI services (no cache) ━━━"
-            docker compose build --no-cache flutter-web admin-portal
+            echo "━━━ Building UI services ━━━"
+            docker compose build flutter-web admin-portal
 
             echo "━━━ Building backend services ━━━"
-            docker compose build --no-cache backend customer
+            docker compose build backend customer
 
             echo "━━━ Starting all containers ━━━"
             docker compose up -d
