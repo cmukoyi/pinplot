@@ -726,7 +726,7 @@ tbody tr:hover { background: var(--bg-3); }
 
 .hist-controls {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 12px;
   padding: 12px 20px;
   background: var(--bg-2);
@@ -735,6 +735,8 @@ tbody tr:hover { background: var(--bg-3); }
   flex-wrap: wrap;
 }
 .hist-controls label { font-size: .8rem; color: var(--text-3); margin-right: 2px; }
+.hist-field { display: flex; flex-direction: column; gap: 3px; }
+.hist-field-spacer { font-size: .8rem; color: transparent; }
 .hist-controls select,
 .hist-controls input[type="date"],
 .hist-controls input[type="time"] {
@@ -748,7 +750,7 @@ tbody tr:hover { background: var(--bg-3); }
 .hist-controls select:focus,
 .hist-controls input:focus { outline: none; border-color: var(--primary); }
 
-.hist-asset-name-wrap { display: flex; flex-direction: column; }
+.hist-asset-name-wrap { display: flex; flex-direction: column; gap: 3px; }
 #hist-asset-name { font-size: .78rem; color: var(--text-3); }
 
 .hist-body {
@@ -1211,6 +1213,21 @@ tbody tr:hover { background: var(--bg-3); }
 .toast-success i { color: var(--success); }
 .toast-error   i { color: var(--danger);  }
 .toast-info    i { color: var(--primary); }
+
+/* ── Beta badge ───────────────────────────────────────────── */
+.beta-badge {
+  font-size: .58rem;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  background: rgba(59,130,246,.2);
+  color: var(--primary);
+  padding: 1px 5px;
+  border-radius: 4px;
+  vertical-align: middle;
+  margin-left: 3px;
+  border: 1px solid rgba(59,130,246,.35);
+}
 
 /* ── Leaflet overrides ─────────────────────────────────────── */
 .leaflet-container { background: #0F1117; }

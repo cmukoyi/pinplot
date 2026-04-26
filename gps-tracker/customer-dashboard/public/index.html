@@ -135,7 +135,7 @@
 
             <button class="nav-item" data-tab="floorplan" onclick="switchTab('floorplan')">
                 <span class="nav-icon"><i class="fa-solid fa-layer-group"></i></span>
-                <span class="nav-label">Floorplan</span>
+                <span class="nav-label">Floor Plan <span class="beta-badge">Beta</span></span>
             </button>
 
             <button class="nav-item" data-tab="assets" onclick="switchTab('assets')">
@@ -169,7 +169,7 @@
 
             <button class="nav-item" data-tab="building" onclick="switchTab('building')">
                 <span class="nav-icon"><i class="fa-solid fa-pencil-ruler"></i></span>
-                <span class="nav-label">Floorplan Sketch</span>
+                <span class="nav-label">Floor Plan Sketch <span class="beta-badge">Beta</span></span>
             </button>
 
             <button class="nav-item" data-tab="settings" onclick="switchTab('settings')">
@@ -193,7 +193,7 @@
 
             <button class="nav-item" data-tab="reports-trips" onclick="switchTab('reports-trips')">
                 <span class="nav-icon"><i class="fa-solid fa-route"></i></span>
-                <span class="nav-label">Trip Log</span>
+                <span class="nav-label">Journey Log</span>
             </button>
 
             <button class="nav-item" data-tab="reports-geofence" onclick="switchTab('reports-geofence')">
@@ -313,22 +313,31 @@
                         <label for="hist-asset-select"><i class="fa-solid fa-tag"></i> Asset / Tag</label>
                         <select id="hist-asset-select" onchange="histChangeAsset(this.value)" style="min-width:220px"></select>
                     </div>
-                    <div>
+                    <div class="hist-field">
                         <label>From</label>
-                        <input type="date" id="hist-from">
-                        <input type="time" id="hist-from-t" value="07:00">
+                        <div style="display:flex;gap:4px">
+                            <input type="date" id="hist-from">
+                            <input type="time" id="hist-from-t" value="07:00">
+                        </div>
                     </div>
-                    <div>
+                    <div class="hist-field">
                         <label>To</label>
-                        <input type="date" id="hist-to">
-                        <input type="time" id="hist-to-t" value="18:00">
+                        <div style="display:flex;gap:4px">
+                            <input type="date" id="hist-to">
+                            <input type="time" id="hist-to-t" value="18:00">
+                        </div>
                     </div>
-                    <button class="btn btn-primary btn-sm" onclick="histLoadTrips()">
-                        <i class="fa-solid fa-magnifying-glass"></i> Load Trips
-                    </button>
-                    <button class="btn btn-ghost btn-sm" id="hist-export-btn" style="display:none" onclick="histExport()">
-                        <i class="fa-solid fa-download"></i> Export CSV
-                    </button>
+                    <div class="hist-field">
+                        <span class="hist-field-spacer"></span>
+                        <div style="display:flex;gap:6px">
+                            <button class="btn btn-primary btn-sm" onclick="histLoadTrips()">
+                                <i class="fa-solid fa-magnifying-glass"></i> Load Journeys
+                            </button>
+                            <button class="btn btn-ghost btn-sm" id="hist-export-btn" style="display:none" onclick="histExport()">
+                                <i class="fa-solid fa-download"></i> Export CSV
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="hist-body">
@@ -337,13 +346,13 @@
                     <aside class="hist-timeline-panel">
                         <div class="hist-timeline-header">
                             <i class="fa-solid fa-route" style="color:var(--primary)"></i>
-                            Trips
+                            Journeys
                             <span id="hist-trip-count" style="margin-left:auto;font-size:.75rem;color:var(--text-3)"></span>
                         </div>
 
                         <div style="padding:8px 16px;border-bottom:1px solid var(--border);font-size:.78rem;color:var(--text-3)">
                             <strong id="hist-asset-name" style="color:var(--text)">—</strong><br>
-                            <span id="hist-track-summary">Select an asset and date range, then Load Trips</span>
+                            <span id="hist-track-summary">Select an asset and date range, then click Load Journeys</span>
                         </div>
 
                         <div id="hist-trips-list"></div>
@@ -352,7 +361,7 @@
                         <div id="hist-timeline" style="display:none">
                             <div class="hist-timeline-header" style="font-size:.78rem;cursor:pointer" onclick="histBackToTrips()">
                                 <i class="fa-solid fa-arrow-left" style="color:var(--primary)"></i>
-                                Back to trips
+                                Back to journeys
                             </div>
                             <div class="hist-legend">
                                 <span><span class="legend-dot" style="background:#10B981"></span>Start</span>
@@ -1544,14 +1553,14 @@
                         <input type="date" id="rpt-trips-to" style="width:145px">
                     </div>
                     <button class="btn btn-primary btn-small" id="rpt-trips-load-btn" onclick="rptTripsLoad()">
-                        <i class="fa-solid fa-magnifying-glass"></i> Load Trips
+                        <i class="fa-solid fa-magnifying-glass"></i> Load Journeys
                     </button>
                     <button class="btn btn-secondary btn-small" id="rpt-trips-export-btn" onclick="rptTripsExportCSV()" disabled>
                         <i class="fa-solid fa-file-csv"></i> Export CSV
                     </button>
                 </div>
                 <div id="rpt-trips-summary" class="rpt-summary-bar" style="display:none">
-                    <span id="rpt-trips-count-total"><strong>—</strong> trips</span>
+                    <span id="rpt-trips-count-total"><strong>—</strong> journeys</span>
                     <span class="rpt-sep">·</span>
                     <span id="rpt-trips-total-dist"><strong>—</strong> mi total</span>
                     <span class="rpt-sep">·</span>
@@ -1572,7 +1581,7 @@
                             </tr>
                         </thead>
                         <tbody id="rpt-trips-tbody">
-                            <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-3)">Select a tag and date range, then click <strong>Load Trips</strong>.</td></tr>
+                            <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-3)">Select a tag and date range, then click <strong>Load Journeys</strong>.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -2226,7 +2235,7 @@ applyTheme(localStorage.getItem('pp-theme') || 'dark');
 // ══════════════════════════════════════════
 // Tab switching
 // ══════════════════════════════════════════
-const TAB_TITLES = { livemap: 'Live Map', assets: 'Asset List', history: 'Movement History', 'asset-mgmt': 'Asset Management', users: 'User Accounts', building: 'Floorplan Sketch', floorplan: 'Floorplan', settings: 'Settings', qr: 'QR / NFC Tags', 'reports-subscriptions': 'Tag Subscriptions Report', 'reports-activity': 'Asset Activity Summary', 'reports-trips': 'Movement / Trip Log', 'reports-geofence': 'Geofence Events', 'reports-battery': 'Battery & Offline Report' };
+const TAB_TITLES = { livemap: 'Live Map', assets: 'Asset List', history: 'Movement History', 'asset-mgmt': 'Asset Management', users: 'User Accounts', building: 'Floor Plan Sketch', floorplan: 'Floor Plan', settings: 'Settings', qr: 'QR / NFC Tags', 'reports-subscriptions': 'Tag Subscriptions Report', 'reports-activity': 'Asset Activity Summary', 'reports-trips': 'Movement / Journey Log', 'reports-geofence': 'Geofence Events', 'reports-battery': 'Battery & Offline Report' };
 let _mapInitialized = false;
 
 function switchTab(name) {
@@ -3292,7 +3301,7 @@ async function rptTripsLoad() {
     if (!toVal)   { _rptTripsAlert('Please select an end date.'); return; }
 
     const tbody = document.getElementById('rpt-trips-tbody');
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading trips…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading journeys…</td></tr>';
     document.getElementById('rpt-trips-summary').style.display   = 'none';
     document.getElementById('rpt-trips-export-btn').disabled     = true;
     try {
@@ -3301,9 +3310,9 @@ async function rptTripsLoad() {
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify({ vehicleId: tagId, startDate: fromVal + 'T00:00:00Z', endDate: toVal + 'T23:59:59Z' }),
         });
-        if (!res.ok) throw new Error(await safeJsonDetail(res, 'Failed to load trips'));
+        if (!res.ok) throw new Error(await safeJsonDetail(res, 'Failed to load journeys'));
         const data = await res.json();
-        if (!data.success) throw new Error(data.error || 'Failed to load trips');
+        if (!data.success) throw new Error(data.error || 'Failed to load journeys');
         _rptTripsData = data.trips || [];
         _rptTripsRender();
         document.getElementById('rpt-trips-export-btn').disabled = !_rptTripsData.length;
@@ -3323,7 +3332,7 @@ function _rptTripsAlert(msg) {
 function _rptTripsRender() {
     const tbody = document.getElementById('rpt-trips-tbody');
     if (!_rptTripsData.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-3)">No trips found for the selected date range.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-3)">No journeys found for the selected date range.</td></tr>';
         document.getElementById('rpt-trips-summary').style.display = 'none';
         return;
     }
@@ -3342,7 +3351,7 @@ function _rptTripsRender() {
             <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(trip.endLocationDescription||'')}">${trip.endLocationDescription   ? esc(trip.endLocationDescription)   : '<span style="color:var(--text-3)">—</span>'}</td>
         </tr>`;
     }).join('');
-    document.getElementById('rpt-trips-count-total').innerHTML = `<strong>${_rptTripsData.length}</strong> trips`;
+    document.getElementById('rpt-trips-count-total').innerHTML = `<strong>${_rptTripsData.length}</strong> journeys`;
     document.getElementById('rpt-trips-total-dist').innerHTML  = `<strong>${totalDist.toFixed(1)}</strong> mi total`;
     document.getElementById('rpt-trips-total-dur').innerHTML   = `<strong>${_rptFmtDuration(totalDur)}</strong> total`;
     document.getElementById('rpt-trips-summary').style.display = 'flex';
@@ -5348,7 +5357,7 @@ async function histLoadTrips() {
     // Show trips panel, hide waypoints
     document.getElementById('hist-trips-list').style.display = '';
     document.getElementById('hist-timeline').style.display  = 'none';
-    document.getElementById('hist-track-summary').textContent = 'Loading trips…';
+    document.getElementById('hist-track-summary').textContent = 'Loading journeys…';
     document.getElementById('hist-trip-count').textContent = '';
     document.getElementById('hist-trips-list').innerHTML =
         '<div style="padding:24px;text-align:center;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
@@ -5372,12 +5381,16 @@ async function histLoadTrips() {
         _histTrips = data.trips || [];
         _histRenderTripsList();
     } catch (err) {
+        const raw = err.message || '';
+        const userMsg = /vehicle.*not.*found|not.*found.*mzone|mzone|vehicle.*not/i.test(raw)
+            ? 'No journeys in the selected date range.'
+            : esc(raw);
         document.getElementById('hist-trips-list').innerHTML =
             `<div style="padding:32px;text-align:center;color:var(--text-3)">
-                <i class="fa-solid fa-triangle-exclamation" style="font-size:28px;opacity:.3;display:block;margin-bottom:10px"></i>
-                <p style="font-size:.83rem">${esc(err.message)}</p>
+                <i class="fa-solid fa-route" style="font-size:28px;opacity:.3;display:block;margin-bottom:10px"></i>
+                <p style="font-size:.83rem">${userMsg}</p>
              </div>`;
-        document.getElementById('hist-track-summary').textContent = 'Failed to load trips';
+        document.getElementById('hist-track-summary').textContent = 'Failed to load journeys';
     }
 }
 
@@ -5387,15 +5400,15 @@ function histLoadTrack() { histLoadTrips(); }
 function _histRenderTripsList() {
     const trips = _histTrips;
     const count = trips.length;
-    document.getElementById('hist-trip-count').textContent = count ? `${count} trip${count > 1 ? 's' : ''}` : '';
+    document.getElementById('hist-trip-count').textContent = count ? `${count} journey${count > 1 ? 's' : ''}` : '';
     document.getElementById('hist-track-summary').textContent =
-        count ? `${count} trip${count > 1 ? 's' : ''} found — click one to view route` : 'No trips found for this date range.';
+        count ? `${count} journey${count > 1 ? 's' : ''} found — click one to view route` : 'No journeys found for this date range.';
 
     if (!count) {
         document.getElementById('hist-trips-list').innerHTML =
             `<div style="padding:40px;text-align:center;color:var(--text-3)">
                 <i class="fa-solid fa-route" style="font-size:36px;opacity:.2;display:block;margin-bottom:12px"></i>
-                <p style="font-size:.83rem">No trips recorded in this date range.</p>
+                <p style="font-size:.83rem">No journeys recorded in this date range.</p>
              </div>`;
         return;
     }
@@ -5483,7 +5496,7 @@ function _histRenderWaypoints() {
     const pts = _histTrack;
     if (!pts.length) {
         document.getElementById('hist-waypoints').innerHTML =
-            `<div style="padding:32px;text-align:center;color:var(--text-3)"><p style="font-size:.83rem">No GPS waypoints for this trip.</p></div>`;
+            `<div style="padding:32px;text-align:center;color:var(--text-3)"><p style="font-size:.83rem">No GPS waypoints for this journey.</p></div>`;
         return;
     }
 
@@ -5509,7 +5522,7 @@ function _histRenderWaypoints() {
                 ${p.speed != null ? `<small><i class='fa-solid fa-gauge'></i> ${p.speed} km/h</small>` : ''}
             </div>
         </div>`, { maxWidth: 260 });
-        m.on('click', () => _histHighlight(i + 1));
+        m.on('click', () => _histHighlightMarker(i + 1));
         _histMarkers.push(m);
     });
     _histMap.fitBounds(_histPolyline.getBounds(), { padding: [40, 40] });
@@ -5539,7 +5552,17 @@ function _histHighlight(seq) {
     const el = document.getElementById(`tl-${seq}`);
     if (el) { el.classList.add('tl-active'); el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
     const m = _histMarkers[seq - 1];
-    if (m && _histMap) { _histMap.flyTo(m.getLatLng(), 16, { duration: 0.6 }); m.openPopup(); }
+    if (m && _histMap) {
+        const zoom = Math.max(16, _histMap.getZoom());
+        _histMap.flyTo(m.getLatLng(), zoom, { duration: 0.6 });
+        setTimeout(() => m.openPopup(), 650);
+    }
+}
+
+function _histHighlightMarker(seq) {
+    document.querySelectorAll('.timeline-item').forEach(el => el.classList.remove('tl-active'));
+    const el = document.getElementById(`tl-${seq}`);
+    if (el) { el.classList.add('tl-active'); el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
 }
 
 function histExport() {
