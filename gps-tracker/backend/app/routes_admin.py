@@ -798,6 +798,7 @@ class UserGroupOut(BaseModel):
     email_domain: Optional[str] = None
     default_package_id: Optional[str] = None
     default_package_name: Optional[str] = None
+    allowed_sections: Optional[list] = None
     packages: List[GroupPackageOut] = []
     created_at: Optional[datetime] = None
     portal_users: List[PortalUserOut] = []
@@ -842,6 +843,7 @@ class UserGroupOut(BaseModel):
             email_domain=g.email_domain,
             default_package_id=default_pkg_id,
             default_package_name=default_pkg_name,
+            allowed_sections=g.allowed_sections,
             packages=packages_out,
             created_at=g.created_at,
             portal_users=g.portal_users,
@@ -1031,6 +1033,7 @@ def activate_usergroup(
 
 class UserGroupUpdate(BaseModel):
     email_domain: Optional[str] = None   # empty string clears it; comma-separated for multiple domains
+    allowed_sections: Optional[list] = None  # e.g. ["tracking","management","reports"] — None means no change
 
 
 @router.put("/usergroups/{group_id}")
@@ -1066,8 +1069,20 @@ def update_usergroup(
                     if d in existing:
                         raise HTTPException(status_code=409, detail=f"Domain '{d}' is already used by another group")
         group.email_domain = domain_value
+
+    # allowed_sections: use model_fields_set so explicit null = "reset to all"
+    if "allowed_sections" in data.model_fields_set:
+        secs = data.allowed_sections
+        valid = {"tracking", "management", "reports"}
+        if secs is not None:
+            bad = [s for s in secs if s not in valid]
+            if bad:
+                raise HTTPException(status_code=400, detail=f"Invalid section(s): {bad}. Allowed: {list(valid)}")
+            secs = secs or None   # empty list → store null (= all enabled)
+        group.allowed_sections = secs
+
     db.commit()
-    return {"id": str(group.id), "name": group.name, "email_domain": group.email_domain}
+    return {"id": str(group.id), "name": group.name, "email_domain": group.email_domain, "allowed_sections": group.allowed_sections}
 
 
 class UserGroupPackageAssign(BaseModel):

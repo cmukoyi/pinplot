@@ -260,6 +260,10 @@ class UserGroup(Base):
     theme_accent          = Column(String(20), nullable=True)    # secondary hex
     # Data retention
     history_retention_days = Column(Integer, nullable=True, default=365)  # days to keep tag history
+    # Feature access control (portal RBAC)
+    # List of section keys enabled for this tenant: 'tracking', 'management', 'reports'
+    # NULL means all sections are enabled (default — backward-compatible).
+    allowed_sections = Column(JSON, nullable=True)
 
     portal_users = relationship("PortalUser", back_populates="usergroup",
                                 cascade="all, delete-orphan")
@@ -313,6 +317,14 @@ class PortalUser(Base):
     is_active       = Column(Boolean, nullable=False, default=True)
     is_group_admin  = Column(Boolean, nullable=False, default=False)
     expires_at      = Column(DateTime(timezone=True), nullable=True)
+    # Portal RBAC
+    # role: 'admin' | 'manager' | 'reporter' | 'custom'
+    # admin    – all features allowed by the usergroup
+    # manager  – tracking + management sections only
+    # reporter – reports section only
+    # custom   – exactly the keys in custom_features (intersected with usergroup)
+    role            = Column(String(20), nullable=False, default='admin')
+    custom_features = Column(JSON, nullable=True)  # only used when role = 'custom'
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
     # Notification preferences (per-user)

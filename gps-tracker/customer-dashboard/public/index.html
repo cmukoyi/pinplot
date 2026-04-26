@@ -1981,6 +1981,39 @@
                 <label>Email *</label>
                 <input type="email" id="auEmail" placeholder="jane@company.com" required>
             </div>
+            <div class="form-group">
+                <label>Role *</label>
+                <select id="auRole" class="form-input" onchange="_auToggleCustomFeatures()">
+                    <option value="admin">Admin — full access to all group features</option>
+                    <option value="manager">Manager — Tracking &amp; Management only</option>
+                    <option value="reporter">Reporter — Reports only</option>
+                    <option value="custom">Custom — choose features below</option>
+                </select>
+            </div>
+            <!-- Custom features panel — shown only when role=custom -->
+            <div id="auCustomPanel" style="display:none;margin-bottom:12px;padding:12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px">
+                <p style="font-size:12px;font-weight:600;margin:0 0 8px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary)">Custom Feature Access</p>
+                <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+                    <p style="margin:0 0 4px;font-size:12px;color:var(--text-secondary)">Tracking</p>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="livemap" class="au-feat"> Live Map</label>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="floorplan" class="au-feat"> Floor Plan</label>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="assets" class="au-feat"> Asset List</label>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="history" class="au-feat"> Movement History</label>
+                    <p style="margin:4px 0 4px;font-size:12px;color:var(--text-secondary)">Management</p>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="asset-mgmt" class="au-feat"> Asset Management</label>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="users" class="au-feat"> User Accounts</label>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="qr" class="au-feat"> QR / NFC Tags</label>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="building" class="au-feat"> Floor Plan Sketch</label>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="settings" class="au-feat"> Settings</label>
+                    <p style="margin:4px 0 4px;font-size:12px;color:var(--text-secondary)">Reports</p>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="reports-subscriptions" class="au-feat"> Tag Subscriptions</label>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="reports-activity" class="au-feat"> Asset Activity</label>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="reports-trips" class="au-feat"> Journey Log</label>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="reports-geofence" class="au-feat"> Geofence Events</label>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="reports-battery" class="au-feat"> Battery &amp; Offline</label>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="reports-alerts" class="au-feat"> Alerts Inbox</label>
+                </div>
+            </div>
             <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
                 <button type="button" class="btn btn-secondary" onclick="closeModal('addUserModal')">Cancel</button>
                 <button type="submit" class="btn btn-primary" id="addUserBtn">Create User</button>
@@ -2065,6 +2098,54 @@
 </div>
 
 <!-- ═══ USER EXPIRY MODAL ═══ -->
+<!-- ═══ EDIT ROLE MODAL ═══ -->
+<div id="editRoleModal" class="modal">
+    <div class="modal-content" style="max-width:460px">
+        <div class="modal-header">
+            <span class="modal-title">Edit Role — <span id="erUserName"></span></span>
+            <button class="modal-close" onclick="closeModal('editRoleModal')">×</button>
+        </div>
+        <div id="erAlert" class="alert" style="display:none"><span id="erAlertText"></span></div>
+        <input type="hidden" id="erUserId">
+        <div class="form-group" style="margin:16px 0 8px">
+            <label>Role</label>
+            <select id="erRole" class="form-input" onchange="_erToggleCustom()">
+                <option value="admin">Admin — full access to all group features</option>
+                <option value="manager">Manager — Tracking &amp; Management only</option>
+                <option value="reporter">Reporter — Reports only</option>
+                <option value="custom">Custom — choose features below</option>
+            </select>
+        </div>
+        <div id="erCustomPanel" style="display:none;margin-bottom:12px;padding:12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px">
+            <p style="font-size:12px;font-weight:600;margin:0 0 8px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary)">Custom Feature Access</p>
+            <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+                <p style="margin:0 0 4px;font-size:12px;color:var(--text-secondary)">Tracking</p>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="livemap" class="er-feat"> Live Map</label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="floorplan" class="er-feat"> Floor Plan</label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="assets" class="er-feat"> Asset List</label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="history" class="er-feat"> Movement History</label>
+                <p style="margin:4px 0 4px;font-size:12px;color:var(--text-secondary)">Management</p>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="asset-mgmt" class="er-feat"> Asset Management</label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="users" class="er-feat"> User Accounts</label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="qr" class="er-feat"> QR / NFC Tags</label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="building" class="er-feat"> Floor Plan Sketch</label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="settings" class="er-feat"> Settings</label>
+                <p style="margin:4px 0 4px;font-size:12px;color:var(--text-secondary)">Reports</p>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="reports-subscriptions" class="er-feat"> Tag Subscriptions</label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="reports-activity" class="er-feat"> Asset Activity</label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="reports-trips" class="er-feat"> Journey Log</label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="reports-geofence" class="er-feat"> Geofence Events</label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="reports-battery" class="er-feat"> Battery &amp; Offline</label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-left:8px"><input type="checkbox" value="reports-alerts" class="er-feat"> Alerts Inbox</label>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('editRoleModal')">Cancel</button>
+            <button type="button" class="btn btn-primary" id="erSaveBtn" onclick="submitEditRole()">Save Role</button>
+        </div>
+    </div>
+</div>
+
 <div id="userExpiryModal" class="modal">
     <div class="modal-content" style="max-width:380px">
         <div class="modal-header">
@@ -2087,25 +2168,28 @@
 </div>
 
 <script>
-const TOKEN_KEY  = 'pp_portal_token';
-const USER_KEY   = 'pp_portal_user';
-const GROUP_KEY  = 'pp_portal_group';
+const TOKEN_KEY    = 'pp_portal_token';
+const USER_KEY     = 'pp_portal_user';
+const GROUP_KEY    = 'pp_portal_group';
+const FEATURES_KEY = 'pp_portal_features';
 
-function saveSession(t, u, g) {
-    localStorage.setItem(TOKEN_KEY,  t);
-    localStorage.setItem(USER_KEY,   JSON.stringify(u));
-    localStorage.setItem(GROUP_KEY,  JSON.stringify(g));
+function saveSession(t, u, g, features) {
+    localStorage.setItem(TOKEN_KEY,    t);
+    localStorage.setItem(USER_KEY,     JSON.stringify(u));
+    localStorage.setItem(GROUP_KEY,    JSON.stringify(g));
+    localStorage.setItem(FEATURES_KEY, JSON.stringify(features || null));
 }
 
 function clearSession() {
-    [TOKEN_KEY, USER_KEY, GROUP_KEY].forEach(k => localStorage.removeItem(k));
+    [TOKEN_KEY, USER_KEY, GROUP_KEY, FEATURES_KEY].forEach(k => localStorage.removeItem(k));
 }
 
 function getSession() {
     return {
-        token: localStorage.getItem(TOKEN_KEY),
-        user:  JSON.parse(localStorage.getItem(USER_KEY)  || 'null'),
-        group: JSON.parse(localStorage.getItem(GROUP_KEY) || 'null'),
+        token:    localStorage.getItem(TOKEN_KEY),
+        user:     JSON.parse(localStorage.getItem(USER_KEY)     || 'null'),
+        group:    JSON.parse(localStorage.getItem(GROUP_KEY)    || 'null'),
+        features: JSON.parse(localStorage.getItem(FEATURES_KEY) || 'null'),
     };
 }
 
@@ -2199,8 +2283,8 @@ async function handleLogin(e) {
         } else {
             localStorage.removeItem('portal_remembered_email');
         }
-        saveSession(data.access_token, data.portal_user, data.usergroup);
-        showDashboard(data.portal_user, data.usergroup);
+        saveSession(data.access_token, data.portal_user, data.usergroup, data.effective_features || null);
+        showDashboard(data.portal_user, data.usergroup, data.effective_features);
     } catch (err) {
         errEl.textContent = err.message;
         errEl.style.display = 'block';
@@ -2250,7 +2334,37 @@ function handleLogout() {
 // ══════════════════════════════════════════
 // Show dashboard
 // ══════════════════════════════════════════
-function showDashboard(user, group) {
+// ══════════════════════════════════════════
+// RBAC — nav feature visibility
+// ══════════════════════════════════════════
+function applyNavFeatures(features) {
+    // null / undefined → all features visible (admin)
+    if (!features) return;
+    const feat = new Set(features);
+    // Per-tab visibility
+    document.querySelectorAll('.nav-item[data-tab]').forEach(btn => {
+        const tab = btn.getAttribute('data-tab');
+        btn.style.display = feat.has(tab) ? '' : 'none';
+    });
+    // Section label visibility — hide the label when ALL its tabs are hidden
+    const sectionTabs = {
+        'Tracking':   ['livemap', 'floorplan', 'assets', 'history'],
+        'Management': ['asset-mgmt', 'users', 'qr', 'building', 'settings'],
+        'Reports':    ['reports-subscriptions', 'reports-activity', 'reports-trips',
+                       'reports-geofence', 'reports-battery', 'reports-alerts'],
+    };
+    document.querySelectorAll('.nav-section').forEach(sec => {
+        const labelEl = sec.querySelector('.nav-section-label');
+        if (!labelEl) return;
+        const label = labelEl.textContent.trim();
+        const tabs  = sectionTabs[label];
+        if (!tabs) return;
+        const anyVisible = tabs.some(t => feat.has(t));
+        sec.style.display = anyVisible ? '' : 'none';
+    });
+}
+
+function showDashboard(user, group, effectiveFeatures) {
     document.getElementById('loginPage').style.display     = 'none';
     document.getElementById('dashboardPage').style.display = 'block';
 
@@ -2266,6 +2380,10 @@ function showDashboard(user, group) {
     }
     const dropEmailEl = document.getElementById('avatarDropdownEmail');
     if (dropEmailEl) dropEmailEl.textContent = user.email || name;
+
+    // Apply nav feature visibility (use stored features if not passed directly)
+    const features = effectiveFeatures || getSession().features;
+    applyNavFeatures(features);
 
     // Defer map init so the browser has painted the dashboard container
     // and Leaflet can read real pixel dimensions (avoids 0×0 tile issue on login).
@@ -4954,13 +5072,26 @@ async function loadUsers() {
             tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray)">No users yet.</td></tr>';
             return;
         }
+        const roleBadge = r => {
+            const map = {
+                admin:    ['badge-info',    'Admin'],
+                manager:  ['badge-primary', 'Manager'],
+                reporter: ['badge-success', 'Reporter'],
+                custom:   ['badge-warning', 'Custom'],
+            };
+            const [cls, label] = map[r] || ['badge-secondary', r || 'User'];
+            return `<span class="badge ${cls}">${label}</span>`;
+        };
         tb.innerHTML = users.map(u => {
             const name   = [u.first_name, u.last_name].filter(Boolean).join(' ') || '—';
-            const role   = u.is_group_admin ? '<span class="badge badge-info">Admin</span>' : '<span class="badge badge-success">User</span>';
+            const role   = roleBadge(u.role || (u.is_group_admin ? 'admin' : 'reporter'));
             const status = u.is_active ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Inactive</span>';
             const expiry = u.expires_at ? new Date(u.expires_at).toLocaleDateString() : '—';
             const isSelf = me && me.id === u.id;
             const actions = isSelf ? '<span style="color:var(--text-3);font-size:12px">You</span>' : `
+                <button class="btn btn-ghost btn-sm" onclick="openEditRoleModal('${esc(u.id)}','${esc(name)}','${esc(u.role||'admin')}',${JSON.stringify(u.custom_features||[])})" title="Change role">
+                    <i class="fa-solid fa-shield-halved"></i> Role
+                </button>
                 <button class="btn btn-ghost btn-sm" onclick="toggleUserActive('${esc(u.id)}',${u.is_active},'${esc(name)}')" title="${u.is_active ? 'Deactivate' : 'Activate'} user">
                     <i class="fa-solid fa-${u.is_active ? 'user-slash' : 'user-check'}"></i> ${u.is_active ? 'Deactivate' : 'Activate'}
                 </button>
@@ -5063,6 +5194,11 @@ async function submitAddUser(e) {
     btn.disabled = true; btn.textContent = 'Creating…';
     document.getElementById('addUserAlert').style.display = 'none';
     try {
+        const role = document.getElementById('auRole').value;
+        let custom_features = null;
+        if (role === 'custom') {
+            custom_features = [...document.querySelectorAll('.au-feat:checked')].map(cb => cb.value);
+        }
         const res = await fetch('/api/portal/users', {
             method: 'POST',
             headers: authHeaders(),
@@ -5070,6 +5206,8 @@ async function submitAddUser(e) {
                 email:      document.getElementById('auEmail').value.trim(),
                 first_name: document.getElementById('auFirst').value.trim(),
                 last_name:  document.getElementById('auLast').value.trim(),
+                role,
+                custom_features,
             }),
         });
         const data = await res.json();
@@ -5091,6 +5229,55 @@ async function submitAddUser(e) {
     }
 }
 
+function _auToggleCustomFeatures() {
+    const isCustom = document.getElementById('auRole').value === 'custom';
+    document.getElementById('auCustomPanel').style.display = isCustom ? 'block' : 'none';
+}
+
+function _erToggleCustom() {
+    const isCustom = document.getElementById('erRole').value === 'custom';
+    document.getElementById('erCustomPanel').style.display = isCustom ? 'block' : 'none';
+}
+
+function openEditRoleModal(userId, name, currentRole, currentFeatures) {
+    document.getElementById('erUserId').value = userId;
+    document.getElementById('erUserName').textContent = name;
+    document.getElementById('erRole').value = currentRole || 'admin';
+    document.getElementById('erAlert').style.display = 'none';
+    // Populate custom feature checkboxes
+    const feats = new Set(currentFeatures || []);
+    document.querySelectorAll('.er-feat').forEach(cb => cb.checked = feats.has(cb.value));
+    _erToggleCustom();
+    openModal('editRoleModal');
+}
+
+async function submitEditRole() {
+    const btn = document.getElementById('erSaveBtn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    document.getElementById('erAlert').style.display = 'none';
+    const userId = document.getElementById('erUserId').value;
+    const role   = document.getElementById('erRole').value;
+    let custom_features = null;
+    if (role === 'custom') {
+        custom_features = [...document.querySelectorAll('.er-feat:checked')].map(cb => cb.value);
+    }
+    try {
+        const res = await apiFetch(`/api/portal/users/${userId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ role, custom_features }),
+        });
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail || 'Failed to update role'); }
+        closeModal('editRoleModal');
+        loadUsers();
+    } catch (err) {
+        const al = document.getElementById('erAlert');
+        document.getElementById('erAlertText').textContent = err.message;
+        al.className = 'alert alert-error'; al.style.display = 'flex';
+    } finally {
+        btn.disabled = false; btn.textContent = 'Save Role';
+    }
+}
+
 // ══════════════════════════════════════════
 // Boot
 // ══════════════════════════════════════════
@@ -5098,11 +5285,16 @@ async function submitAddUser(e) {
     document.getElementById('addUserModal').addEventListener('show', () => {
         document.getElementById('addUserForm').style.display   = 'block';
         document.getElementById('addUserResult').style.display = 'none';
+        // Reset form state
+        const roleEl = document.getElementById('auRole');
+        if (roleEl) roleEl.value = 'admin';
+        _auToggleCustomFeatures();
+        document.querySelectorAll('.au-feat').forEach(cb => cb.checked = false);
     });
 
-    const { token, user, group } = getSession();
+    const { token, user, group, features } = getSession();
     if (token && user && group) {
-        showDashboard(user, group);
+        showDashboard(user, group, features);
     } else {
         document.getElementById('loginPage').style.display = 'flex';
         // Pre-fill remembered email

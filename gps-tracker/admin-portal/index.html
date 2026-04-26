@@ -1301,6 +1301,30 @@
                                             <input type="text" id="egDomain" class="form-input" placeholder="e.g. acmecorp.com" style="flex:1">
                                         </div>
                                     </div>
+                                    <!-- Portal Feature Access -->
+                                    <div class="form-group">
+                                        <label class="form-label">Portal Feature Access</label>
+                                        <p style="font-size:13px;color:var(--text-secondary);margin:4px 0 10px">
+                                            Select which top-level sections are available to users in this group. Unchecked sections are hidden for everyone regardless of their role.
+                                        </p>
+                                        <div style="display:flex;gap:24px;flex-wrap:wrap;padding:10px 12px;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border-color)">
+                                            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500">
+                                                <input type="checkbox" id="egFeatTracking" style="width:15px;height:15px;cursor:pointer" checked>
+                                                <i class="fa-solid fa-map-location-dot" style="color:var(--primary-color)"></i> Tracking
+                                            </label>
+                                            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500">
+                                                <input type="checkbox" id="egFeatManagement" style="width:15px;height:15px;cursor:pointer" checked>
+                                                <i class="fa-solid fa-folder-gear" style="color:var(--primary-color)"></i> Management
+                                            </label>
+                                            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500">
+                                                <input type="checkbox" id="egFeatReports" style="width:15px;height:15px;cursor:pointer" checked>
+                                                <i class="fa-solid fa-chart-bar" style="color:var(--primary-color)"></i> Reports
+                                            </label>
+                                        </div>
+                                        <p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">
+                                            <i class="fa-solid fa-circle-info"></i> Individual users can be further restricted via their Role in the customer portal.
+                                        </p>
+                                    </div>
                                     <!-- Multi-package section -->
                                     <div class="form-group">
                                         <label class="form-label">Assigned Tag Packages</label>
@@ -2286,7 +2310,7 @@
                         <td>${badge}</td>
                         <td>${date}</td>
                         <td style="display:flex;gap:6px">
-                            <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openEditGroupModal('${g.id}','${escHtml(g.name)}','${escHtml(g.email_domain||'')}')">Edit</button>
+                            <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openEditGroupModal('${g.id}','${escHtml(g.name)}','${escHtml(g.email_domain||'')}',${JSON.stringify(g.allowed_sections||null)})">Edit</button>
                             ${deactivateBtn}
                         </td>
                     </tr>`;
@@ -2403,13 +2427,18 @@
         // --- Edit Group helpers ---
         let _egAllPackages = [];   // all active packages from API (used to populate "Add" dropdown)
 
-        async function openEditGroupModal(groupId, groupName, emailDomain) {
+        async function openEditGroupModal(groupId, groupName, emailDomain, allowedSections) {
             document.getElementById('egGroupId').value = groupId;
             document.getElementById('egGroupName').textContent = groupName;
             document.getElementById('egDomain').value = emailDomain || '';
             document.getElementById('egAlert').style.display = 'none';
             document.getElementById('egSubmitBtn').disabled = false;
             document.getElementById('egSubmitBtn').textContent = 'Save';
+            // Populate feature checkboxes — null means all enabled
+            const secs = allowedSections || ['tracking', 'management', 'reports'];
+            document.getElementById('egFeatTracking').checked   = secs.includes('tracking');
+            document.getElementById('egFeatManagement').checked = secs.includes('management');
+            document.getElementById('egFeatReports').checked    = secs.includes('reports');
             document.getElementById('editGroupModal').classList.add('active');
             // Load all packages + this group's assigned packages in parallel
             await _egRefreshPackages(groupId);
@@ -2513,11 +2542,19 @@
             document.getElementById('egAlert').style.display = 'none';
             const groupId = document.getElementById('egGroupId').value;
             const domain  = document.getElementById('egDomain').value.trim();
+            // Build allowed_sections from checkboxes
+            const allowedSections = [];
+            if (document.getElementById('egFeatTracking').checked)   allowedSections.push('tracking');
+            if (document.getElementById('egFeatManagement').checked) allowedSections.push('management');
+            if (document.getElementById('egFeatReports').checked)    allowedSections.push('reports');
             try {
                 const res = await fetch(`${API_URL}/api/admin/usergroups/${groupId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ email_domain: domain })
+                    body: JSON.stringify({
+                        email_domain: domain,
+                        allowed_sections: allowedSections.length === 3 ? null : allowedSections,
+                    })
                 });
                 if (res.status === 401) { handle401(); return; }
                 const data = await res.json();

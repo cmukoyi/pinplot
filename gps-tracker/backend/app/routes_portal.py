@@ -29,6 +29,41 @@ PORTAL_TOKEN_EXPIRE_HOURS = 12
 
 
 # ---------------------------------------------------------------------------
+# Feature / role constants
+# ---------------------------------------------------------------------------
+
+SECTION_FEATURES: dict = {
+    "tracking":   ["livemap", "floorplan", "assets", "history"],
+    "management": ["asset-mgmt", "users", "qr", "building", "settings"],
+    "reports":    [
+        "reports-subscriptions", "reports-activity", "reports-trips",
+        "reports-geofence", "reports-battery", "reports-alerts",
+    ],
+}
+ALL_SECTIONS = list(SECTION_FEATURES.keys())
+
+
+def _compute_effective_features(user: "PortalUser", group: "UserGroup") -> list:
+    """Return the list of tab keys the user can access, given their role and
+    the usergroup's allowed sections."""
+    allowed_sections = group.allowed_sections or ALL_SECTIONS
+    group_features = [f for s in allowed_sections for f in SECTION_FEATURES.get(s, [])]
+
+    role = user.role or "admin"
+    if role == "admin":
+        return group_features
+    elif role == "manager":
+        role_features = SECTION_FEATURES["tracking"] + SECTION_FEATURES["management"]
+        return [f for f in role_features if f in group_features]
+    elif role == "reporter":
+        return [f for f in SECTION_FEATURES["reports"] if f in group_features]
+    elif role == "custom":
+        custom = user.custom_features or []
+        return [f for f in custom if f in group_features]
+    return group_features
+
+
+# ---------------------------------------------------------------------------
 # Pydantic schemas
 # ---------------------------------------------------------------------------
 
@@ -45,6 +80,8 @@ class PortalUserOut(BaseModel):
     is_active: bool
     is_group_admin: bool
     expires_at: Optional[datetime] = None
+    role: str = "admin"
+    custom_features: Optional[list] = None
 
     class Config:
         from_attributes = True
@@ -146,11 +183,14 @@ def portal_login(data: PortalLoginRequest, db: Session = Depends(get_db)):
                             detail="User group is inactive or not found")
 
     token = _create_portal_token(str(user.id), str(user.usergroup_id))
-    return PortalTokenResponse(
-        access_token=token,
-        portal_user=PortalUserOut.model_validate(user),
-        usergroup=UserGroupOut.model_validate(group),
-    )
+    effective = _compute_effective_features(user, group)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "portal_user": PortalUserOut.model_validate(user),
+        "usergroup": UserGroupOut.model_validate(group),
+        "effective_features": effective,
+    }
 
 
 @router.get("/me")
@@ -158,12 +198,14 @@ def portal_me(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Return the logged-in portal user's profile + usergroup."""
+    """Return the logged-in portal user\'s profile + usergroup + effective features."""
     user = get_portal_user_from_request(request, db)
     group = db.query(UserGroup).filter(UserGroup.id == user.usergroup_id).first()
+    effective = _compute_effective_features(user, group) if group else []
     return {
         "portal_user": PortalUserOut.model_validate(user),
         "usergroup":   UserGroupOut.model_validate(group) if group else None,
+        "effective_features": effective,
     }
 
 
@@ -175,6 +217,8 @@ class PortalUserCreate(BaseModel):
     email: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    role: str = "admin"              # admin | manager | reporter | custom
+    custom_features: Optional[list] = None  # only used when role='custom'
 
 
 class PortalUserCreateResponse(BaseModel):
@@ -211,6 +255,9 @@ def create_portal_user(
     if db.query(PortalUser).filter(PortalUser.email == email).first():
         raise HTTPException(status_code=400, detail="A portal user with that email already exists")
 
+    valid_roles = {"admin", "manager", "reporter", "custom"}
+    role = data.role if data.role in valid_roles else "admin"
+
     import secrets as _secrets
     import uuid as _uuid
     temp_password = _secrets.token_urlsafe(12)
@@ -224,6 +271,8 @@ def create_portal_user(
         last_name=data.last_name or None,
         is_active=True,
         is_group_admin=False,
+        role=role,
+        custom_features=data.custom_features if role == "custom" else None,
     )
     db.add(new_user)
     db.commit()
@@ -238,6 +287,8 @@ def create_portal_user(
 class PortalUserPatch(BaseModel):
     is_active: Optional[bool] = None
     expires_at: Optional[datetime] = None
+    role: Optional[str] = None
+    custom_features: Optional[list] = None
 
 
 @router.patch("/users/{user_id}", response_model=PortalUserOut)
@@ -276,6 +327,15 @@ def patch_portal_user(
             if expiry_naive < datetime.utcnow():
                 raise HTTPException(status_code=400, detail="Expiry date cannot be in the past")
         target.expires_at = new_expiry
+
+    # Role + custom features
+    if data.role is not None:
+        valid_roles = {"admin", "manager", "reporter", "custom"}
+        if data.role not in valid_roles:
+            raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {', '.join(valid_roles)}")
+        target.role = data.role
+    if "custom_features" in data.model_fields_set:
+        target.custom_features = data.custom_features if (target.role == "custom") else None
 
     db.commit()
     db.refresh(target)
