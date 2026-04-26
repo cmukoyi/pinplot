@@ -107,6 +107,24 @@
                 <strong id="sidebarUserName" style="display:block;color:var(--text-2)">—</strong>
                 <small id="sidebarCompany">—</small>
             </div>
+            <div class="notif-wrap" id="notifWrap">
+                <button id="notif-btn" title="Alerts inbox" onclick="toggleNotifPanel(event)">
+                    <i class="fa-solid fa-bell"></i>
+                    <span id="notif-badge" style="display:none">0</span>
+                </button>
+                <div id="notif-panel">
+                    <div class="notif-header" style="display:flex;align-items:center;justify-content:space-between">
+                        <span>Recent Alerts</span>
+                        <button style="background:none;border:none;color:var(--primary);cursor:pointer;font-size:.78rem;padding:0" onclick="markAllAlertsRead()">Mark all read</button>
+                    </div>
+                    <div id="notif-list"><div style="padding:24px;text-align:center;color:var(--text-3);font-size:.83rem">Loading…</div></div>
+                    <div style="padding:8px 12px;border-top:1px solid var(--border)">
+                        <button class="btn btn-ghost btn-sm" onclick="closeNotifPanel();switchTab('reports-alerts')" style="width:100%;font-size:.8rem;justify-content:center">
+                            <i class="fa-solid fa-inbox"></i> View all in Alerts Inbox
+                        </button>
+                    </div>
+                </div>
+            </div>
             <div class="avatar-menu-wrap" id="avatarMenuWrap">
                 <div class="header-avatar" id="headerAvatar" title="Account menu" onclick="toggleAvatarMenu(event)" style="cursor:pointer">—</div>
                 <div class="avatar-dropdown" id="avatarDropdown" style="display:none">
@@ -204,6 +222,11 @@
             <button class="nav-item" data-tab="reports-battery" onclick="switchTab('reports-battery')">
                 <span class="nav-icon"><i class="fa-solid fa-battery-quarter"></i></span>
                 <span class="nav-label">Battery &amp; Offline</span>
+            </button>
+
+            <button class="nav-item" data-tab="reports-alerts" onclick="switchTab('reports-alerts')">
+                <span class="nav-icon"><i class="fa-solid fa-inbox"></i></span>
+                <span class="nav-label">Alerts Inbox</span>
             </button>
         </div>
 
@@ -1696,9 +1719,50 @@
                 </div>
             </div>
 
+            <!-- ═══ REPORTS — Alerts Inbox ═══ -->
+            <div id="tab-reports-alerts" class="tab-content">
+                <div class="rpt-toolbar">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label style="font-size:12px;color:var(--text-3);white-space:nowrap">Last</label>
+                        <select id="rpt-alerts-days">
+                            <option value="7">7 days</option>
+                            <option value="30" selected>30 days</option>
+                            <option value="90">90 days</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-secondary btn-small" onclick="rptAlertsLoad()">
+                        <i class="fa-solid fa-rotate-right"></i> Refresh
+                    </button>
+                    <button class="btn btn-primary btn-small" id="rpt-alerts-mark-all-btn" onclick="rptAlertsMarkAllRead()" style="display:none">
+                        <i class="fa-solid fa-check-double"></i> Mark All Read
+                    </button>
+                </div>
+                <div id="rpt-alerts-summary" class="rpt-summary-bar" style="display:none">
+                    <span id="rpt-alerts-count"><strong>—</strong> alerts</span>
+                    <span class="rpt-sep">·</span>
+                    <span id="rpt-alerts-unread" style="color:var(--primary)"><strong>—</strong> unread</span>
+                </div>
+                <div id="rpt-alerts-err" class="alert" style="display:none"><span id="rpt-alerts-err-text"></span></div>
+                <div class="rpt-table-wrap">
+                    <table class="rpt-table" id="rpt-alerts-table">
+                        <thead>
+                            <tr>
+                                <th style="width:16px"></th>
+                                <th>Event</th>
+                                <th>Asset / Tag</th>
+                                <th>Zone / Geofence</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rpt-alerts-tbody">
+                            <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
         </div><!-- /content -->
     </main><!-- /main-content -->
-</div><!-- /app -->
 </div><!-- /dashboardPage -->
 
 
@@ -2167,6 +2231,11 @@ document.addEventListener('click', function(e) {
     if (_avatarMenuOpen && !document.getElementById('avatarMenuWrap')?.contains(e.target)) {
         closeAvatarMenu();
     }
+    // Also close notif panel when clicking outside
+    const nw = document.getElementById('notifWrap');
+    if (nw && !nw.contains(e.target)) {
+        closeNotifPanel();
+    }
 });
 
 function handleLogout() {
@@ -2206,6 +2275,8 @@ function showDashboard(user, group) {
     }));
     // Pre-load categories so filter bars are populated before user opens Settings
     _fetchCategories();
+    // Fetch recent alerts for bell badge
+    _fetchBellAlerts();
     // Load and apply branding (theme colours + logo) for this group
     apiFetch('/api/portal/theme').then(r => r.ok ? r.json() : null).then(t => { if (t) applyBranding(t); }).catch(() => {});
 }
@@ -2235,7 +2306,7 @@ applyTheme(localStorage.getItem('pp-theme') || 'dark');
 // ══════════════════════════════════════════
 // Tab switching
 // ══════════════════════════════════════════
-const TAB_TITLES = { livemap: 'Live Map', assets: 'Asset List', history: 'Movement History', 'asset-mgmt': 'Asset Management', users: 'User Accounts', building: 'Floor Plan Sketch', floorplan: 'Floor Plan', settings: 'Settings', qr: 'QR / NFC Tags', 'reports-subscriptions': 'Tag Subscriptions Report', 'reports-activity': 'Asset Activity Summary', 'reports-trips': 'Movement / Journey Log', 'reports-geofence': 'Geofence Events', 'reports-battery': 'Battery & Offline Report' };
+const TAB_TITLES = { livemap: 'Live Map', assets: 'Asset List', history: 'Movement History', 'asset-mgmt': 'Asset Management', users: 'User Accounts', building: 'Floor Plan Sketch', floorplan: 'Floor Plan', settings: 'Settings', qr: 'QR / NFC Tags', 'reports-subscriptions': 'Tag Subscriptions Report', 'reports-activity': 'Asset Activity Summary', 'reports-trips': 'Movement / Journey Log', 'reports-geofence': 'Geofence Events', 'reports-battery': 'Battery & Offline Report', 'reports-alerts': 'Alerts Inbox' };
 let _mapInitialized = false;
 
 function switchTab(name) {
@@ -2270,6 +2341,7 @@ function switchTab(name) {
     if (name === 'reports-trips')     loadReportsTrips();
     if (name === 'reports-geofence')  loadReportsGeofence();
     if (name === 'reports-battery')   loadReportsBattery();
+    if (name === 'reports-alerts')    rptAlertsLoad();
     // Sketch tab: resize canvases now the container is visible
     if (name === 'building' && typeof resizeCanvases === 'function') {
         requestAnimationFrame(() => { resizeCanvases(); if (typeof render === 'function') render(); });
@@ -3594,10 +3666,189 @@ function rptBatExportCSV() {
 }
 
 // ══════════════════════════════════════════
-// REPORTS — Tag Subscriptions
+// REPORTS — Alerts Inbox
 // ══════════════════════════════════════════
 
-let _rptSubData     = [];   // full dataset from API
+// IDs of alerts the user has already read (persisted in localStorage)
+let _alertsRead = new Set(JSON.parse(localStorage.getItem('_alertsRead') || '[]'));
+let _alertsData = [];  // full list loaded into the inbox tab
+let _bellAlerts = [];  // short list used for the header bell panel (7-day window)
+
+function _saveAlertsRead() {
+    const arr = [..._alertsRead].slice(-2000);
+    localStorage.setItem('_alertsRead', JSON.stringify(arr));
+}
+
+async function _fetchBellAlerts() {
+    try {
+        const res = await apiFetch('/api/portal/reports/geofence-events?days=7');
+        if (!res.ok) return;
+        _bellAlerts = await res.json();
+        _updateBellBadge();
+    } catch (_) {}
+}
+
+function _updateBellBadge() {
+    const badge = document.getElementById('notif-badge');
+    if (!badge) return;
+    const unread = _bellAlerts.filter(a => !_alertsRead.has(a.id)).length;
+    if (unread > 0) {
+        badge.textContent = unread > 99 ? '99+' : unread;
+        badge.style.display = 'flex';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+function toggleNotifPanel(e) {
+    if (e) e.stopPropagation();
+    const panel = document.getElementById('notif-panel');
+    if (!panel) return;
+    const isOpen = panel.classList.contains('open');
+    if (isOpen) {
+        panel.classList.remove('open');
+    } else {
+        closeAvatarMenu();
+        panel.classList.add('open');
+        _renderNotifPanel();
+    }
+}
+
+function closeNotifPanel() {
+    document.getElementById('notif-panel')?.classList.remove('open');
+}
+
+function _renderNotifPanel() {
+    const list = document.getElementById('notif-list');
+    if (!list) return;
+    const recent = _bellAlerts.slice(0, 10);
+    if (!recent.length) {
+        list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-3);font-size:.83rem">No recent alerts</div>';
+        return;
+    }
+    list.innerHTML = recent.map(a => {
+        const isUnread = !_alertsRead.has(a.id);
+        const isEntry  = /enter|entry/i.test(a.event_type || '');
+        const evtIcon  = isEntry ? 'fa-right-to-bracket' : 'fa-right-from-bracket';
+        const evtColor = isEntry ? 'var(--success)' : 'var(--danger)';
+        const ago      = a.created_at ? _timeAgo(new Date(a.created_at)) : '\u2014';
+        return `<div class="notif-item${isUnread ? ' notif-unread' : ''}" onclick="notifItemClick('${esc(a.id)}',this)">
+            <span class="notif-icon" style="color:${evtColor}"><i class="fa-solid ${evtIcon}"></i></span>
+            <div style="flex:1;min-width:0">
+                <div style="font-weight:${isUnread?600:400};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.tag_label||a.tag_imei||a.tag_id)}</div>
+                <div style="font-size:.78rem;color:var(--text-3)">${isEntry ? 'Entered' : 'Exited'} ${esc(a.poi_name||'')}</div>
+            </div>
+            <span class="notif-time">${ago}</span>
+        </div>`;
+    }).join('');
+}
+
+function notifItemClick(id, el) {
+    _alertsRead.add(id);
+    _saveAlertsRead();
+    if (el) el.classList.remove('notif-unread');
+    _updateBellBadge();
+    closeNotifPanel();
+    switchTab('reports-alerts');
+}
+
+function markAllAlertsRead() {
+    _bellAlerts.forEach(a => _alertsRead.add(a.id));
+    _saveAlertsRead();
+    _renderNotifPanel();
+    _updateBellBadge();
+}
+
+function _timeAgo(date) {
+    const secs = Math.floor((Date.now() - date) / 1000);
+    if (secs < 60)    return 'just now';
+    if (secs < 3600)  return Math.floor(secs / 60)    + 'm ago';
+    if (secs < 86400) return Math.floor(secs / 3600)  + 'h ago';
+    return Math.floor(secs / 86400) + 'd ago';
+}
+
+async function rptAlertsLoad() {
+    const days  = document.getElementById('rpt-alerts-days')?.value || 30;
+    const tbody = document.getElementById('rpt-alerts-tbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading\u2026</td></tr>';
+    const errEl = document.getElementById('rpt-alerts-err');
+    if (errEl) errEl.style.display = 'none';
+    try {
+        const res = await apiFetch(`/api/portal/reports/geofence-events?days=${days}`);
+        if (!res.ok) throw new Error(await safeJsonDetail(res, 'Failed to load alerts'));
+        _alertsData = await res.json();
+        if (parseInt(days) >= 7) _bellAlerts = _alertsData;
+        _updateBellBadge();
+        _rptAlertsRender();
+    } catch (err) {
+        if (errEl) { document.getElementById('rpt-alerts-err-text').textContent = err.message; errEl.style.display = 'flex'; }
+        if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-3)">${esc(err.message)}</td></tr>`;
+    }
+}
+
+function _rptAlertsRender() {
+    const tbody   = document.getElementById('rpt-alerts-tbody');
+    const summary = document.getElementById('rpt-alerts-summary');
+    const markBtn = document.getElementById('rpt-alerts-mark-all-btn');
+    if (!tbody) return;
+    if (!_alertsData.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-3)">No alerts in the selected date range.</td></tr>';
+        if (summary) summary.style.display = 'none';
+        if (markBtn) markBtn.style.display = 'none';
+        return;
+    }
+    const unreadCount = _alertsData.filter(a => !_alertsRead.has(a.id)).length;
+    document.getElementById('rpt-alerts-count').innerHTML  = `<strong>${_alertsData.length}</strong> alerts`;
+    document.getElementById('rpt-alerts-unread').innerHTML = `<strong>${unreadCount}</strong> unread`;
+    if (summary) summary.style.display = 'flex';
+    if (markBtn) markBtn.style.display  = unreadCount > 0 ? '' : 'none';
+    tbody.innerHTML = _alertsData.map(a => {
+        const isUnread = !_alertsRead.has(a.id);
+        const isEntry  = /enter|entry/i.test(a.event_type || '');
+        const evtColor = isEntry ? 'var(--success)' : 'var(--danger)';
+        const evtIcon  = isEntry ? 'fa-right-to-bracket' : 'fa-right-from-bracket';
+        const evtLabel = isEntry ? 'Entry' : 'Exit';
+        const time     = a.created_at ? new Date(a.created_at).toLocaleString() : '\u2014';
+        const dot      = isUnread
+            ? `<span style="width:8px;height:8px;border-radius:50%;background:var(--primary);display:inline-block"></span>`
+            : `<span style="width:8px;height:8px;display:inline-block"></span>`;
+        return `<tr class="${isUnread ? 'rpt-row-unread' : ''}" style="cursor:pointer" onclick="rptAlertMarkRead('${esc(a.id)}',this)">
+            <td style="padding-left:16px">${dot}</td>
+            <td><span style="color:${evtColor}"><i class="fa-solid ${evtIcon}"></i> ${evtLabel}</span></td>
+            <td>${esc(a.tag_label||a.tag_imei||a.tag_id||'\u2014')}</td>
+            <td>${esc(a.poi_name||a.poi_id||'\u2014')}</td>
+            <td style="white-space:nowrap;color:var(--text-3);font-size:.82rem">${esc(time)}</td>
+        </tr>`;
+    }).join('');
+}
+
+function rptAlertMarkRead(id, rowEl) {
+    if (_alertsRead.has(id)) return;
+    _alertsRead.add(id);
+    _saveAlertsRead();
+    if (rowEl) {
+        rowEl.classList.remove('rpt-row-unread');
+        const dot = rowEl.querySelector('td:first-child span');
+        if (dot) dot.style.background = 'transparent';
+    }
+    _updateBellBadge();
+    const unreadCount = _alertsData.filter(a => !_alertsRead.has(a.id)).length;
+    const unreadEl = document.getElementById('rpt-alerts-unread');
+    if (unreadEl) unreadEl.innerHTML = `<strong>${unreadCount}</strong> unread`;
+    const markBtn = document.getElementById('rpt-alerts-mark-all-btn');
+    if (markBtn) markBtn.style.display = unreadCount > 0 ? '' : 'none';
+}
+
+function rptAlertsMarkAllRead() {
+    _alertsData.forEach(a => _alertsRead.add(a.id));
+    _saveAlertsRead();
+    _rptAlertsRender();
+    _updateBellBadge();
+}
+
+// ══════════════════════════════════════════
+// REPORTS — Tag Subscriptions
+// ══════════════════════════════════════════
 let _rptSubFiltered = [];   // after search/filter
 let _rptSubSortCol  = 'expiry_date';
 let _rptSubSortAsc  = true;

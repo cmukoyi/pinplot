@@ -87,7 +87,8 @@ input, select, textarea { font-family: var(--font); }
   padding: 0 20px;
   background: var(--bg-2);
   border-bottom: 1px solid var(--border);
-  z-index: 200;
+  position: relative;
+  z-index: 3000;
   box-shadow: 0 2px 10px rgba(0,0,0,.3);
 }
 
@@ -218,6 +219,10 @@ input, select, textarea { font-family: var(--font); }
 .notif-unread { background: rgba(59,130,246,.06); color: var(--text); }
 .notif-icon { color: var(--primary); margin-top: 2px; flex-shrink: 0; }
 .notif-time { margin-left: auto; font-size: .75rem; color: var(--text-3); white-space: nowrap; }
+
+/* Alerts inbox row */
+.rpt-row-unread { background: rgba(59,130,246,.06); }
+.rpt-row-unread:hover { background: rgba(59,130,246,.12) !important; }
 
 /* user avatar */
 .header-avatar {
