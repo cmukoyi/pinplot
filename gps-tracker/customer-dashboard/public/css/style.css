@@ -597,7 +597,10 @@ input, select, textarea { font-family: var(--font); }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  border: 4px solid var(--bg-3);
+  border-top: 4px solid var(--bg-3);
+  border-left: 4px solid var(--bg-3);
+  border-bottom: 14px solid var(--bg-3);
+  border-right: 14px solid var(--bg-3);
   z-index: 9999;
 }
 #map-container { width: 100%; height: 100%; }
