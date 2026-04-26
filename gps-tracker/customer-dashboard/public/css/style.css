@@ -1225,13 +1225,13 @@ tbody tr:hover { background: var(--bg-3); }
   font-weight: 700;
   letter-spacing: .5px;
   text-transform: uppercase;
-  background: rgba(59,130,246,.2);
+  background: var(--primary-glow);
   color: var(--primary);
   padding: 1px 5px;
   border-radius: 4px;
   vertical-align: middle;
   margin-left: 3px;
-  border: 1px solid rgba(59,130,246,.35);
+  border: 1px solid var(--primary-glow);
 }
 
 /* ── Leaflet overrides ─────────────────────────────────────── */

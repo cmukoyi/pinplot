@@ -2759,6 +2759,15 @@ async function openTagMgmtModal(mode, imei) {
     document.getElementById('tagMgmtPackageGroup').style.display = '';
     document.getElementById('tagMgmtPackageGroup').querySelector('label').textContent = 'Package';
     document.getElementById('tagMgmtPackage').removeAttribute('required');
+    // Non-admins cannot assign or reassign a package — only Admin portal users can
+    const _isAdmin = getSession().user?.is_group_admin;
+    if (!_isAdmin) {
+        document.getElementById('tagMgmtPackage').disabled = true;
+        const _pkgLabel = document.getElementById('tagMgmtPackageGroup').querySelector('label');
+        _pkgLabel.innerHTML = 'Package <span style="font-size:11px;color:var(--text-3);font-weight:400">(Admin only — contact your administrator to change)</span>';
+    } else {
+        document.getElementById('tagMgmtPackage').disabled = false;
+    }
 
     // Activation status banner — show above the form (remove previous banner if any)
     const _existingBanner = document.getElementById('tagActivationBanner');
@@ -3054,11 +3063,41 @@ function applyBranding(theme) {
     if (!theme) return;
     const root = document.documentElement;
     if (theme.theme_primary) {
-        root.style.setProperty('--primary', theme.theme_primary);
-        root.style.setProperty('--primary-d', theme.theme_primary);
+        const hex = theme.theme_primary;
+        root.style.setProperty('--primary', hex);
+        root.style.setProperty('--primary-d', hex);
+        root.style.setProperty('--primary-glow', hex + '40');
+        // Propagate primary colour into the beta-tab scoped stylesheets
+        // QR tab uses its own --qrg-primary* vars
+        const qrRoot = document.getElementById('qr-root');
+        if (qrRoot) {
+            qrRoot.style.setProperty('--qrg-primary',        hex);
+            qrRoot.style.setProperty('--qrg-primary-mid',    hex);
+            qrRoot.style.setProperty('--qrg-primary-border', hex);
+            qrRoot.style.setProperty('--qrg-primary-light',  hex + '26');
+        }
+        // Sketch tab overrides its own --primary
+        const skRoot = document.getElementById('sketch-root');
+        if (skRoot) {
+            skRoot.style.setProperty('--primary', hex);
+            skRoot.style.setProperty('--primary-light', hex);
+            skRoot.style.setProperty('--primary-dim',    hex + '1f');
+            skRoot.style.setProperty('--primary-border', hex + '59');
+        }
     } else {
         root.style.removeProperty('--primary');
         root.style.removeProperty('--primary-d');
+        root.style.removeProperty('--primary-glow');
+        const qrRoot = document.getElementById('qr-root');
+        if (qrRoot) {
+            ['--qrg-primary','--qrg-primary-mid','--qrg-primary-border','--qrg-primary-light']
+                .forEach(v => qrRoot.style.removeProperty(v));
+        }
+        const skRoot = document.getElementById('sketch-root');
+        if (skRoot) {
+            ['--primary','--primary-light','--primary-dim','--primary-border']
+                .forEach(v => skRoot.style.removeProperty(v));
+        }
     }
     if (theme.theme_accent) {
         root.style.setProperty('--success', theme.theme_accent);
