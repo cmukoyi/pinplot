@@ -2310,7 +2310,7 @@
                         <td>${badge}</td>
                         <td>${date}</td>
                         <td style="display:flex;gap:6px">
-                            <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openEditGroupModal('${g.id}','${escHtml(g.name)}','${escHtml(g.email_domain||'')}',${JSON.stringify(g.allowed_sections||null)})">Edit</button>
+                            <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openEditGroupModal('${g.id}','${escHtml(g.name)}','${escHtml(g.email_domain||'')}',${JSON.stringify(g.allowed_sections||null).replace(/"/g,'&quot;')})">Edit</button>
                             ${deactivateBtn}
                         </td>
                     </tr>`;
