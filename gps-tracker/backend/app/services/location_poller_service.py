@@ -89,32 +89,32 @@ class LocationPollerService:
                 return
 
             # Split by provider type — only known types are routed; unknowns are logged and skipped
-            tracksolid_trackers = [t for t in live_trackers if (t.tag_type or "").lower() == "tracksolid"]
-            mzone_trackers      = [t for t in live_trackers if (t.tag_type or "scope").lower() == "scope"]
-            unknown_trackers    = [t for t in live_trackers
-                                   if (t.tag_type or "scope").lower() not in ("tracksolid", "scope")]
+            series2_trackers = [t for t in live_trackers if (t.tag_type or "").lower() == "series2"]
+            series1_trackers = [t for t in live_trackers if (t.tag_type or "series1").lower() == "series1"]
+            unknown_trackers = [t for t in live_trackers
+                                   if (t.tag_type or "series1").lower() not in ("series2", "series1")]
             for t in unknown_trackers:
                 logger.warning("⚠️  Tracker IMEI %s has unrecognised tag_type '%s' — skipping", t.imei, t.tag_type)
 
             updated_count = 0
 
-            # ── Poll TrackSolid tags ──────────────────────────────────────
-            if tracksolid_trackers:
+            # ── Poll Series 2 tags ──────────────────────────────────────
+            if series2_trackers:
                 # Parallel per-IMEI calls to getMonitorInfo (V3 Bearer JWT)
-                imeis = [t.imei for t in tracksolid_trackers]
+                imeis = [t.imei for t in series2_trackers]
                 try:
                     ts_locations = await fetch_all_tracksolid_locations(imeis)
                 except Exception as exc:
-                    logger.error("TrackSolid location fetch failed: %s", exc)
+                    logger.error("Series 2 location fetch failed: %s", exc)
                     ts_locations = {}
 
-                for tracker in tracksolid_trackers:
+                for tracker in series2_trackers:
                     loc = ts_locations.get(tracker.imei.strip())
                     if not loc:
-                        logger.warning("⚠️  TrackSolid IMEI %s not in location response", tracker.imei)
+                        logger.warning("⚠️  Series 2 IMEI %s not in location response", tracker.imei)
                         continue
                     if loc.latitude == 0.0 and loc.longitude == 0.0:
-                        logger.warning("⚠️  TrackSolid IMEI %s has no GPS fix", tracker.imei)
+                        logger.warning("⚠️  Series 2 IMEI %s has no GPS fix", tracker.imei)
                         continue
 
                     tracker.latitude = str(loc.latitude)

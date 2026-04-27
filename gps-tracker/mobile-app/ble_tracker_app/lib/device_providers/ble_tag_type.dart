@@ -4,8 +4,8 @@
 /// Add a new value here (and a matching provider) to support a new
 /// device platform.
 enum BleTagType {
-  trackSolid('tracksolid', 'Series 2'),
-  scope('scope', 'Series 1');
+  series2('series2', 'Series 2'),
+  series1('series1', 'Series 1');
 
   const BleTagType(this.apiValue, this.displayName);
 
@@ -18,7 +18,7 @@ enum BleTagType {
   static BleTagType fromApiValue(String value) {
     return BleTagType.values.firstWhere(
       (e) => e.apiValue == value.toLowerCase(),
-      orElse: () => BleTagType.scope,
+      orElse: () => BleTagType.series1,
     );
   }
 }

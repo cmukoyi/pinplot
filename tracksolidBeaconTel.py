@@ -1,3 +1,13 @@
+"""
+Device types are now generic for Pinplot:
+    - series1 (was Scope/MZone)
+    - series2 (was Tracksolid)
+
+Update all code to use only 'series1' and 'series2' for device type logic.
+"""
+# TrackSolidBLEScope1 => scope1
+# TrackSolidBLENeoTrak => NEOTRAK
+# TrackSolidBLEScopeT => ScopeTesting
 import time
 import hashlib
 import requests

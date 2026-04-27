@@ -35,7 +35,7 @@ class _AddTagScreenState extends State<AddTagScreen> {
   final _imeiController = TextEditingController();
   final _tagNameController = TextEditingController();
 
-  BleTagType _selectedType = BleTagType.scope;
+  BleTagType _selectedType = BleTagType.series1;
   bool _isLoading = false;
   String? _validationMessage; // feedback shown below IMEI field
   int? _validatedBatteryLevel; // battery level returned by TrackSolid validation
@@ -378,12 +378,12 @@ class _TagTypeHint extends StatelessWidget {
     final IconData icon;
 
     switch (type) {
-      case BleTagType.trackSolid:
-        hint = 'Choose your tag type';
+      case BleTagType.series2:
+        hint = 'Series 2: For newer devices.';
         icon = Icons.verified_outlined;
         break;
-      case BleTagType.scope:
-        hint = 'Choose your tag type';
+      case BleTagType.series1:
+        hint = 'Series 1: For legacy devices.';
         icon = Icons.info_outline;
         break;
     }

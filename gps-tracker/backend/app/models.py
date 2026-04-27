@@ -93,7 +93,7 @@ class BLETag(Base):
     description = Column(String(255))  # Vehicle description from MZone API
     mzone_vehicle_id = Column(String(100), index=True)  # Cached MZone vehicle_Id for faster trips API
     mac_address = Column(String(17))  # Format: XX:XX:XX:XX:XX:XX
-    tag_type = Column(String(50), nullable=True, default='scope')  # 'tracksolid' | 'scope'
+    tag_type = Column(String(50), nullable=True, default='series1')  # 'series2' | 'series1'
     is_active = Column(Boolean, default=True)
     last_seen = Column(DateTime(timezone=True))
     latitude = Column(String(50))

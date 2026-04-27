@@ -12,15 +12,15 @@ class ScopeTagProvider implements BleTagProvider {
   ScopeTagProvider(this._authService);
 
   @override
-  BleTagType get tagType => BleTagType.scope;
+  BleTagType get tagType => BleTagType.series1;
 
   @override
-  String get displayName => 'Scope';
+  String get displayName => 'Series 1';
 
   @override
   Future<TagValidationResult> validateTag(String imei) async {
     final result =
-        await _authService.validateTagByType(imei, BleTagType.scope.apiValue);
+        await _authService.validateTagByType(imei, BleTagType.series1.apiValue);
     return TagValidationResult(
       isValid: result['is_valid'] as bool,
       message: result['message'] as String,

@@ -13,15 +13,15 @@ class TrackSolidTagProvider implements BleTagProvider {
   TrackSolidTagProvider(this._authService);
 
   @override
-  BleTagType get tagType => BleTagType.trackSolid;
+  BleTagType get tagType => BleTagType.series2;
 
   @override
-  String get displayName => 'TrackSolid';
+  String get displayName => 'Series 2';
 
   @override
   Future<TagValidationResult> validateTag(String imei) async {
     final result =
-        await _authService.validateTagByType(imei, BleTagType.trackSolid.apiValue);
+        await _authService.validateTagByType(imei, BleTagType.series2.apiValue);
     return TagValidationResult(
       isValid: result['is_valid'] as bool,
       message: result['message'] as String,

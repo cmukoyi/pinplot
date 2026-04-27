@@ -9,8 +9,8 @@ class Vehicle {
   final String? vehicleIconColor;
   final DateTime? lastKnownEventUtcLastModified;
   final Map<String, dynamic>? attributes;
-  final int? batteryLevel;   // Battery % from TrackSolid (0-100)
-  final String? tagType;     // 'tracksolid' | 'scope'
+  final int? batteryLevel;   // Battery % from Series 2 (0-100)
+  final String? tagType;     // 'series2' | 'series1'
   
   Vehicle({
     required this.id,
@@ -194,7 +194,7 @@ class BLETag {
     required this.imei,
     required this.description,
     this.vehicleId,
-    this.tagType = 'scope',
+    this.tagType = 'series1',
   });
   
   factory BLETag.fromJson(Map<String, dynamic> json) {
@@ -202,7 +202,7 @@ class BLETag {
       imei: json['imei'] ?? '',
       description: json['description'] ?? 'BLE Tag',
       vehicleId: json['vehicle_id'],
-      tagType: json['tag_type'] ?? 'scope',
+      tagType: json['tag_type'] ?? 'series1',
     );
   }
   

@@ -16,9 +16,9 @@ class BleTagProviderFactory {
   /// Returns the correct provider for [type].
   static BleTagProvider getProvider(BleTagType type, AuthService authService) {
     switch (type) {
-      case BleTagType.trackSolid:
+      case BleTagType.series2:
         return TrackSolidTagProvider(authService);
-      case BleTagType.scope:
+      case BleTagType.series1:
         return ScopeTagProvider(authService);
     }
   }
