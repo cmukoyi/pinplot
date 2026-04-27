@@ -1916,8 +1916,8 @@
             <div id="tagMgmtTypeGroup" class="form-group">
                 <label>Tag Type</label>
                 <select id="tagMgmtType">
-                    <option value="scope">Scope</option>
-                    <option value="tracksolid">TrackSolid</option>
+                    <option value="series1">Series 1</option>
+                    <option value="series2">Series 2</option>
                 </select>
             </div>
             <div id="tagMgmtCategoryGroup" class="form-group">
@@ -2693,7 +2693,7 @@ async function openAddTagModal() {
     imeiInput.style.color = '';
     imeiInput.setAttribute('required', '');
     document.getElementById('tagMgmtDesc').value = '';
-    document.getElementById('tagMgmtType').value = 'scope';
+    document.getElementById('tagMgmtType').value = 'series1';
     document.getElementById('tagMgmtImeiGroup').style.display = '';
     document.getElementById('tagMgmtDescGroup').style.display = '';
     document.getElementById('tagMgmtTypeGroup').style.display = '';
@@ -2749,7 +2749,7 @@ async function openTagMgmtModal(mode, imei) {
     document.getElementById('tagMgmtDescGroup').style.display = '';
 
     // Tag type
-    document.getElementById('tagMgmtType').value = tag.tag_type || 'scope';
+    document.getElementById('tagMgmtType').value = tag.tag_type || 'series1';
     document.getElementById('tagMgmtTypeGroup').style.display = '';
 
     // Category
