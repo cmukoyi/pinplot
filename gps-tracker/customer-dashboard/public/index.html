@@ -2804,6 +2804,21 @@ async function openTagMgmtModal(mode, imei) {
     }
 }
 
+// Reusable backend IMEI validation function
+async function validateImeiBackend(imei, tagType) {
+    // Map UI type to backend type if needed
+    let backendType = tagType;
+    if (tagType === 'series1') backendType = 'scope';
+    if (tagType === 'series2') backendType = 'tracksolid';
+    const res = await apiFetch('/api/v1/ble-tags/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imei, tag_type: backendType })
+    });
+    const data = await res.json();
+    return { ok: res.ok, ...data };
+}
+
 async function submitTagForm(e) {
     e.preventDefault();
     const tagId  = document.getElementById('tagMgmtTagId').value;
@@ -2820,6 +2835,15 @@ async function submitTagForm(e) {
     const categoryName = catObj ? catObj.name : null;
     try {
         let res;
+        if (!tagId) {
+            // Validate IMEI with backend before creating new tag
+            const imei = document.getElementById('tagMgmtImei').value.trim();
+            const tagType = document.getElementById('tagMgmtType').value;
+            const validation = await validateImeiBackend(imei, tagType);
+            if (!validation.ok || !validation.is_valid) {
+                throw new Error(validation.message || 'IMEI validation failed');
+            }
+        }
         if (tagId && mode === 'edit') {
             // Full edit — description, tag_type, category, user reassignment, package
             const _pkgVal = document.getElementById('tagMgmtPackage')?.value || '';
@@ -2842,7 +2866,7 @@ async function submitTagForm(e) {
                 body: JSON.stringify({ user_id: userId }),
             });
         } else {
-            // Create new tag
+            // Create new tag (IMEI already validated)
             const packageId = document.getElementById('tagMgmtPackage')?.value;
             if (!packageId) {
                 throw new Error('Please select a package');
